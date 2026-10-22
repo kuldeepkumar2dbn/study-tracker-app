@@ -1,0 +1,35 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="favGrad1" x1="8" y1="56" x2="56" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="favOrbitGrad" x1="10" y1="42" x2="56" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="55%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="favStarGrad" x1="42" y1="3" x2="49" y2="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+
+  <!-- Open Book Base -->
+  <path d="M 8 50 C 18 50 26 46 32 42 C 38 46 46 50 56 50 C 56 53 46 56 32 53 C 18 56 8 53 8 50 Z" fill="url(#favGrad1)" opacity="0.9" />
+  <path d="M 8 45 C 18 45 26 41 32 37 L 32 42 C 26 46 18 50 8 50 Z" fill="#4f46e5" opacity="0.65" />
+  <path d="M 56 45 C 46 45 38 41 32 37 L 32 42 C 38 46 46 50 56 50 Z" fill="#10b981" opacity="0.65" />
+
+  <!-- Ascending Staircase Bars -->
+  <rect x="18" y="32" width="7" height="15" rx="2" fill="url(#favGrad1)" />
+  <rect x="28.5" y="22" width="7" height="25" rx="2" fill="url(#favGrad1)" />
+  <rect x="39" y="12" width="7" height="35" rx="2" fill="url(#favGrad1)" />
+
+  <!-- Swoop Orbit Loop -->
+  <path d="M 10 36 C 10 18 30 10 50 16 C 56 18 58 24 54 30 C 46 40 22 46 12 40" stroke="url(#favOrbitGrad)" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Summit Spark Star -->
+  <path d="M 42.5 3 Q 42.5 8.5 48 8.5 Q 42.5 8.5 42.5 14 Q 42.5 8.5 37 8.5 Q 42.5 8.5 42.5 3 Z" fill="url(#favStarGrad)" />
+  <circle cx="42.5" cy="8.5" r="1.5" fill="#ffffff" />
+</svg>

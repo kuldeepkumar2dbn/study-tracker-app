@@ -1,0 +1,14 @@
+# Antigravity Rule Protocol
+
+## Strict Operation Constraints
+1. **Explicit Permission Required for File Operations**:
+   - The assistant MUST NOT create, overwrite, or delete any file without first asking for and receiving explicit permission from the user.
+   - All proposed file changes must display the target path and full proposed content or architectural diff before execution.
+
+2. **No Automatic Terminal Command Execution**:
+   - The assistant MUST NOT execute any terminal commands automatically.
+   - The assistant must always display the exact command string and await the user's explicit confirmation before running it.
+
+3. **Production-Ready Code Standards**:
+   - All code must be complete, modular, and production-ready.
+   - Avoid shortcuts, stubs, `TODO` comments, or mock placeholders where functional logic is expected.
