@@ -146,3 +146,101 @@ body {
   box-shadow: 0 12px 35px -5px var(--color-card-shadow);
   backdrop-filter: blur(16px);
 }
+
+/* Animations & Micro-Interactions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tabEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 200ms ease-out forwards;
+}
+
+.animate-tab-enter {
+  animation: tabEnter 200ms ease-out forwards;
+}
+
+/* Navigation bar tab items */
+.nav-tab-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.nav-tab-item:active {
+  transform: scale(0.97);
+}
+
+/* Exam & Assignment Cards */
+.exam-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.exam-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.08);
+}
+
+/* Card interactive button clicks */
+.card-action-btn,
+.card-action-select {
+  transition: all 0.15s ease, transform 0.1s ease;
+}
+
+.card-action-btn:active,
+.card-action-select:active {
+  transform: scale(0.95);
+}
+
+/* Filter Pills */
+.filter-pill {
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+}
+
+.filter-pill:active {
+  transform: scale(0.97);
+}
+
+/* Primary Action Buttons */
+.btn-primary-action {
+  transition: all 0.2s ease, filter 0.15s ease, transform 0.1s ease;
+}
+
+.btn-primary-action:hover {
+  filter: brightness(1.1);
+}
+
+.btn-primary-action:active {
+  transform: scale(0.97);
+  filter: brightness(0.95);
+}
+
+/* Top Action Links */
+.top-action-link {
+  transition: all 0.2s ease, filter 0.15s ease, transform 0.1s ease;
+}
+
+.top-action-link:hover {
+  filter: brightness(1.06);
+}
+
+.top-action-link:active {
+  transform: scale(0.96);
+}
+

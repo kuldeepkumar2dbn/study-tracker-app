@@ -77,7 +77,7 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 relative whitespace-nowrap ${
+                  className={`nav-tab-item flex items-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ease-in-out relative whitespace-nowrap ${
                     isActive
                       ? 'bg-theme-accent text-white shadow-glow-accent font-semibold'
                       : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
@@ -116,7 +116,7 @@ export default function App() {
         </div>
 
         {/* Tab Content Display */}
-        <div className="transition-all duration-300">
+        <div key={activeTab} className="transition-all duration-300 animate-tab-enter">
           {activeTab === 'dashboard' && <DashboardTab onNavigateTab={setActiveTab} />}
           {activeTab === 'routine' && <DailyRoutine />}
           {activeTab === 'calendar' && <CalendarView />}

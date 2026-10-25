@@ -108,14 +108,14 @@ export default function DashboardTab({ onNavigateTab }) {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => onNavigateTab('timer')}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all transform hover:-translate-y-0.5"
+              className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all duration-200 hover:brightness-110 active:scale-95"
             >
               <Play className="w-3.5 h-3.5 fill-white" />
               <span>Launch Focus Timer</span>
             </button>
             <button
               onClick={handleQuickLog}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all"
+              className="btn-primary-action flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
               title="Add 30 minutes to primary subject"
             >
               <Plus className="w-3.5 h-3.5 text-theme-accent" />
@@ -406,7 +406,7 @@ export default function DashboardTab({ onNavigateTab }) {
               return (
                 <div 
                   key={item.id}
-                  className="p-3.5 rounded-xl bg-theme-surface/70 border border-theme-border flex items-center justify-between gap-3 hover:border-theme-accent/30 transition-all"
+                  className="exam-card p-3.5 rounded-xl bg-theme-surface/70 border border-theme-border flex items-center justify-between gap-3 hover:border-theme-accent/30 cursor-pointer"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

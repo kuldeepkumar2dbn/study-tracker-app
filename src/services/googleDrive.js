@@ -4,6 +4,8 @@
 export const FOLDER_NAME = 'MyStudyTracker_Data';
 export const DATA_FILE_NAME = 'study_data.json';
 export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+export const DEFAULT_GOOGLE_CLIENT_ID = '316205351069-hnmklkhtlbqufp22dm0poqvo6lfjjs1c.apps.googleusercontent.com';
+export const DEFAULT_GOOGLE_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
 
 let tokenClientInstance = null;
 
@@ -13,7 +15,7 @@ let tokenClientInstance = null;
  * @param {Function} onTokenSuccess Callback with tokenResponse
  * @param {Function} onError Callback with error
  */
-export function initGoogleTokenClient(clientId, onTokenSuccess, onError) {
+export function initGoogleTokenClient(clientId = DEFAULT_GOOGLE_CLIENT_ID, onTokenSuccess, onError) {
   if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
     if (onError) onError(new Error('Google Identity Services SDK not loaded yet.'));
     return null;
@@ -21,8 +23,8 @@ export function initGoogleTokenClient(clientId, onTokenSuccess, onError) {
 
   try {
     tokenClientInstance = window.google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: DRIVE_FILE_SCOPE,
+      client_id: clientId || DEFAULT_GOOGLE_CLIENT_ID,
+      scope: DEFAULT_GOOGLE_SCOPES,
       callback: (tokenResponse) => {
         if (tokenResponse && tokenResponse.access_token) {
           if (onTokenSuccess) onTokenSuccess(tokenResponse);
@@ -196,35 +198,35 @@ export async function loadStudyDataFromDrive(accessToken, folderId) {
 }
 
 /**
- * Uploads a PDF or Image file directly to "MyStudyTracker_Data" using Drive's multipart API
+ * Uploads a PDF or Image file directly to Google Drive using Drive v3 multipart upload API
  */
 export async function uploadFileToDriveFolder(accessToken, folderId, file) {
-  const boundary = '-------StudyFlowUploadBoundary';
+  const boundary = '-------StudyTrackerDriveUpload' + Date.now();
   const delimiter = `\r\n--${boundary}\r\n`;
   const closeDelimiter = `\r\n--${boundary}--`;
 
   const metadata = {
     name: file.name,
-    parents: [folderId],
-    mimeType: file.type || 'application/octet-stream'
+    mimeType: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream')
   };
-
-  // Convert File to ArrayBuffer
-  const fileBuffer = await file.arrayBuffer();
+  if (folderId) {
+    metadata.parents = [folderId];
+  }
 
   const metadataPart = new Blob([
     delimiter,
     'Content-Type: application/json; charset=UTF-8\r\n\r\n',
     JSON.stringify(metadata),
     delimiter,
-    `Content-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`
+    `Content-Type: ${metadata.mimeType}\r\n\r\n`
   ], { type: 'application/octet-stream' });
 
   const closePart = new Blob([closeDelimiter], { type: 'application/octet-stream' });
 
-  const multipartBlob = new Blob([metadataPart, fileBuffer, closePart]);
+  // Stream file directly in multipart body without allocating entire buffer
+  const multipartBlob = new Blob([metadataPart, file, closePart]);
 
-  const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size,mimeType';
+  const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size,mimeType';
   const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -234,9 +236,17 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
     body: multipartBlob
   });
 
+  if (response.status === 401) {
+    try {
+      localStorage.removeItem('google_access_token');
+      sessionStorage.removeItem('studyflow_drive_token');
+    } catch {}
+    throw new Error('Google authorization expired (401). Please sign in again.');
+  }
+
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Drive File Upload failed: ${errorText}`);
+    throw new Error(`Drive File Upload failed (${response.status}): ${errorText}`);
   }
 
   const uploadedMeta = await response.json();
@@ -244,8 +254,35 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
     id: uploadedMeta.id,
     name: uploadedMeta.name || file.name,
     webViewLink: uploadedMeta.webViewLink || `https://drive.google.com/file/d/${uploadedMeta.id}/view`,
+    webContentLink: uploadedMeta.webContentLink,
     size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-    type: file.type.includes('pdf') ? 'pdf' : 'image',
+    type: (file.type && file.type.includes('pdf')) || file.name.endsWith('.pdf') ? 'pdf' : 'image',
+    mimeType: file.type || 'application/octet-stream',
     uploadedAt: new Date().toISOString()
   };
 }
+
+/**
+ * Direct client-side upload helper that automatically fetches stored token and folder
+ */
+export async function uploadDirectToDrive(file) {
+  const token = localStorage.getItem('google_access_token') || sessionStorage.getItem('studyflow_drive_token');
+  if (!token) {
+    throw new Error('Not signed in to Google. Please sign in via login.html first.');
+  }
+
+  let folderId = localStorage.getItem('studyflow_drive_folder_id');
+  if (!folderId) {
+    try {
+      folderId = await getOrCreateStudyTrackerFolder(token);
+      if (folderId) {
+        localStorage.setItem('studyflow_drive_folder_id', folderId);
+      }
+    } catch (e) {
+      console.warn('Could not ensure MyStudyTracker_Data folder, uploading to root:', e);
+    }
+  }
+
+  return await uploadFileToDriveFolder(token, folderId, file);
+}
+

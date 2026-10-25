@@ -105,7 +105,7 @@ export default function RevisionTab() {
               <button
                 key={st}
                 onClick={() => setFilterStage(st)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                className={`filter-pill px-2.5 py-1 rounded-lg text-xs font-medium active:scale-95 ${
                   filterStage === st 
                     ? 'bg-theme-accent text-white shadow-sm' 
                     : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'

@@ -3,17 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StudyFlow - Personal Daily Study & Skill Tracker</title>
+    <title>StudyFlow - Dashboard & Academic Overview</title>
     <meta name="description" content="Personal Daily Study & Skill Tracker. Master your subjects, monitor exam countdowns, build skills, and track focus sessions with direct client-side Google Drive integration." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/styles.css" />
+    <!-- Immediate Auth Guard: Redirect to login.html if not authenticated -->
+    <script>
+      try {
+        if (!localStorage.getItem('google_access_token')) {
+          window.location.replace('/login.html');
+        }
+      } catch (e) {}
+    </script>
     <!-- Google Identity Services (GIS) for direct client-side Google Drive integration -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="/src/pages/dashboard.jsx"></script>
   </body>
 </html>

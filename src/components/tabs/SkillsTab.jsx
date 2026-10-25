@@ -114,7 +114,7 @@ export default function SkillsTab() {
           <button
             key={cat}
             onClick={() => setFilterCategory(cat)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`filter-pill px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap active:scale-95 ${
               filterCategory === cat
                 ? 'bg-theme-accent text-white shadow-sm'
                 : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'

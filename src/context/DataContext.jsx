@@ -6,6 +6,8 @@ import {
   saveStudyDataToDrive, 
   loadStudyDataFromDrive,
   uploadFileToDriveFolder,
+  uploadDirectToDrive,
+  DEFAULT_GOOGLE_CLIENT_ID,
   FOLDER_NAME
 } from '../services/googleDrive';
 import { extractYouTubeId } from '../utils/youtube';
@@ -321,6 +323,32 @@ const initialImportantLinks = [
   }
 ];
 
+// Initial Study Notes
+const initialNotes = [
+  {
+    id: 'note-1',
+    title: 'AVL Trees & Self-Balancing Invariants',
+    subject: 'Computer Science & Algorithms',
+    folder: 'Algorithms',
+    tags: ['Trees', 'AVL', 'DataStructures'],
+    content: `# AVL Tree Rotations & Invariants\n\n### Balance Factor\nBalance factor $BF = height(left) - height(right)$. Valid AVL range is $\\{-1, 0, 1\\}$.\n\n### Rotations Overview:\n- **Left-Left (LL)**: Single Right Rotation\n- **Right-Right (RR)**: Single Left Rotation\n- **Left-Right (LR)**: Left rotate child, then Right rotate parent\n- **Right-Left (RL)**: Right rotate child, then Left rotate parent\n\n### Complexity:\n- Search: $O(\\log n)$\n- Insert: $O(\\log n)$\n- Delete: $O(\\log n)`,
+    isStarred: true,
+    driveFileId: 'drv-avl-doc-01',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'note-2',
+    title: 'Dynamic Programming Tabulation & Knapsack',
+    subject: 'Computer Science & Algorithms',
+    folder: 'Algorithms',
+    tags: ['DP', 'Knapsack', 'Optimization'],
+    content: `# Dynamic Programming Tabulation\n\n1. State Definition: \`dp[i][w]\` represents max profit using prefix \`i\` items with capacity \`w\`.\n2. Recurrence:\n   \`dp[i][w] = max(dp[i-1][w], dp[i-1][w - wt[i]] + val[i])\`\n3. Base Case:\n   \`dp[0][w] = 0\` for all \`w\`.\n4. Space Optimization:\n   Rolling 1D array backwards from \`W\` down to \`wt[i]\`.`,
+    isStarred: true,
+    driveFileId: 'drv-dp-doc-02',
+    updatedAt: new Date().toISOString()
+  }
+];
+
 export function DataProvider({ children }) {
   // State: Subjects
   const [subjects, setSubjects] = useState(() => {
@@ -461,18 +489,38 @@ export function DataProvider({ children }) {
     });
   };
 
+  // State: Drive Notes
+  const [notes, setNotes] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'notes');
+      return saved ? JSON.parse(saved) : initialNotes;
+    } catch {
+      return initialNotes;
+    }
+  });
+
+  // State: Direct Drive Uploaded Files (PDFs / Images)
+  const [driveFiles, setDriveFiles] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'drive_files');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Google Drive & GIS State
   const [googleClientId, setGoogleClientIdState] = useState(() => {
     try {
-      return localStorage.getItem('studyflow_google_client_id') || '';
+      return localStorage.getItem('studyflow_google_client_id') || DEFAULT_GOOGLE_CLIENT_ID;
     } catch {
-      return '';
+      return DEFAULT_GOOGLE_CLIENT_ID;
     }
   });
 
   const [driveAccessToken, setDriveAccessToken] = useState(() => {
     try {
-      return sessionStorage.getItem('studyflow_drive_token') || null;
+      return localStorage.getItem('google_access_token') || sessionStorage.getItem('studyflow_drive_token') || null;
     } catch {
       return null;
     }
@@ -480,7 +528,7 @@ export function DataProvider({ children }) {
 
   const [driveUser, setDriveUser] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('studyflow_drive_user');
+      const saved = localStorage.getItem('user_profile') || localStorage.getItem('google_user_profile') || sessionStorage.getItem('studyflow_drive_user');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -565,6 +613,8 @@ export function DataProvider({ children }) {
       localStorage.setItem(STORAGE_KEY_PREFIX + 'weekly_target_hrs', String(weeklyTargetHours));
       localStorage.setItem(STORAGE_KEY_PREFIX + 'daily_target_mins', String(dailyTargetMinutes));
       localStorage.setItem(STORAGE_KEY_PREFIX + 'important_links', JSON.stringify(importantLinks));
+      localStorage.setItem(STORAGE_KEY_PREFIX + 'notes', JSON.stringify(notes));
+      localStorage.setItem(STORAGE_KEY_PREFIX + 'drive_files', JSON.stringify(driveFiles));
 
       // Trigger debounced Drive sync if connected
       if (driveAccessToken && driveFolderId) {
@@ -577,7 +627,7 @@ export function DataProvider({ children }) {
     } catch (e) {
       console.error('LocalStorage write error', e);
     }
-  }, [subjects, exams, routineSlots, weeklyGoals, skills, streakData, timerHistory, weeklyTargetHours, dailyTargetMinutes, importantLinks]);
+  }, [subjects, exams, routineSlots, weeklyGoals, skills, streakData, timerHistory, weeklyTargetHours, dailyTargetMinutes, importantLinks, notes, driveFiles]);
 
   // Google Drive Actions
   const connectGoogleDrive = () => {
@@ -652,9 +702,64 @@ export function DataProvider({ children }) {
   const disconnectGoogleDrive = () => {
     setDriveAccessToken(null);
     setDriveUser(null);
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('user_profile');
+    localStorage.removeItem('google_user_profile');
     sessionStorage.removeItem('studyflow_drive_token');
     sessionStorage.removeItem('studyflow_drive_user');
     setSyncStatus('offline');
+  };
+
+  const signOut = () => {
+    disconnectGoogleDrive();
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.location.replace('/login.html');
+  };
+
+  // Notes CRUD Handlers
+  const addNote = (newNote) => {
+    const note = {
+      id: 'note-' + Date.now(),
+      updatedAt: new Date().toISOString(),
+      driveFileId: 'drv-' + Math.random().toString(36).substring(2, 9),
+      isStarred: false,
+      tags: [],
+      ...newNote
+    };
+    setNotes(prev => [note, ...prev]);
+    return note;
+  };
+
+  const updateNote = (id, updates) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n));
+  };
+
+  const deleteNote = (id) => {
+    setNotes(prev => prev.filter(n => n.id !== id));
+  };
+
+  // Drive File Direct Upload Handlers
+  const uploadDriveFile = async (file) => {
+    const uploaded = await uploadDirectToDrive(file);
+    setDriveFiles(prev => [uploaded, ...prev]);
+    return uploaded;
+  };
+
+  const deleteDriveFile = (id) => {
+    setDriveFiles(prev => prev.filter(f => f.id !== id));
+  };
+
+  const driveConfig = {
+    targetFolder: FOLDER_NAME,
+    lastSynced: lastSyncedTime || 'Synced with Google Drive',
+    isConnected: !!driveAccessToken
+  };
+
+  const syncDrive = () => {
+    syncNowToDrive();
   };
 
   const syncNowToDrive = async () => {
@@ -1252,6 +1357,17 @@ export function DataProvider({ children }) {
         addImportantLink,
         deleteImportantLink,
         restoreImportantLink,
+        // Drive Notes
+        notes,
+        addNote,
+        updateNote,
+        deleteNote,
+        driveConfig,
+        syncDrive,
+        // Drive direct files (PDFs/Images)
+        driveFiles,
+        uploadDriveFile,
+        deleteDriveFile,
         // Google Drive zero-backend
         googleClientId,
         setGoogleClientId,
@@ -1262,7 +1378,8 @@ export function DataProvider({ children }) {
         lastSyncedTime,
         connectGoogleDrive,
         disconnectGoogleDrive,
-        syncNowToDrive
+        syncNowToDrive,
+        signOut
       }}
     >
       {children}

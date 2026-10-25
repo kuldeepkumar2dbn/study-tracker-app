@@ -8,7 +8,8 @@ import {
   RefreshCw,
   Sparkles,
   Zap,
-  Link2
+  Link2,
+  LogOut
 } from 'lucide-react';
 import Logo from './Logo';
 import { useTheme } from '../context/ThemeContext';
@@ -16,9 +17,18 @@ import { useData } from '../context/DataContext';
 
 export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
-  const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks } = useData();
+  const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks, driveUser } = useData();
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  const userProfile = (() => {
+    try {
+      const raw = localStorage.getItem('user_profile') || localStorage.getItem('google_user_profile') || sessionStorage.getItem('studyflow_drive_user');
+      return raw ? JSON.parse(raw) : (driveUser || null);
+    } catch {
+      return driveUser || null;
+    }
+  })();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -80,7 +90,7 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
             <button
               onClick={() => onNavigateTab('links')}
               title="Open Important Links & Resource Hub"
-              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border hover:border-theme-accent/40 text-xs font-medium text-theme-muted hover:text-theme-text transition-all shadow-sm"
+              className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border hover:border-theme-accent/40 text-xs font-medium text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95 shadow-sm"
             >
               <Link2 className="w-3.5 h-3.5 text-theme-accent" />
               <span className="hidden md:inline">Links</span>
@@ -92,47 +102,72 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
             </button>
           )}
 
-          {/* Google Drive Status & Sync Button */}
+          {/* Google Drive Status & "Drive Synced" Badge */}
           <div className="flex items-center gap-1.5">
-            <button
+            <div
               onClick={onOpenDriveModal}
-              className={`flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium transition-all duration-150 shadow-sm ${
-                isConnected
-                  ? 'bg-theme-surface border-theme-border text-theme-text hover:border-theme-accent/40'
-                  : 'bg-theme-surface/70 border-theme-border text-theme-muted hover:text-theme-text'
-              }`}
+              title="Google Drive is connected and synced with your account"
+              className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all"
             >
               <div className="relative flex items-center justify-center">
-                <Cloud className={`w-4 h-4 ${isConnected ? 'text-theme-accent' : 'text-theme-muted'}`} />
-                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface ${
-                  syncStatus === 'synced' ? 'bg-emerald-400' :
-                  syncStatus === 'unsaved' ? 'bg-amber-400' :
-                  syncStatus === 'syncing' ? 'bg-sky-400 animate-pulse' : 'bg-zinc-500'
-                }`}></span>
+                <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
               </div>
-              <span className="hidden sm:inline">
-                {isConnected 
-                  ? (syncStatus === 'synced' ? 'Drive Synced' : syncStatus === 'unsaved' ? 'Unsaved' : 'Syncing...') 
-                  : 'Connect Drive'}
-              </span>
-            </button>
+              <span className="hidden sm:inline font-semibold">Drive Synced</span>
+            </div>
 
-            {isConnected && (
-              <button
-                onClick={syncNowToDrive}
-                title="Sync now to Google Drive"
-                className="p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-colors"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-              </button>
-            )}
+            <button
+              onClick={syncNowToDrive}
+              title="Sync now to personal Google Drive"
+              className="top-action-link p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+            </button>
           </div>
+
+          {/* Logged-In Student Profile (Avatar & Name) */}
+          <div 
+            className="flex items-center space-x-2 px-2 sm:px-2.5 py-1 rounded-xl bg-theme-surface border border-theme-border text-xs shadow-sm"
+            title={`Signed in as ${userProfile?.name || 'Student'} (${userProfile?.email || ''})`}
+          >
+            {userProfile?.picture ? (
+              <img 
+                src={userProfile.picture} 
+                alt={userProfile.name || 'Student'} 
+                referrerPolicy="no-referrer"
+                className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
+              />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-[10px]">
+                {(userProfile?.name || 'S').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <span className="hidden md:inline font-semibold text-theme-text truncate max-w-[110px]">
+              {userProfile?.name?.split(' ')[0] || 'Student'}
+            </span>
+          </div>
+
+          {/* Sign Out Button */}
+          <button
+            onClick={() => {
+              try {
+                localStorage.clear();
+                sessionStorage.clear();
+              } catch {}
+              window.location.replace('/login.html');
+            }}
+            title="Sign Out of Study Tracker"
+            className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
+          >
+            <LogOut className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
 
           {/* Persistent Theme Toggle Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}
-              className="flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-medium text-theme-text transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-accent/30"
+              className="top-action-link flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-medium text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95 shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-accent/30"
               aria-label="Toggle Theme"
             >
               <div 

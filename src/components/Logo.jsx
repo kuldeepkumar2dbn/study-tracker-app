@@ -82,7 +82,7 @@ export default function Logo({ onClick }) {
       role="button"
       tabIndex={0}
       title="Study Tracker - Back to Overview"
-      className="flex items-center space-x-2.5 cursor-pointer group select-none focus:outline-none"
+      className="flex items-center space-x-2.5 cursor-pointer group select-none focus:outline-none transition-transform duration-200 active:scale-95"
     >
       <div className="relative group-hover:scale-105 transition-transform duration-200">
         <LogoMark size={38} />

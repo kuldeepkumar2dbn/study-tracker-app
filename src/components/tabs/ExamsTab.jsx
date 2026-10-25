@@ -153,7 +153,7 @@ export default function ExamsTab() {
 
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all self-start sm:self-auto"
+          className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all duration-200 hover:brightness-110 active:scale-95 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Schedule Exam / Assignment</span>
@@ -173,7 +173,7 @@ export default function ExamsTab() {
             <button
               key={pill.id}
               onClick={() => setCategoryFilter(pill.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`filter-pill px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap active:scale-95 ${
                 categoryFilter === pill.id
                   ? 'bg-theme-accent text-white shadow-sm'
                   : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'
@@ -191,7 +191,7 @@ export default function ExamsTab() {
           <select
             value={selectedSubjectFilter}
             onChange={(e) => setSelectedSubjectFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-theme-surface border border-theme-border text-xs text-theme-text focus:outline-none focus:border-theme-accent"
+            className="card-action-select px-3 py-1.5 rounded-xl bg-theme-surface border border-theme-border text-xs text-theme-text focus:outline-none focus:border-theme-accent transition-all duration-150"
           >
             {allSubjectsOptions.map((sub) => (
               <option key={sub} value={sub}>{sub}</option>
@@ -219,7 +219,7 @@ export default function ExamsTab() {
           return (
             <div 
               key={item.id}
-              className={`rounded-2xl glass-panel p-6 border transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+              className={`exam-card rounded-2xl glass-panel p-6 border relative overflow-hidden flex flex-col justify-between ${
                 item.isCompleted
                   ? 'border-theme-border/50 opacity-75 bg-theme-surface/40'
                   : isUrgent 
@@ -266,7 +266,7 @@ export default function ExamsTab() {
                       <select
                         value={item.assignmentStatus || 'Pending'}
                         onChange={(e) => updateAssignmentStatus(item.id, e.target.value)}
-                        className={`text-[11px] font-semibold px-2 py-1 rounded-lg border focus:outline-none transition-colors cursor-pointer ${
+                        className={`card-action-select text-[11px] font-semibold px-2 py-1 rounded-lg border focus:outline-none transition-all duration-150 active:scale-95 cursor-pointer ${
                           item.assignmentStatus === 'Submitted'
                             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                             : item.assignmentStatus === 'In Progress'
@@ -281,7 +281,7 @@ export default function ExamsTab() {
                     ) : (
                       <button
                         onClick={() => toggleExamCompleted(item.id)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                        className={`card-action-btn px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all duration-150 active:scale-95 ${
                           item.isCompleted
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                             : 'bg-theme-surface hover:bg-emerald-500/10 text-theme-muted hover:text-emerald-400 border border-theme-border'
@@ -294,7 +294,7 @@ export default function ExamsTab() {
 
                     <button
                       onClick={() => deleteExam(item.id)}
-                      className="p-1.5 rounded-lg text-theme-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      className="card-action-btn p-1.5 rounded-lg text-theme-muted hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-150 active:scale-90"
                       title="Remove deadline"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
