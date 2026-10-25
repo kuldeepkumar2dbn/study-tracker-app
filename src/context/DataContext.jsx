@@ -11,10 +11,44 @@ import {
   FOLDER_NAME
 } from '../services/googleDrive';
 import { extractYouTubeId } from '../utils/youtube';
+import { getUserStorageKey, logout } from '../../auth-guard';
 
 const DataContext = createContext();
 
 const STORAGE_KEY_PREFIX = 'studyflow_data_';
+
+/**
+ * Scoped LocalStorage helpers namespaced by user.sub
+ */
+function readScoped(key, fallback) {
+  try {
+    const scopedKey = getUserStorageKey(key);
+    const saved = localStorage.getItem(scopedKey);
+    if (saved !== null) {
+      return JSON.parse(saved);
+    }
+    // Backward-compatible fallback for legacy un-scoped key
+    const legacy = localStorage.getItem(STORAGE_KEY_PREFIX + key);
+    if (legacy !== null) {
+      try {
+        localStorage.setItem(scopedKey, legacy);
+        return JSON.parse(legacy);
+      } catch {}
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeScoped(key, val) {
+  try {
+    const scopedKey = getUserStorageKey(key);
+    localStorage.setItem(scopedKey, typeof val === 'string' ? val : JSON.stringify(val));
+  } catch (e) {
+    console.error('Storage write error for', key, e);
+  }
+}
 
 // Helper for dates
 const todayDateStr = () => new Date().toISOString().split('T')[0];
@@ -352,121 +386,67 @@ const initialNotes = [
 export function DataProvider({ children }) {
   // State: Subjects
   const [subjects, setSubjects] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'subjects');
-      return saved ? JSON.parse(saved) : initialSubjects;
-    } catch {
-      return initialSubjects;
-    }
+    return readScoped('subjects', initialSubjects);
   });
 
   // State: Exams & Assignment Deadlines
   const [exams, setExams] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'exams');
-      return saved ? JSON.parse(saved) : initialDeadlines;
-    } catch {
-      return initialDeadlines;
-    }
+    return readScoped('exams', initialDeadlines);
   });
 
   // State: Daily Routine Slots
   const [routineSlots, setRoutineSlots] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'routine_slots');
-      return saved ? JSON.parse(saved) : initialRoutineSlots;
-    } catch {
-      return initialRoutineSlots;
-    }
+    return readScoped('routine_slots', initialRoutineSlots);
   });
 
   // State: Weekly Goals
   const [weeklyGoals, setWeeklyGoals] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'weekly_goals');
-      return saved ? JSON.parse(saved) : initialWeeklyGoals;
-    } catch {
-      return initialWeeklyGoals;
-    }
+    return readScoped('weekly_goals', initialWeeklyGoals);
   });
 
   // Daily & Weekly Targets
   const [dailyTargetMinutes, setDailyTargetMinutesState] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'daily_target_mins');
-      return saved ? Number(saved) : 240; // 4 hours
-    } catch {
-      return 240;
-    }
+    const saved = readScoped('daily_target_mins', 240);
+    return Number(saved) || 240;
   });
 
   const [weeklyTargetHours, setWeeklyTargetHoursState] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'weekly_target_hrs');
-      return saved ? Number(saved) : 28; // 28 hours
-    } catch {
-      return 28;
-    }
+    const saved = readScoped('weekly_target_hrs', 28);
+    return Number(saved) || 28;
   });
 
   // Streak & Activity Log
   const [streakData, setStreakData] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'streak');
-      return saved ? JSON.parse(saved) : {
-        streakCount: 14,
-        lastActiveDate: todayDateStr(),
-        todayHours: 3.5,
-        dailyTarget: 4.0,
-        weeklyLog: [
-          { day: 'Mon', hours: 4.5, target: 4.0 },
-          { day: 'Tue', hours: 3.8, target: 4.0 },
-          { day: 'Wed', hours: 5.2, target: 4.0 },
-          { day: 'Thu', hours: 3.5, target: 4.0 },
-          { day: 'Fri', hours: 4.0, target: 4.0 },
-          { day: 'Sat', hours: 2.5, target: 4.0 },
-          { day: 'Sun', hours: 1.0, target: 4.0 }
-        ]
-      };
-    } catch {
-      return {
-        streakCount: 14,
-        lastActiveDate: todayDateStr(),
-        todayHours: 3.5,
-        dailyTarget: 4.0,
-        weeklyLog: []
-      };
-    }
+    return readScoped('streak', {
+      streakCount: 14,
+      lastActiveDate: todayDateStr(),
+      todayHours: 3.5,
+      dailyTarget: 4.0,
+      weeklyLog: [
+        { day: 'Mon', hours: 4.5, target: 4.0 },
+        { day: 'Tue', hours: 3.8, target: 4.0 },
+        { day: 'Wed', hours: 5.2, target: 4.0 },
+        { day: 'Thu', hours: 3.5, target: 4.0 },
+        { day: 'Fri', hours: 4.0, target: 4.0 },
+        { day: 'Sat', hours: 2.5, target: 4.0 },
+        { day: 'Sun', hours: 1.0, target: 4.0 }
+      ]
+    });
   });
 
   // Skills
   const [skills, setSkills] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'skills');
-      return saved ? JSON.parse(saved) : initialSkills;
-    } catch {
-      return initialSkills;
-    }
+    return readScoped('skills', initialSkills);
   });
 
   // Focus Timer History
   const [timerHistory, setTimerHistory] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'timer_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    return readScoped('timer_history', []);
   });
 
   // State: Important Links & Resources
   const [importantLinks, setImportantLinks] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'important_links');
-      return saved ? JSON.parse(saved) : initialImportantLinks;
-    } catch {
-      return initialImportantLinks;
-    }
+    return readScoped('important_links', initialImportantLinks);
   });
 
   const addImportantLink = (link) => {
@@ -491,22 +471,12 @@ export function DataProvider({ children }) {
 
   // State: Drive Notes
   const [notes, setNotes] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'notes');
-      return saved ? JSON.parse(saved) : initialNotes;
-    } catch {
-      return initialNotes;
-    }
+    return readScoped('notes', initialNotes);
   });
 
   // State: Direct Drive Uploaded Files (PDFs / Images)
   const [driveFiles, setDriveFiles] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_PREFIX + 'drive_files');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
+    return readScoped('drive_files', []);
   });
 
   // Google Drive & GIS State
@@ -536,11 +506,7 @@ export function DataProvider({ children }) {
   });
 
   const [driveFolderId, setDriveFolderId] = useState(() => {
-    try {
-      return localStorage.getItem('studyflow_drive_folder_id') || null;
-    } catch {
-      return null;
-    }
+    return readScoped('drive_folder_id', null);
   });
 
   const [syncStatus, setSyncStatus] = useState('offline');
@@ -561,14 +527,14 @@ export function DataProvider({ children }) {
   const setDailyTargetMinutes = (mins) => {
     const val = Number(mins) || 60;
     setDailyTargetMinutesState(val);
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'daily_target_mins', String(val));
+    writeScoped('daily_target_mins', val);
     setStreakData(prev => ({ ...prev, dailyTarget: Math.round((val / 60) * 10) / 10 }));
   };
 
   const setWeeklyTargetHours = (hrs) => {
     const val = Number(hrs) || 10;
     setWeeklyTargetHoursState(val);
-    localStorage.setItem(STORAGE_KEY_PREFIX + 'weekly_target_hrs', String(val));
+    writeScoped('weekly_target_hrs', val);
   };
 
   // Automatic Midnight Rollover Check
@@ -600,21 +566,22 @@ export function DataProvider({ children }) {
     return () => clearInterval(interval);
   }, [routineSlots]);
 
-  // LocalStorage Persistence
+  // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'subjects', JSON.stringify(subjects));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'exams', JSON.stringify(exams));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'routine_slots', JSON.stringify(routineSlots));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'weekly_goals', JSON.stringify(weeklyGoals));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'skills', JSON.stringify(skills));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'streak', JSON.stringify(streakData));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'timer_history', JSON.stringify(timerHistory));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'weekly_target_hrs', String(weeklyTargetHours));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'daily_target_mins', String(dailyTargetMinutes));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'important_links', JSON.stringify(importantLinks));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'notes', JSON.stringify(notes));
-      localStorage.setItem(STORAGE_KEY_PREFIX + 'drive_files', JSON.stringify(driveFiles));
+      writeScoped('subjects', subjects);
+      writeScoped('exams', exams);
+      writeScoped('routine_slots', routineSlots);
+      writeScoped('weekly_goals', weeklyGoals);
+      writeScoped('skills', skills);
+      writeScoped('streak', streakData);
+      writeScoped('timer_history', timerHistory);
+      writeScoped('weekly_target_hrs', weeklyTargetHours);
+      writeScoped('daily_target_mins', dailyTargetMinutes);
+      writeScoped('important_links', importantLinks);
+      writeScoped('notes', notes);
+      writeScoped('drive_files', driveFiles);
+      if (driveFolderId) writeScoped('drive_folder_id', driveFolderId);
 
       // Trigger debounced Drive sync if connected
       if (driveAccessToken && driveFolderId) {
@@ -627,7 +594,7 @@ export function DataProvider({ children }) {
     } catch (e) {
       console.error('LocalStorage write error', e);
     }
-  }, [subjects, exams, routineSlots, weeklyGoals, skills, streakData, timerHistory, weeklyTargetHours, dailyTargetMinutes, importantLinks, notes, driveFiles]);
+  }, [subjects, exams, routineSlots, weeklyGoals, skills, streakData, timerHistory, weeklyTargetHours, dailyTargetMinutes, importantLinks, notes, driveFiles, driveFolderId]);
 
   // Google Drive Actions
   const connectGoogleDrive = () => {
@@ -703,20 +670,17 @@ export function DataProvider({ children }) {
     setDriveAccessToken(null);
     setDriveUser(null);
     localStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_token_expiry');
     localStorage.removeItem('user_profile');
     localStorage.removeItem('google_user_profile');
+    localStorage.removeItem('google_user_sub');
     sessionStorage.removeItem('studyflow_drive_token');
     sessionStorage.removeItem('studyflow_drive_user');
     setSyncStatus('offline');
   };
 
   const signOut = () => {
-    disconnectGoogleDrive();
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {}
-    window.location.replace('/login.html');
+    logout();
   };
 
   // Notes CRUD Handlers

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { getYouTubeThumbnail, getYouTubeEmbedUrl } from '../../utils/youtube';
+import { sanitizeUrl } from '../../utils/security';
 import InlineEdit from '../InlineEdit';
 import ChapterReportCard from '../ChapterReportCard';
 
@@ -700,7 +701,7 @@ export default function SubjectsTab() {
                               </div>
                               <div className="min-w-0">
                                 <a 
-                                  href={att.webViewLink} 
+                                  href={sanitizeUrl(att.webViewLink)}
                                   target="_blank" 
                                   rel="noreferrer"
                                   className="font-medium text-theme-text hover:text-theme-accent transition-colors truncate block text-xs"

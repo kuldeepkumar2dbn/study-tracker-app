@@ -14,6 +14,7 @@ import {
 import Logo from './Logo';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
+import { logout } from '../../auth-guard';
 
 export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
@@ -147,16 +148,10 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
             </span>
           </div>
 
-          {/* Sign Out Button */}
+          {/* Hardened Sign Out Button (calls google.accounts.oauth2.revoke) */}
           <button
-            onClick={() => {
-              try {
-                localStorage.clear();
-                sessionStorage.clear();
-              } catch {}
-              window.location.replace('/login.html');
-            }}
-            title="Sign Out of Study Tracker"
+            onClick={() => logout()}
+            title="Sign Out of Study Tracker and Revoke Google Session"
             className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
           >
             <LogOut className="w-3.5 h-3.5 text-rose-400" />

@@ -14,6 +14,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { sanitizeUrl } from '../utils/security';
 
 // 1. Reusable Two-Step Confirm Delete Button
 export function ConfirmDeleteButton({ onConfirm, itemName = 'link', className = '' }) {
@@ -371,7 +372,7 @@ export default function ImportantLinks() {
                   </span>
 
                   <a
-                    href={link.url}
+                    href={sanitizeUrl(link.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-2.5 py-1 rounded-lg bg-theme-surface hover:bg-theme-accent hover:text-white border border-theme-border text-xs font-semibold text-theme-text transition-colors flex items-center gap-1 shrink-0"

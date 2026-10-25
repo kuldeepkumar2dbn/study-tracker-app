@@ -12,17 +12,26 @@
 
 export * from './src/components/AppShell.jsx';
 export * from './src/services/googleDrive.js';
+export * from './auth-guard.js';
 export { soundEngine } from './src/utils/audio.js';
+
+import { getUserStorageKey } from './auth-guard.js';
 
 export const STORAGE_PREFIX = 'studyflow_data_';
 
 /**
- * LocalStorage CRUD Handlers
+ * LocalStorage CRUD Handlers (Scoped by authenticated user.sub)
  */
 export function getStorageData(key, fallback = null) {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + key);
-    return raw ? JSON.parse(raw) : fallback;
+    const scopedKey = getUserStorageKey(key);
+    const raw = localStorage.getItem(scopedKey);
+    if (raw !== null) {
+      return JSON.parse(raw);
+    }
+    // Backward-compatible fallback for un-namespaced keys
+    const legacyRaw = localStorage.getItem(STORAGE_PREFIX + key);
+    return legacyRaw ? JSON.parse(legacyRaw) : fallback;
   } catch (err) {
     console.error(`Error reading ${key} from storage:`, err);
     return fallback;
@@ -31,7 +40,8 @@ export function getStorageData(key, fallback = null) {
 
 export function setStorageData(key, value) {
   try {
-    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+    const scopedKey = getUserStorageKey(key);
+    localStorage.setItem(scopedKey, JSON.stringify(value));
   } catch (err) {
     console.error(`Error writing ${key} to storage:`, err);
   }
@@ -39,7 +49,8 @@ export function setStorageData(key, value) {
 
 export function removeStorageData(key) {
   try {
-    localStorage.removeItem(STORAGE_PREFIX + key);
+    const scopedKey = getUserStorageKey(key);
+    localStorage.removeItem(scopedKey);
   } catch (err) {
     console.error(`Error removing ${key} from storage:`, err);
   }

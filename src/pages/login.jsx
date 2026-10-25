@@ -22,12 +22,22 @@ function LoginPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [statusText, setStatusText] = useState('');
 
-  // Auto-redirect if already authenticated
+  // Auto-redirect if already authenticated and unexpired
   useEffect(() => {
     try {
       const existingToken = localStorage.getItem('google_access_token');
+      const expiryStr = localStorage.getItem('google_token_expiry');
       if (existingToken) {
-        window.location.replace('/index.html');
+        if (expiryStr && Date.now() > Number(expiryStr)) {
+          // Token expired, clear it
+          localStorage.removeItem('google_access_token');
+          localStorage.removeItem('google_token_expiry');
+          localStorage.removeItem('user_profile');
+          localStorage.removeItem('google_user_profile');
+          localStorage.removeItem('google_user_sub');
+        } else {
+          window.location.replace('/index.html');
+        }
       }
     } catch (e) {
       console.warn('LocalStorage error:', e);
@@ -75,12 +85,16 @@ function LoginPage() {
             const accessToken = tokenResponse.access_token;
             setStatusText('Saving authorization and loading profile...');
 
-            // Store primary access token
+            // Store primary access token and calculate expiry timestamp
             localStorage.setItem('google_access_token', accessToken);
+            const expiresInSec = Number(tokenResponse.expires_in) || 3600;
+            const tokenExpiry = Date.now() + expiresInSec * 1000;
+            localStorage.setItem('google_token_expiry', String(tokenExpiry));
+
             localStorage.setItem('studyflow_drive_token', accessToken);
             sessionStorage.setItem('studyflow_drive_token', accessToken);
 
-            // Fetch student's profile information
+            // Fetch student's profile information including unique Google subject ID (sub)
             try {
               const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                 headers: { Authorization: `Bearer ${accessToken}` }
@@ -88,7 +102,11 @@ function LoginPage() {
 
               if (res.ok) {
                 const profile = await res.json();
+                const userSub = profile.sub || '';
+                localStorage.setItem('google_user_sub', userSub);
+
                 const userData = {
+                  sub: userSub,
                   name: profile.name || profile.given_name || 'Student',
                   email: profile.email || '',
                   picture: profile.picture || ''

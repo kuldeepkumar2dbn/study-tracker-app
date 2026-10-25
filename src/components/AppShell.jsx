@@ -24,6 +24,8 @@ import Logo from './Logo';
 import DriveModal from './DriveModal';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { DataProvider, useData } from '../context/DataContext';
+import { logout, validateAuthToken } from '../../auth-guard';
+import { sanitizeUrl } from '../utils/security';
 
 export const STORAGE_KEY_PREFIX = 'studyflow_data_';
 
@@ -171,16 +173,10 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
             </span>
           </div>
 
-          {/* Sign Out Button */}
+          {/* Hardened Sign Out Button (calls google.accounts.oauth2.revoke) */}
           <button
-            onClick={() => {
-              try {
-                localStorage.clear();
-                sessionStorage.clear();
-              } catch {}
-              window.location.replace('/login.html');
-            }}
-            title="Sign Out of Study Tracker"
+            onClick={() => logout()}
+            title="Sign Out of Study Tracker and Revoke Google Session"
             className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
           >
             <LogOut className="w-3.5 h-3.5 text-rose-400" />
@@ -405,7 +401,7 @@ export function QuickLinksModal({ isOpen, onClose }) {
             >
               <div className="min-w-0 flex-1">
                 <a 
-                  href={link.url} 
+                  href={sanitizeUrl(link.url)}
                   target="_blank" 
                   rel="noreferrer" 
                   className="font-semibold text-xs text-theme-text hover:text-theme-accent flex items-center gap-1.5 transition-colors"
@@ -492,14 +488,9 @@ export function AppLayout({ activeTabId, children }) {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
 
-  // Auth Guard: Redirect to login.html if google_access_token does not exist
+  // Auth Guard: Validate token existence and expiration (Date.now() > google_token_expiry)
   useEffect(() => {
-    try {
-      const token = localStorage.getItem('google_access_token');
-      if (!token) {
-        window.location.replace('/login.html');
-      }
-    } catch {}
+    validateAuthToken({ redirect: true });
   }, []);
 
   return (
@@ -543,13 +534,8 @@ export function AppLayout({ activeTabId, children }) {
 
 // Multi-Page Initializer Helper
 export function initPage(Component, activeTabId) {
-  if (typeof window !== 'undefined') {
-    try {
-      if (!localStorage.getItem('google_access_token')) {
-        window.location.replace('/login.html');
-        return;
-      }
-    } catch {}
+  if (typeof window !== 'undefined' && !validateAuthToken({ redirect: true })) {
+    return;
   }
 
   const rootElement = document.getElementById('root');

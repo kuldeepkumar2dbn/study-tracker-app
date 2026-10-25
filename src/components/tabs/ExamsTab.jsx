@@ -17,6 +17,7 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { sanitizeUrl } from '../../utils/security';
 
 export default function ExamsTab() {
   const { exams, addExam, updateAssignmentStatus, toggleExamCompleted, deleteExam, subjects } = useData();
@@ -318,7 +319,7 @@ export default function ExamsTab() {
                 {isAssignment && item.submissionLink && (
                   <div className="mb-3">
                     <a
-                      href={item.submissionLink}
+                      href={sanitizeUrl(item.submissionLink)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs text-theme-accent font-medium transition-colors"

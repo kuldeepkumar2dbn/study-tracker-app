@@ -25,6 +25,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { sanitizeUrl } from '../../utils/security';
 
 export default function NotesTab({ onOpenDriveModal }) {
   const { 
@@ -83,15 +84,38 @@ export default function NotesTab({ onOpenDriveModal }) {
 
   const selectedNote = notes.find(n => n.id === selectedNoteId) || filteredNotes[0] || null;
 
-  // Direct Google Drive Multipart Upload Handler
+  // Direct Google Drive Multipart Upload Handler with Security Hardening
   const processFileUpload = async (file) => {
     if (!file) return;
 
-    const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
-    const isImage = file.type.startsWith('image/');
+    // 1. Enforce 25MB file size limit
+    const MAX_SIZE = 25 * 1024 * 1024; // 25 MB
+    if (file.size > MAX_SIZE) {
+      setUploadError(`File exceeds the 25MB limit (${(file.size / (1024 * 1024)).toFixed(2)} MB). Please select a file under 25MB.`);
+      return;
+    }
 
-    if (!isPdf && !isImage) {
-      setUploadError('Please select a valid PDF document or image file (PNG, JPG, WebP).');
+    const lowerName = file.name.toLowerCase();
+
+    // 2. Reject executable file extensions explicitly
+    const EXECUTABLE_EXTS = ['.exe', '.bat', '.sh', '.cmd', '.js', '.mjs', '.cjs', '.vbs', '.ps1', '.com', '.scr', '.msi', '.jar', '.apk', '.bin'];
+    if (EXECUTABLE_EXTS.some(ext => lowerName.endsWith(ext))) {
+      setUploadError('Security alert: Executable files (.exe, .bat, .sh, .cmd, .js) are strictly rejected.');
+      return;
+    }
+
+    // 3. Restrict accepted file types to PDF, Images, TXT, and DOCX
+    const ALLOWED_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.docx'];
+    const isAllowedExt = ALLOWED_EXTS.some(ext => lowerName.endsWith(ext));
+    const isAllowedMime =
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/') ||
+      file.type === 'text/plain' ||
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.type === 'application/msword';
+
+    if (!isAllowedExt && !isAllowedMime) {
+      setUploadError('Invalid file type. Only PDF documents, Images, TXT, and DOCX files are permitted.');
       return;
     }
 
@@ -216,12 +240,12 @@ export default function NotesTab({ onOpenDriveModal }) {
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Direct File Picker Input */}
+          {/* Direct File Picker Input (Restricted to PDF, Images, TXT, DOCX; Max 25MB) */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileInputChange}
-            accept="application/pdf,image/*"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.txt,.docx,application/pdf,image/*,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
           />
 
@@ -229,10 +253,10 @@ export default function NotesTab({ onOpenDriveModal }) {
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-emerald-500/30 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Upload a PDF or Image directly to Google Drive"
+            title="Upload a PDF, Image, TXT, or DOCX document (Max 25MB) directly to Google Drive"
           >
             {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            <span>{isUploading ? 'Uploading to Drive...' : 'Upload PDF / Image'}</span>
+            <span>{isUploading ? 'Uploading to Drive...' : 'Upload Document (Max 25MB)'}</span>
           </button>
 
           <button
@@ -357,7 +381,7 @@ export default function NotesTab({ onOpenDriveModal }) {
 
                   <div className="flex items-center gap-1 shrink-0">
                     <a
-                      href={df.webViewLink}
+                      href={sanitizeUrl(df.webViewLink)}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Open directly in Google Drive"

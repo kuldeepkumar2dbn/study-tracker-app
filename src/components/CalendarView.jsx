@@ -15,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { sanitizeUrl } from '../utils/security';
 
 export default function CalendarView() {
   const { exams, subjects, addExam, skills } = useData();
@@ -369,7 +370,7 @@ export default function CalendarView() {
 
                   {ev.submissionLink && (
                     <a
-                      href={ev.submissionLink}
+                      href={sanitizeUrl(ev.submissionLink)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[11px] text-theme-accent hover:underline flex items-center gap-1 pt-1"

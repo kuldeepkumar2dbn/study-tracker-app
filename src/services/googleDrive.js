@@ -197,10 +197,57 @@ export async function loadStudyDataFromDrive(accessToken, folderId) {
   return await downloadRes.json();
 }
 
+export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB limit
+export const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.docx'];
+export const BLOCKED_EXECUTABLE_EXTENSIONS = [
+  '.exe', '.bat', '.sh', '.cmd', '.js', '.mjs', '.cjs', '.vbs', '.ps1',
+  '.com', '.scr', '.msi', '.jar', '.apk', '.bin', '.app', '.dmg', '.php', '.py'
+];
+
+/**
+ * Validates uploaded file size and type against security policies
+ */
+export function validateUploadedFile(file) {
+  if (!file) {
+    throw new Error('No file selected.');
+  }
+
+  // 1. Enforce 25MB file size limit
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    throw new Error(`File size (${sizeMb} MB) exceeds the maximum allowed limit of 25MB.`);
+  }
+
+  // 2. Reject executable file extensions explicitly
+  const lowerName = file.name.toLowerCase();
+  const isExecutable = BLOCKED_EXECUTABLE_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+  if (isExecutable) {
+    throw new Error('Executable and script files (.exe, .bat, .sh, .cmd, .js) are strictly rejected for security.');
+  }
+
+  // 3. Restrict accepted file types to PDF, images, TXT, and DOCX
+  const isAllowedExt = ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+  const isAllowedMime =
+    file.type === 'application/pdf' ||
+    file.type.startsWith('image/') ||
+    file.type === 'text/plain' ||
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    file.type === 'application/msword';
+
+  if (!isAllowedExt && !isAllowedMime) {
+    throw new Error('Invalid file type. Only PDF, Images (PNG, JPG, WebP, SVG), TXT, and DOCX documents are permitted.');
+  }
+
+  return true;
+}
+
 /**
  * Uploads a PDF or Image file directly to Google Drive using Drive v3 multipart upload API
  */
 export async function uploadFileToDriveFolder(accessToken, folderId, file) {
+  // Validate file size and type before starting upload
+  validateUploadedFile(file);
+
   const boundary = '-------StudyTrackerDriveUpload' + Date.now();
   const delimiter = `\r\n--${boundary}\r\n`;
   const closeDelimiter = `\r\n--${boundary}--`;
@@ -285,4 +332,3 @@ export async function uploadDirectToDrive(file) {
 
   return await uploadFileToDriveFolder(token, folderId, file);
 }
-
