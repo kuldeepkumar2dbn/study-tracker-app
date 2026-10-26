@@ -7,6 +7,7 @@ import {
   loadStudyDataFromDrive,
   uploadFileToDriveFolder,
   uploadDirectToDrive,
+  getSubjectFolderLink,
   DEFAULT_GOOGLE_CLIENT_ID,
   FOLDER_NAME
 } from '../services/googleDrive';
@@ -599,7 +600,15 @@ export function DataProvider({ children }) {
 
   // State: Direct Drive Uploaded Files (PDFs / Images)
   const [driveFiles, setDriveFiles] = useState(() => {
-    return readScoped('drive_files', []);
+    const raw = readScoped('drive_files', []);
+    if (Array.isArray(raw)) {
+      return raw.map(f => ({
+        ...f,
+        subject: f.subject || 'General',
+        folderLink: f.folderLink || getSubjectFolderLink(f.subject || 'General', f.folderId)
+      }));
+    }
+    return [];
   });
 
   // Google Drive & GIS State
@@ -915,10 +924,15 @@ export function DataProvider({ children }) {
   };
 
   // Drive File Direct Upload Handlers
-  const uploadDriveFile = async (file) => {
-    const uploaded = await uploadDirectToDrive(file);
-    setDriveFiles(prev => [uploaded, ...prev]);
-    return uploaded;
+  const uploadDriveFile = async (file, subjectName = 'General') => {
+    const uploaded = await uploadDirectToDrive(file, subjectName);
+    const enriched = {
+      ...uploaded,
+      subject: uploaded.subject || subjectName || 'General',
+      folderLink: uploaded.folderLink || getSubjectFolderLink(uploaded.subject || subjectName, uploaded.folderId)
+    };
+    setDriveFiles(prev => [enriched, ...prev]);
+    return enriched;
   };
 
   const deleteDriveFile = (id) => {

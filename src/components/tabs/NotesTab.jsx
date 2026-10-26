@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -22,11 +22,17 @@ import {
   Paperclip,
   AlertCircle,
   CheckCircle2,
-  Lock
+  Lock,
+  ChevronDown,
+  ChevronRight,
+  FolderPlus,
+  FolderCheck,
+  HardDrive
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { sanitizeUrl, validateFileBinarySignature, getSafeHash } from '../../utils/security';
+import { getSubjectFolderLink, NOTES_PARENT_FOLDER_NAME } from '../../services/googleDrive';
 import AnimatedHeadline from '../AnimatedHeadline';
 import RollingNumber from '../RollingNumber';
 import { celebrateTaskCompletion } from '../../utils/confetti';
@@ -60,21 +66,66 @@ export default function NotesTab({ onOpenDriveModal }) {
   const [editTags, setEditTags] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // File Upload State
+  // File Upload Modal & Staging State
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [isCustomSubject, setIsCustomSubject] = useState(false);
+  const [customSubjectInput, setCustomSubjectInput] = useState('');
+  const [modalUploadProgress, setModalUploadProgress] = useState(0);
+  const [modalUploadStatus, setModalUploadStatus] = useState('');
+  const [modalError, setModalError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+  const [lastUploadedFolderLink, setLastUploadedFolderLink] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
-  // New Note Modal
+  // Accordion collapsed state for subject folders in Explorer
+  const [collapsedSubjects, setCollapsedSubjects] = useState({});
+
+  // New Markdown Note Modal State
   const [isNewNoteOpen, setIsNewNoteOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newSubject, setNewSubject] = useState(subjects[0]?.name || 'General');
   const [newFolder, setNewFolder] = useState('Algorithms');
   const [newTags, setNewTags] = useState('Summary, CheatSheet');
   const [newContent, setNewContent] = useState('# New Study Note\n\n- Key concepts:\n- Important definitions:\n- Practice problems:');
+
+  // Dynamic Subjects List pulled directly from the user's Subjects & Syllabus
+  const subjectOptions = useMemo(() => {
+    const list = (subjects || []).map(s => s.name?.trim()).filter(Boolean);
+    const defaults = ['Computer Science', 'Mathematics', 'Physics', 'General'];
+    const combined = Array.from(new Set([...list, ...defaults]));
+    return combined;
+  }, [subjects]);
+
+  // Group Drive Files by Subject for the UI Notes Explorer
+  const filesBySubject = useMemo(() => {
+    const groups = {};
+    (driveFiles || []).forEach(file => {
+      const sub = (file.subject || 'General').trim() || 'General';
+      if (!groups[sub]) {
+        groups[sub] = {
+          subject: sub,
+          folderId: file.folderId || null,
+          folderLink: file.folderLink || getSubjectFolderLink(sub, file.folderId),
+          files: []
+        };
+      }
+      groups[sub].files.push(file);
+    });
+
+    return Object.values(groups).sort((a, b) => a.subject.localeCompare(b.subject));
+  }, [driveFiles]);
+
+  const toggleSubjectCollapse = (subject) => {
+    setCollapsedSubjects(prev => ({
+      ...prev,
+      [subject]: !prev[subject]
+    }));
+  };
 
   const folders = FOLDERS;
 
@@ -94,8 +145,8 @@ export default function NotesTab({ onOpenDriveModal }) {
 
   const selectedNote = notes.find(n => n.id === selectedNoteId) || filteredNotes[0] || null;
 
-  // Direct Google Drive Multipart Upload Handler with Security Hardening
-  const processFileUpload = async (file) => {
+  // Staging handler: Validates file and opens Upload Modal before sending to Drive
+  const handleStageFile = async (file) => {
     if (!file) return;
 
     // 1. Enforce 25MB file size limit
@@ -142,29 +193,67 @@ export default function NotesTab({ onOpenDriveModal }) {
 
     setUploadError('');
     setUploadSuccess('');
+    setModalError('');
+    setPendingUploadFile(file);
+
+    // Default subject selection to active subject or first available subject
+    const defaultSub = selectedSubject || subjectOptions[0] || 'General';
+    setSelectedSubject(defaultSub);
+    setIsCustomSubject(false);
+    setCustomSubjectInput('');
+    setModalUploadProgress(0);
+    setModalUploadStatus('');
+    setIsUploadModalOpen(true);
+  };
+
+  // Confirm and execute multipart upload with target subject folder
+  const handleConfirmUpload = async () => {
+    if (!pendingUploadFile) return;
+
+    const targetSubject = isCustomSubject 
+      ? (customSubjectInput.trim() || 'General')
+      : (selectedSubject || 'General');
+
+    if (isCustomSubject && !customSubjectInput.trim()) {
+      setModalError('Please enter a custom subject name or select an existing subject.');
+      return;
+    }
+
     setIsUploading(true);
-    setUploadProgress(`Uploading ${file.name} directly to Google Drive via API v3...`);
+    setModalError('');
+    setModalUploadProgress(25);
+    setModalUploadStatus(`Checking Google Drive > StudyTracker Notes > ${targetSubject}...`);
 
     try {
+      setModalUploadProgress(55);
+      setModalUploadStatus(`Streaming multipart payload for ${pendingUploadFile.name}...`);
+
       let uploaded;
       try {
-        uploaded = await uploadDriveFile(file);
+        uploaded = await uploadDriveFile(pendingUploadFile, targetSubject);
       } catch (uploadErr) {
         if (
           uploadErr?.code === 'DRIVE_TOKEN_EXPIRED' || 
           uploadErr?.message?.includes('expired') || 
           uploadErr?.message?.includes('401')
         ) {
-          setUploadProgress('Renewing Google Drive token...');
+          setModalUploadStatus('Renewing Google Drive authorization...');
           await renewDriveToken();
-          setUploadProgress(`Retrying upload of ${file.name}...`);
-          uploaded = await uploadDriveFile(file);
+          setModalUploadStatus(`Retrying upload of ${pendingUploadFile.name}...`);
+          uploaded = await uploadDriveFile(pendingUploadFile, targetSubject);
         } else {
           throw uploadErr;
         }
       }
 
-      setUploadSuccess(`Successfully uploaded "${uploaded.name}" directly to your Google Drive!`);
+      setModalUploadProgress(100);
+      setModalUploadStatus('Complete!');
+
+      // Success notification strictly matching requirement 4:
+      // "Saved to Google Drive > StudyTracker Notes > [Subject Name]"
+      const successNotice = `Saved to Google Drive > StudyTracker Notes > ${targetSubject}`;
+      setUploadSuccess(successNotice);
+      setLastUploadedFolderLink(uploaded.folderLink || getSubjectFolderLink(targetSubject, uploaded.folderId));
       celebrateTaskCompletion();
 
       // If viewing/editing a note, append attachment markdown
@@ -178,12 +267,26 @@ export default function NotesTab({ onOpenDriveModal }) {
           });
         }
       }
+
+      // Automatically uncollapse the target subject folder accordion
+      setCollapsedSubjects(prev => ({
+        ...prev,
+        [targetSubject]: false
+      }));
+
+      // Close modal smoothly
+      setTimeout(() => {
+        setIsUploadModalOpen(false);
+        setPendingUploadFile(null);
+        setModalUploadProgress(0);
+        setModalUploadStatus('');
+      }, 400);
+
     } catch (err) {
       console.error('Direct Drive file upload error:', err);
-      setUploadError(err.message || 'Direct Drive upload failed. Please verify your Google sign-in.');
+      setModalError(err.message || 'Direct Drive upload failed. Please verify your Google sign-in.');
     } finally {
       setIsUploading(false);
-      setUploadProgress('');
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -191,7 +294,7 @@ export default function NotesTab({ onOpenDriveModal }) {
   const handleFileInputChange = (e) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      processFileUpload(files[0]);
+      handleStageFile(files[0]);
     }
   };
 
@@ -200,7 +303,7 @@ export default function NotesTab({ onOpenDriveModal }) {
     setIsDragOver(false);
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      processFileUpload(files[0]);
+      handleStageFile(files[0]);
     }
   };
 
@@ -268,7 +371,7 @@ export default function NotesTab({ onOpenDriveModal }) {
   return (
     <div className="space-y-6 animate-fadeIn">
       
-      {/* Header */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
           <div className="flex items-center gap-2">
@@ -279,17 +382,17 @@ export default function NotesTab({ onOpenDriveModal }) {
             />
           </div>
           <p className="text-xs text-theme-muted mt-1">
-            Zero-backend direct upload & Markdown notes synced directly to your personal Google Drive storage.
+            Auto-organizes uploaded notes into Subject Folders in Google Drive with direct client-side GIS uploads.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Direct File Picker Input (Restricted to PDF, Images, TXT, DOCX; Max 25MB) */}
+          {/* Hidden File Picker Input */}
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileInputChange}
-            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.txt,.docx,application/pdf,image/*,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.docx,application/pdf,image/*,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
           />
 
@@ -297,10 +400,10 @@ export default function NotesTab({ onOpenDriveModal }) {
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-emerald-500/30 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Upload a PDF, Image, TXT, or DOCX document (Max 25MB) directly to Google Drive"
+            title="Upload a PDF, Image, TXT, or DOCX document directly into a Google Drive Subject Folder"
           >
             {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            <span>{isUploading ? 'Uploading to Drive...' : 'Upload Document (Max 25MB)'}</span>
+            <span>{isUploading ? 'Uploading to Drive...' : 'Upload Note (Max 25MB)'}</span>
           </button>
 
           <button
@@ -332,14 +435,14 @@ export default function NotesTab({ onOpenDriveModal }) {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-display font-semibold text-xs sm:text-sm text-theme-text">
-                  Direct Google Drive File Upload
+                  Direct Google Drive Subject Folder Upload
                 </h3>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold font-mono">
                   Drive API v3 multipart
                 </span>
               </div>
               <p className="text-[11px] text-theme-muted mt-0.5">
-                Drag and drop PDFs or images here to upload directly to your personal Drive. Zero server routing.
+                Drop files here or click "Upload Note" to select a Subject Folder in Drive. Files auto-organize into <span className="text-emerald-400 font-mono">StudyTracker Notes &gt; [Subject]</span>.
               </p>
             </div>
           </div>
@@ -357,107 +460,254 @@ export default function NotesTab({ onOpenDriveModal }) {
           </div>
         </div>
 
-        {/* Upload Status / Progress Indicator */}
-        {isUploading && (
-          <div className="mt-3 p-3 rounded-xl bg-theme-accent/10 border border-theme-accent/30 text-xs text-theme-accent flex items-center gap-2.5 animate-pulse">
-            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-            <span>{uploadProgress}</span>
-          </div>
-        )}
-
-        {/* Success Alert */}
+        {/* Global Success Notification Alert */}
         {uploadSuccess && (
-          <div className="mt-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-400 flex items-center justify-between gap-2 animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{uploadSuccess}</span>
+          <div className="mt-3 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-400 flex items-center justify-between gap-3 animate-fadeIn shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span className="font-medium truncate">{uploadSuccess}</span>
             </div>
-            <button onClick={() => setUploadSuccess('')} className="text-emerald-400 hover:text-emerald-200">
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {lastUploadedFolderLink && (
+                <a
+                  href={sanitizeUrl(lastUploadedFolderLink)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-semibold text-[11px] transition-colors"
+                  title="Open subject folder in Google Drive"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Open Folder</span>
+                </a>
+              )}
+              <button 
+                onClick={() => setUploadSuccess('')} 
+                className="p-1 rounded-md text-emerald-400 hover:text-emerald-200 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Error Alert */}
+        {/* Global Error Alert */}
         {uploadError && (
           <div className="mt-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-400 flex items-center justify-between gap-2 animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{uploadError}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span className="truncate">{uploadError}</span>
             </div>
             <button onClick={() => setUploadError('')} className="text-rose-400 hover:text-rose-200">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
+      </div>
 
-        {/* Uploaded Documents List */}
-        {driveFiles && driveFiles.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-theme-border/60">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-theme-muted">
-                Uploaded Drive Documents (<RollingNumber value={driveFiles.length} />)
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {driveFiles.map((df) => (
+      {/* UI NOTES EXPLORER GROUPED BY SUBJECT */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Folder className="w-4 h-4 text-theme-accent" />
+            <h2 className="font-display font-bold text-sm text-theme-text uppercase tracking-wider">
+              Google Drive Explorer (Grouped by Subject)
+            </h2>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-theme-surface border border-theme-border font-mono text-theme-muted">
+              <RollingNumber value={driveFiles.length} /> files total
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-theme-muted">
+            <span className="hidden sm:inline">Drive Root:</span>
+            <code className="text-emerald-400 font-mono text-[11px]">
+              StudyTracker Notes/
+            </code>
+          </div>
+        </div>
+
+        {/* Subject Accordions */}
+        {filesBySubject.length > 0 ? (
+          <div className="space-y-3">
+            {filesBySubject.map((group) => {
+              const isCollapsed = !!collapsedSubjects[group.subject];
+              const count = group.files.length;
+              const countLabel = count === 1 ? '1 file' : `${count} files`;
+
+              return (
                 <div 
-                  key={df.id} 
-                  className="p-2.5 rounded-xl bg-theme-surface/80 border border-theme-border hover:border-theme-accent/40 flex items-center justify-between gap-2 text-xs transition-all shadow-sm card-glow-hover"
+                  key={group.subject} 
+                  className="rounded-2xl glass-panel border border-theme-border/80 overflow-hidden transition-all shadow-xs"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 rounded-lg bg-theme-bg flex items-center justify-center shrink-0 border border-theme-border">
-                      {df.type === 'pdf' ? (
-                        <FileText className="w-4 h-4 text-rose-400" />
-                      ) : (
-                        <ImageIcon className="w-4 h-4 text-sky-400" />
-                      )}
+                  {/* Subject Accordion Header */}
+                  <div 
+                    onClick={() => toggleSubjectCollapse(group.subject)}
+                    className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 bg-theme-surface/60 hover:bg-theme-cardHover/70 cursor-pointer select-none transition-colors border-b border-theme-border/40"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button 
+                        type="button"
+                        className="text-theme-muted hover:text-theme-text transition-transform duration-200"
+                        aria-label={isCollapsed ? 'Expand subject' : 'Collapse subject'}
+                      >
+                        {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                      
+                      <div className="w-8 h-8 rounded-xl bg-theme-accent/10 border border-theme-accent/20 flex items-center justify-center shrink-0">
+                        <Folder className="w-4 h-4 text-theme-accent" />
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-display font-bold text-sm text-theme-text truncate">
+                            {group.subject}
+                          </h3>
+                          <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full bg-theme-bg border border-theme-border font-semibold text-theme-muted shrink-0">
+                            {countLabel}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-theme-muted flex items-center gap-1 font-mono mt-0.5 truncate">
+                          <span>Google Drive</span> &gt; <span>StudyTracker Notes</span> &gt; <span className="text-emerald-400">{group.subject}</span>
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-theme-text truncate text-[11px]" title={df.name}>
-                        {df.name}
-                      </p>
-                      <span className="text-[10px] text-theme-muted font-mono-numbers">
-                        {df.size}
-                      </span>
+
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {/* Direct "Open in Google Drive" button for Subject Folder */}
+                      {group.folderLink ? (
+                        <a
+                          href={sanitizeUrl(group.folderLink)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-all shadow-xs"
+                          title={`Open "${group.subject}" folder directly in Google Drive`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open in Google Drive</span>
+                        </a>
+                      ) : (
+                        <a
+                          href="https://drive.google.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs text-theme-muted hover:text-theme-text transition-all"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open in Google Drive</span>
+                        </a>
+                      )}
+
+                      {/* Quick Upload Note to this Subject */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSubject(group.subject);
+                          setIsCustomSubject(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs text-theme-muted hover:text-theme-text transition-all"
+                        title={`Upload note directly into ${group.subject}`}
+                      >
+                        <Plus className="w-3.5 h-3.5 text-theme-accent" />
+                        <span className="hidden sm:inline">Upload Note</span>
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <a
-                      href={sanitizeUrl(df.webViewLink)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open directly in Google Drive"
-                      className="p-1 rounded-lg hover:bg-theme-cardHover text-theme-muted hover:text-theme-text transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-theme-accent" />
-                    </a>
-                    {selectedNote && (
-                      <button
-                        onClick={() => handleInsertDriveFileIntoNote(df)}
-                        title="Insert link into active note"
-                        className="p-1 rounded-lg hover:bg-theme-cardHover text-theme-muted hover:text-emerald-400 transition-colors"
-                      >
-                        <Paperclip className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteDriveFile(df.id)}
-                      title="Remove from uploaded list"
-                      className="p-1 rounded-lg hover:bg-rose-500/10 text-theme-muted hover:text-rose-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {/* Accordion Body: Files Grid inside Subject */}
+                  {!isCollapsed && (
+                    <div className="p-3.5 sm:p-4 bg-theme-bg/40 animate-fadeIn">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {group.files.map((df) => (
+                          <div 
+                            key={df.id} 
+                            className="p-3 rounded-xl bg-theme-surface/90 border border-theme-border hover:border-theme-accent/40 flex flex-col justify-between gap-2.5 text-xs transition-all shadow-xs card-glow-hover"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-theme-bg flex items-center justify-center shrink-0 border border-theme-border">
+                                {df.type === 'pdf' ? (
+                                  <FileText className="w-4 h-4 text-rose-400" />
+                                ) : (
+                                  <ImageIcon className="w-4 h-4 text-sky-400" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-theme-text truncate text-xs" title={df.name}>
+                                  {df.name}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5 text-[10px] text-theme-muted">
+                                  <span className="font-mono-numbers">{df.size}</span>
+                                  <span>•</span>
+                                  <span className="truncate">{new Date(df.uploadedAt || Date.now()).toLocaleDateString()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-theme-border/50 text-[11px]">
+                              {/* Direct "Open in Google Drive" button for Individual File */}
+                              <a
+                                href={sanitizeUrl(df.webViewLink)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Open file directly in Google Drive"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-theme-bg hover:bg-theme-cardHover border border-theme-border text-theme-text hover:text-theme-accent transition-colors font-medium text-[11px]"
+                              >
+                                <ExternalLink className="w-3 h-3 text-theme-accent" />
+                                <span>Open in Google Drive</span>
+                              </a>
+
+                              <div className="flex items-center gap-1">
+                                {selectedNote && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsertDriveFileIntoNote(df)}
+                                    title="Insert link into active markdown note"
+                                    className="p-1.5 rounded-lg hover:bg-theme-cardHover text-theme-muted hover:text-emerald-400 transition-colors"
+                                  >
+                                    <Paperclip className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => deleteDriveFile(df.id)}
+                                  title="Remove from study tracker"
+                                  className="p-1.5 rounded-lg hover:bg-rose-500/10 text-theme-muted hover:text-rose-400 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-8 rounded-2xl glass-panel border border-theme-border text-center">
+            <div className="w-12 h-12 rounded-2xl bg-theme-accent/10 border border-theme-accent/20 flex items-center justify-center mx-auto mb-3">
+              <Cloud className="w-6 h-6 text-theme-accent" />
             </div>
+            <h3 className="font-display font-bold text-sm text-theme-text mb-1">
+              No Drive Documents Organized Yet
+            </h3>
+            <p className="text-xs text-theme-muted max-w-md mx-auto mb-4">
+              Upload PDF cheat sheets, lecture slides, or images. Study Tracker will automatically create dedicated Subject Folders in your Google Drive!
+            </p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white text-xs font-semibold shadow-glow-accent transition-all active:scale-95"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Upload First Note to Drive</span>
+            </button>
           </div>
         )}
       </div>
 
-      {/* Main Split Interface */}
+      {/* Main Split Interface: Markdown Notes & Editor */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[550px]">
         
         {/* Left Sidebar: Folders & Note Cards (5 columns) */}
@@ -581,7 +831,7 @@ export default function NotesTab({ onOpenDriveModal }) {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="p-2 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-emerald-400 transition-colors"
-                    title="Upload & attach PDF or Image directly to this note"
+                    title="Upload & attach file directly to this note"
                   >
                     <Paperclip className="w-4 h-4" />
                   </button>
@@ -669,7 +919,7 @@ export default function NotesTab({ onOpenDriveModal }) {
               <div className="mt-4 pt-3 border-t border-theme-border/60 flex items-center justify-between text-[11px] text-theme-muted">
                 <span className="flex items-center gap-1.5">
                   <Cloud className="w-3.5 h-3.5 text-emerald-400" />
-                  Drive Synced: <code className="font-mono-numbers">{selectedNote.driveFileId || 'MyStudyTracker_Data'}</code>
+                  Drive Folder: <code className="font-mono-numbers text-emerald-400">{NOTES_PARENT_FOLDER_NAME}</code>
                 </span>
                 <span>Format: Markdown (.md)</span>
               </div>
@@ -686,7 +936,202 @@ export default function NotesTab({ onOpenDriveModal }) {
 
       </div>
 
-      {/* Create Note Modal */}
+      {/* 1. UPLOAD MODAL & SUBJECT SELECTION */}
+      {isUploadModalOpen && pendingUploadFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md animate-fadeIn">
+          <div 
+            className="w-full max-w-lg rounded-2xl glass-dropdown p-6 shadow-2xl border border-theme-border relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-theme-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <Cloud className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base text-theme-text">Upload Note to Google Drive</h3>
+                  <p className="text-[11px] text-theme-muted">Organize into dedicated Subject Folders in Google Drive</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => {
+                  if (!isUploading) {
+                    setIsUploadModalOpen(false);
+                    setPendingUploadFile(null);
+                  }
+                }}
+                disabled={isUploading}
+                className="p-1.5 rounded-lg text-theme-muted hover:text-theme-text transition-colors disabled:opacity-40"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* File Details Summary Card */}
+            <div className="mt-4 p-3.5 rounded-xl bg-theme-surface/80 border border-theme-border">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-theme-bg flex items-center justify-center border border-theme-border shrink-0">
+                  {pendingUploadFile.name.toLowerCase().endsWith('.pdf') ? (
+                    <FileText className="w-5 h-5 text-rose-400" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5 text-sky-400" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-xs text-theme-text truncate" title={pendingUploadFile.name}>
+                      {pendingUploadFile.name}
+                    </p>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                      Signature Verified
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-[11px] text-theme-muted">
+                    <span className="font-mono-numbers">{(pendingUploadFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                    <span>•</span>
+                    <span className="truncate">{pendingUploadFile.type || 'Document'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Subject Selection Field */}
+            <div className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="block text-theme-text font-semibold mb-1.5 flex items-center justify-between">
+                  <span>Subject</span>
+                  <span className="text-[11px] font-normal text-theme-muted">Google Drive Subject Folder</span>
+                </label>
+                <select
+                  value={isCustomSubject ? '__NEW_SUBJECT__' : selectedSubject}
+                  onChange={(e) => {
+                    if (e.target.value === '__NEW_SUBJECT__') {
+                      setIsCustomSubject(true);
+                    } else {
+                      setIsCustomSubject(false);
+                      setSelectedSubject(e.target.value);
+                    }
+                  }}
+                  disabled={isUploading}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:outline-none focus:border-theme-accent transition-colors cursor-pointer"
+                >
+                  <optgroup label="Subjects & Syllabus List">
+                    {subjectOptions.map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="New Folder">
+                    <option value="__NEW_SUBJECT__">+ Create New Subject Folder</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Reveal text input for "+ Create New Subject Folder" */}
+              {isCustomSubject && (
+                <div className="p-3 rounded-xl bg-theme-accent/5 border border-theme-accent/20 animate-fadeIn">
+                  <label className="block text-theme-text font-medium mb-1 text-[11px]">
+                    Custom Subject Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="e.g. Operating Systems, Chemistry, Machine Learning..."
+                      value={customSubjectInput}
+                      onChange={(e) => setCustomSubjectInput(e.target.value)}
+                      disabled={isUploading}
+                      className="w-full px-3 py-2 rounded-xl bg-theme-surface border border-theme-border text-theme-text placeholder-theme-muted focus:outline-none focus:border-theme-accent text-xs"
+                    />
+                  </div>
+                  <p className="text-[10px] text-theme-muted mt-1">
+                    A dedicated folder will be created inside "StudyTracker Notes" on your Google Drive.
+                  </p>
+                </div>
+              )}
+
+              {/* Visual Drive Folder Destination Preview */}
+              <div className="p-3 rounded-xl bg-theme-bg/60 border border-theme-border/60 text-[11px]">
+                <span className="text-theme-muted block mb-1">Target Google Drive Path:</span>
+                <div className="flex items-center gap-1.5 font-mono text-emerald-400">
+                  <Folder className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="text-theme-muted">Google Drive</span>
+                  <span>&gt;</span>
+                  <span className="text-theme-muted">StudyTracker Notes</span>
+                  <span>&gt;</span>
+                  <span className="font-semibold text-emerald-300">
+                    {isCustomSubject ? (customSubjectInput.trim() || 'Custom Subject') : selectedSubject}
+                  </span>
+                </div>
+              </div>
+
+              {/* Upload Progress Bar (when uploading) */}
+              {isUploading && (
+                <div className="space-y-2 pt-2 animate-fadeIn">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-theme-accent font-medium flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      {modalUploadStatus || 'Uploading note to Drive...'}
+                    </span>
+                    <span className="font-mono text-theme-accent">{modalUploadProgress}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-theme-surface overflow-hidden border border-theme-border">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 transition-all duration-300 rounded-full"
+                      style={{ width: `${modalUploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Error Alert in Modal */}
+              {modalError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-400 flex items-center gap-2 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{modalError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="pt-4 mt-4 border-t border-theme-border flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUploadModalOpen(false);
+                  setPendingUploadFile(null);
+                }}
+                disabled={isUploading}
+                className="px-4 py-2 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs text-theme-muted hover:text-theme-text transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmUpload}
+                disabled={isUploading || (isCustomSubject && !customSubjectInput.trim())}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white text-xs font-semibold shadow-glow-accent transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {isUploading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="w-4 h-4" />
+                    <span>Upload to Drive</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Markdown Note Modal */}
       {isNewNoteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div 
@@ -724,14 +1169,13 @@ export default function NotesTab({ onOpenDriveModal }) {
                     onChange={(e) => setNewSubject(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:outline-none focus:border-theme-accent"
                   >
-                    {subjects.map(s => (
-                      <option key={s.id} value={s.name}>{s.name}</option>
+                    {subjectOptions.map(s => (
+                      <option key={s} value={s}>{s}</option>
                     ))}
-                    <option value="General Engineering">General Engineering</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-theme-muted font-medium mb-1">Drive Folder</label>
+                  <label className="block text-theme-muted font-medium mb-1">Category</label>
                   <select
                     value={newFolder}
                     onChange={(e) => setNewFolder(e.target.value)}

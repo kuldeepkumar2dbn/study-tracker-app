@@ -31,12 +31,26 @@ function LoginPage() {
   const [showExpiredToast, setShowExpiredToast] = useState(() => {
     return getSafeQueryParam('expired', ['true', 'false']) === 'true';
   });
+  const [showBannedToast, setShowBannedToast] = useState(() => {
+    return getSafeQueryParam('banned', ['true', 'false']) === 'true';
+  });
+  const [isDemoEnabled, setIsDemoEnabled] = useState(() => {
+    try {
+      const raw = localStorage.getItem('admin_killswitches');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.demoMode === false) return false;
+      }
+    } catch {}
+    return true;
+  });
 
   // Auto-redirect to dashboard if already authenticated with active genuine session
   useEffect(() => {
     try {
       const isExpired = getSafeQueryParam('expired', ['true', 'false']) === 'true';
-      if (isExpired) {
+      const isBanned = getSafeQueryParam('banned', ['true', 'false']) === 'true';
+      if (isExpired || isBanned) {
         clearDemoSession();
         return;
       }
@@ -193,6 +207,28 @@ function LoginPage() {
             </div>
           </div>
 
+          {/* Banned Student Alert Banner */}
+          {showBannedToast && (
+            <div className="mb-5 p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-300 dark:text-rose-200 text-xs flex items-start gap-3 animate-fadeIn relative">
+              <div className="p-1.5 rounded-xl bg-rose-500/25 text-rose-400 shrink-0 mt-0.5">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div className="flex-1 pr-4">
+                <h4 className="font-semibold text-xs text-rose-200 mb-0.5">Account Suspended</h4>
+                <p className="text-[11px] text-rose-300/90 leading-relaxed">
+                  Your Google account has been banned from accessing Study Tracker by an administrator. Please contact your administrator if you believe this is an error.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowBannedToast(false)}
+                className="absolute top-3 right-3 text-rose-400/60 hover:text-rose-300 p-1 cursor-pointer"
+                aria-label="Dismiss banner"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Friendly Expired Demo Toast / Banner */}
           {showExpiredToast && (
             <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 dark:text-amber-200 text-xs flex items-start gap-3 animate-fadeIn relative">
@@ -207,7 +243,8 @@ function LoginPage() {
                 <div className="mt-2.5 flex items-center gap-2">
                   <button
                     onClick={() => initDemoSession()}
-                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-semibold text-[11px] transition-colors cursor-pointer"
+                    disabled={!isDemoEnabled}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-semibold text-[11px] transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Start New Demo
                   </button>
@@ -274,15 +311,25 @@ function LoginPage() {
           </button>
 
           {/* Instant Demo Sign-In (Local Preview) Action Button */}
-          <button
-            id="demo-signin-btn"
-            type="button"
-            onClick={() => initDemoSession()}
-            className="w-full mt-3 py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/15 to-amber-500/15 hover:from-amber-500/25 hover:via-yellow-500/25 hover:to-amber-500/25 border border-amber-500/35 hover:border-amber-400/60 text-xs font-semibold text-amber-300 dark:text-amber-200 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Instant Demo Sign-In (Local Preview)</span>
-          </button>
+          {isDemoEnabled ? (
+            <button
+              id="demo-signin-btn"
+              type="button"
+              onClick={() => initDemoSession()}
+              className="w-full mt-3 py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/15 to-amber-500/15 hover:from-amber-500/25 hover:via-yellow-500/25 hover:to-amber-500/25 border border-amber-500/35 hover:border-amber-400/60 text-xs font-semibold text-amber-300 dark:text-amber-200 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Instant Demo Sign-In (Local Preview)</span>
+            </button>
+          ) : (
+            <div 
+              title="Instant demo mode disabled by administrator"
+              className="w-full mt-3 py-3 px-4 rounded-2xl bg-theme-surface/50 border border-theme-border/60 text-xs font-medium text-theme-muted flex items-center justify-center gap-2 cursor-not-allowed select-none opacity-60"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Demo Mode Disabled by Admin</span>
+            </div>
+          )}
 
           {/* Guest Preview Mode Link */}
           <div className="mt-3.5 text-center">

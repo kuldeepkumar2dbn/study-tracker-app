@@ -23,7 +23,13 @@ import {
   Lock,
   ShieldCheck,
   User,
-  Menu
+  Menu,
+  AlertTriangle,
+  AlertCircle,
+  Sparkles,
+  Bell,
+  Wrench,
+  ShieldAlert
 } from 'lucide-react';
 import Logo from './Logo';
 import DriveModal from './DriveModal';
@@ -37,6 +43,13 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import RollingNumber from './RollingNumber';
 import { sanitizeUrl } from '../utils/security';
 import { isDemoUser, getDemoRemainingSeconds, clearDemoSession } from '../../auth-guard';
+import { 
+  getPlatformAnnouncement, 
+  getEmergencyKillswitches, 
+  isSuperAdmin, 
+  canAccessAdmin,
+  ADMIN_STORAGE_KEYS 
+} from '../../admin-config';
 
 export { default as CollapsibleSidebar, StopwatchIcon, SIDEBAR_ITEMS } from './CollapsibleSidebar';
 
@@ -195,27 +208,37 @@ export function SharedHeader({
 
           {/* Google Drive Status & "Drive Synced" Badge */}
           {isAuthenticated && !isDemo ? (
-            <div className="flex items-center gap-1.5">
-              <div
-                onClick={onOpenDriveModal}
-                title="Google Drive is connected and synchronized with your account"
-                className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all"
+            getEmergencyKillswitches().driveSync === false ? (
+              <div 
+                title="Google Drive sync is temporarily disabled by administrator"
+                className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-semibold shadow-sm select-none"
               >
-                <div className="relative flex items-center justify-center">
-                  <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
-                </div>
-                <span className="hidden sm:inline font-semibold">Drive Synced</span>
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline font-semibold">Drive Sync Disabled</span>
               </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div
+                  onClick={onOpenDriveModal}
+                  title="Google Drive is connected and synchronized with your account"
+                  className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all"
+                >
+                  <div className="relative flex items-center justify-center">
+                    <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
+                  </div>
+                  <span className="hidden sm:inline font-semibold">Drive Synced</span>
+                </div>
 
-              <button
-                onClick={syncNowToDrive}
-                title="Sync now to personal Google Drive"
-                className="top-action-link p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+                <button
+                  onClick={syncNowToDrive}
+                  title="Sync now to personal Google Drive"
+                  className="top-action-link p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            )
           ) : (
             <div
               onClick={() => {
@@ -610,6 +633,72 @@ export function AppLayout({ activeTabId, children }) {
   const isGuestLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
   const isDemoLockedNotes = isDemo && activeTabId === 'notes';
 
+  // Global Announcement Banner State
+  const [announcement, setAnnouncement] = useState(() => getPlatformAnnouncement());
+  const [isAnnouncementDismissed, setIsAnnouncementDismissed] = useState(false);
+
+  useEffect(() => {
+    const syncAnnouncement = () => {
+      const active = getPlatformAnnouncement();
+      setAnnouncement(active);
+      if (active) {
+        const dismissed = sessionStorage.getItem(`announcement_dismissed_${active.id}`);
+        setIsAnnouncementDismissed(dismissed === 'true');
+      }
+    };
+    syncAnnouncement();
+    window.addEventListener('studyflow-announcement-changed', syncAnnouncement);
+    window.addEventListener('storage', syncAnnouncement);
+    return () => {
+      window.removeEventListener('studyflow-announcement-changed', syncAnnouncement);
+      window.removeEventListener('storage', syncAnnouncement);
+    };
+  }, []);
+
+  const handleDismissAnnouncement = () => {
+    if (announcement) {
+      sessionStorage.setItem(`announcement_dismissed_${announcement.id}`, 'true');
+      setIsAnnouncementDismissed(true);
+    }
+  };
+
+  // Access Denied Alert from /admin.html
+  const [accessDeniedAlert, setAccessDeniedAlert] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const param = new URLSearchParams(window.location.search).get('access_denied');
+    const alertMsg = sessionStorage.getItem(ADMIN_STORAGE_KEYS.ACCESS_DENIED_ALERT);
+    if (param === 'admin' || alertMsg) {
+      sessionStorage.removeItem(ADMIN_STORAGE_KEYS.ACCESS_DENIED_ALERT);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('access_denied');
+        window.history.replaceState({}, '', url.pathname + (url.search || ''));
+      } catch {}
+      return alertMsg || "Access Denied: Administrator privileges required.";
+    }
+    return null;
+  });
+
+  // Emergency Controls: Maintenance Mode & Killswitches
+  const [killswitches, setKillswitches] = useState(() => getEmergencyKillswitches());
+  const [isAdminUser, setIsAdminUser] = useState(() => isSuperAdmin());
+
+  useEffect(() => {
+    const syncKillswitches = () => {
+      setKillswitches(getEmergencyKillswitches());
+      setIsAdminUser(isSuperAdmin());
+    };
+    syncKillswitches();
+    window.addEventListener('studyflow-killswitch-changed', syncKillswitches);
+    window.addEventListener('studyflow-role-switched', syncKillswitches);
+    window.addEventListener('storage', syncKillswitches);
+    return () => {
+      window.removeEventListener('studyflow-killswitch-changed', syncKillswitches);
+      window.removeEventListener('studyflow-role-switched', syncKillswitches);
+      window.removeEventListener('storage', syncKillswitches);
+    };
+  }, []);
+
   useEffect(() => {
     if (isDemo && activeTabId === 'notes') {
       setIsDriveNotesDemoModalOpen(true);
@@ -620,6 +709,8 @@ export function AppLayout({ activeTabId, children }) {
     const feature = activeTabId || 'dashboard';
     document.documentElement.setAttribute('data-active-feature', feature);
   }, [activeTabId]);
+
+  const isPlatformMaintenanceLocked = killswitches.maintenanceMode && !isAdminUser;
 
   return (
     <div 
@@ -635,6 +726,80 @@ export function AppLayout({ activeTabId, children }) {
         onToggleSidebar={handleToggleSidebar}
         isSidebarExpanded={isSidebarExpanded}
       />
+
+      {/* Access Denied Alert Toast */}
+      {accessDeniedAlert && (
+        <div className="w-full bg-rose-600 text-white py-2.5 px-4 shadow-lg flex items-center justify-between text-xs sm:text-sm font-semibold animate-fadeIn z-50">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-white" />
+              <span>{accessDeniedAlert}</span>
+            </div>
+            <button 
+              onClick={() => setAccessDeniedAlert(null)}
+              className="p-1 hover:bg-white/20 rounded cursor-pointer transition-colors"
+              aria-label="Dismiss access alert"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Global Announcement Banner across all pages */}
+      {announcement && !isAnnouncementDismissed && (
+        <aside 
+          role="alert" 
+          aria-label="Platform Announcement"
+          className={`w-full py-2 px-4 shadow-md backdrop-blur-md flex items-center justify-between text-xs sm:text-sm font-medium z-40 transition-all border-b ${
+            announcement.urgency === 'warning'
+              ? 'bg-gradient-to-r from-rose-900/90 via-amber-900/80 to-rose-900/90 border-rose-500/40 text-rose-100'
+              : announcement.urgency === 'motivational'
+              ? 'bg-gradient-to-r from-emerald-900/90 via-teal-900/80 to-emerald-900/90 border-emerald-500/40 text-emerald-100'
+              : 'bg-gradient-to-r from-indigo-900/90 via-blue-900/80 to-indigo-900/90 border-indigo-500/40 text-indigo-100'
+          }`}
+        >
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {announcement.urgency === 'warning' ? (
+                <span className="p-1 rounded-lg bg-rose-500/25 text-rose-300 shrink-0"><AlertTriangle className="w-4 h-4" /></span>
+              ) : announcement.urgency === 'motivational' ? (
+                <span className="p-1 rounded-lg bg-emerald-500/25 text-emerald-300 shrink-0"><Sparkles className="w-4 h-4" /></span>
+              ) : (
+                <span className="p-1 rounded-lg bg-blue-500/25 text-blue-300 shrink-0"><Bell className="w-4 h-4" /></span>
+              )}
+              <div className="flex items-center gap-2 truncate">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
+                  announcement.urgency === 'warning'
+                    ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40'
+                    : announcement.urgency === 'motivational'
+                    ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
+                    : 'bg-indigo-500/30 text-indigo-200 border border-indigo-500/40'
+                }`}>
+                  {announcement.urgency === 'warning' ? 'Exam Warning' : announcement.urgency === 'motivational' ? 'Motivational' : 'Notice'}
+                </span>
+                <span className="truncate font-medium">{announcement.text}</span>
+              </div>
+            </div>
+            <button
+              onClick={handleDismissAnnouncement}
+              title="Dismiss announcement"
+              className="p-1 rounded-lg hover:bg-white/20 transition-colors shrink-0 text-white/80 hover:text-white cursor-pointer"
+              aria-label="Close announcement"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* Maintenance Mode Super Admin Warning Indicator */}
+      {killswitches.maintenanceMode && isAdminUser && (
+        <div className="w-full bg-amber-500/15 border-b border-amber-500/30 text-amber-300 py-1.5 px-4 text-xs font-semibold flex items-center justify-center gap-2 z-40 select-none">
+          <Wrench className="w-3.5 h-3.5 text-amber-400" />
+          <span>⚠️ Maintenance Mode Active: Regular students see the Platform Updating lock screen. Super Admin bypass enabled.</span>
+        </div>
+      )}
 
       {/* Main Body with Left Collapsible Sidebar Navigation Rail and Main View */}
       <div className="flex-1 flex w-full relative">
@@ -661,7 +826,30 @@ export function AppLayout({ activeTabId, children }) {
           >
             {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
             <div className="transition-all duration-300 animate-tab-enter">
-              {isDemoLockedNotes ? (
+              {isPlatformMaintenanceLocked ? (
+                <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-amber-500/40 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-rose-500/20 border border-amber-500/40 flex items-center justify-center mb-4 text-amber-400 shadow-inner">
+                    <Wrench className="w-8 h-8 animate-pulse" />
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">
+                    <span>Platform Updating</span>
+                  </div>
+                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-theme-text tracking-tight mb-2">
+                    Platform Updating
+                  </h2>
+                  <p className="text-xs sm:text-sm text-theme-muted max-w-md mx-auto mb-6 leading-relaxed">
+                    Study Tracker is currently undergoing scheduled maintenance. Please check back shortly. Your personal data, syllabus progress, and notes remain safe in your personal Google account.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="/login.html"
+                      className="px-6 py-2.5 rounded-2xl bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs shadow-lg transition-all"
+                    >
+                      Go to Sign In
+                    </a>
+                  </div>
+                </div>
+              ) : isDemoLockedNotes ? (
                 <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-theme-border/80 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-indigo-500/20 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-inner">
                     <Lock className="w-8 h-8" />

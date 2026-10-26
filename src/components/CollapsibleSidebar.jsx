@@ -13,13 +13,15 @@ import {
   Menu,
   X,
   Zap,
-  Sparkles
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { soundEngine } from '../utils/audio';
 import { celebrateTaskCompletion } from '../utils/confetti';
+import { canAccessAdmin } from '../../admin-config';
 
 /**
  * Minimalist Stopwatch / Hourglass SVG icon for Focus Timer
@@ -112,6 +114,11 @@ export const ACTIVE_PILL_STYLES = {
     bg: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #8b5cf6 100%)',
     shadow: '0 0 26px -2px rgba(139, 92, 246, 0.75), 0 4px 16px rgba(79, 70, 229, 0.5)',
     border: 'rgba(196, 181, 253, 0.5)'
+  },
+  admin: {
+    bg: 'linear-gradient(135deg, #b45309 0%, #d97706 50%, #f59e0b 100%)',
+    shadow: '0 0 26px -2px rgba(245, 158, 11, 0.75), 0 4px 16px rgba(180, 83, 9, 0.5)',
+    border: 'rgba(253, 230, 138, 0.5)'
   }
 };
 
@@ -133,6 +140,26 @@ export default function CollapsibleSidebar({
 
   const { isAuthenticated, openAuthModal, isDemo } = useAuth();
   const { isFeatureCoded } = useTheme();
+
+  // Dynamic Admin Portal navigation visibility check (Super Admin or Editor only)
+  const [hasAdminAccess, setHasAdminAccess] = useState(() => {
+    return typeof canAccessAdmin === 'function' ? canAccessAdmin() : false;
+  });
+
+  useEffect(() => {
+    const checkAccess = () => {
+      setHasAdminAccess(typeof canAccessAdmin === 'function' ? canAccessAdmin() : false);
+    };
+    checkAccess();
+    window.addEventListener('studyflow-role-switched', checkAccess);
+    window.addEventListener('studyflow-collaborators-changed', checkAccess);
+    window.addEventListener('storage', checkAccess);
+    return () => {
+      window.removeEventListener('studyflow-role-switched', checkAccess);
+      window.removeEventListener('studyflow-collaborators-changed', checkAccess);
+      window.removeEventListener('storage', checkAccess);
+    };
+  }, []);
 
   // Live Timer Background Session Tracking State
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -291,9 +318,18 @@ export default function CollapsibleSidebar({
           </div>
         </div>
 
-        {/* 9 Core Navigation Items in Exact Clean Sequence */}
+        {/* Navigation Items (Core 9 views + Admin Portal for authorized administrators) */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
-          {SIDEBAR_ITEMS.map((item) => {
+          {(hasAdminAccess ? [
+            ...SIDEBAR_ITEMS,
+            {
+              id: 'admin',
+              name: '🛡️ Admin Portal',
+              icon: ShieldCheck,
+              href: '/admin.html',
+              tooltip: '🛡️ Admin & Collaborator Portal'
+            }
+          ] : SIDEBAR_ITEMS).map((item) => {
             const Icon = item.icon;
             const isActive = item.id === activeTabId;
             const isDemoLockedNotes = isDemo && item.id === 'notes';

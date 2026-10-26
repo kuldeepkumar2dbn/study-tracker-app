@@ -19,6 +19,7 @@ export default defineConfig({
         timer: resolve(import.meta.dirname, 'timer.html'),
         privacy: resolve(import.meta.dirname, 'privacy.html'),
         login: resolve(import.meta.dirname, 'login.html'),
+        admin: resolve(import.meta.dirname, 'admin.html'),
       },
     },
   },

@@ -118,8 +118,61 @@ export async function requestSilentDriveToken(clientId = DEFAULT_GOOGLE_CLIENT_I
   });
 }
 
+export const NOTES_PARENT_FOLDER_NAME = 'StudyTracker Notes';
+export const DRIVE_FOLDER_MAP_KEY = 'study_drive_folder_map';
+
 /**
- * Checks for or creates the dedicated folder "MyStudyTracker_Data"
+ * Retrieves the cached folder map from localStorage under 'study_drive_folder_map'
+ */
+export function getStoredDriveFolderMap() {
+  if (typeof localStorage === 'undefined') return { parentFolderId: null, folders: {} };
+  try {
+    const raw = localStorage.getItem(DRIVE_FOLDER_MAP_KEY);
+    if (!raw) return { parentFolderId: null, folders: {} };
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      if (!parsed.folders) parsed.folders = {};
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('Failed to parse study_drive_folder_map:', e);
+  }
+  return { parentFolderId: null, folders: {} };
+}
+
+/**
+ * Persists updated folder map to localStorage under 'study_drive_folder_map'
+ */
+export function saveStoredDriveFolderMap(map) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(DRIVE_FOLDER_MAP_KEY, JSON.stringify(map));
+  } catch (e) {
+    console.warn('Failed to save study_drive_folder_map:', e);
+  }
+}
+
+/**
+ * Returns Google Drive web link for a subject folder
+ */
+export function getSubjectFolderLink(subjectName, fallbackFolderId = null) {
+  const cleanSubject = (subjectName || 'General').trim() || 'General';
+  const map = getStoredDriveFolderMap();
+  if (map.folders && map.folders[cleanSubject]?.webViewLink) {
+    return map.folders[cleanSubject].webViewLink;
+  }
+  const folderId = fallbackFolderId || (map.folders && map.folders[cleanSubject]?.id) || map[cleanSubject];
+  if (folderId) {
+    return `https://drive.google.com/drive/folders/${folderId}`;
+  }
+  if (map.parentFolderId || map.parentId) {
+    return map.parentWebViewLink || `https://drive.google.com/drive/folders/${map.parentFolderId || map.parentId}`;
+  }
+  return null;
+}
+
+/**
+ * Checks for or creates the dedicated root data folder "MyStudyTracker_Data"
  */
 export async function getOrCreateStudyTrackerFolder(accessToken) {
   const query = encodeURIComponent(`name = '${FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
@@ -160,6 +213,148 @@ export async function getOrCreateStudyTrackerFolder(accessToken) {
 
   const folder = await createResponse.json();
   return folder.id;
+}
+
+/**
+ * Google Drive Folder Check & Reuse Logic for Subject Notes:
+ * Step A: Check if a parent folder named "StudyTracker Notes" exists. If not, create it:
+ *         POST https://www.googleapis.com/drive/v3/files
+ *         Body: { name: "StudyTracker Notes", mimeType: "application/vnd.google-apps.folder" }
+ * Step B: Search if a folder for subjectName already exists inside the "StudyTracker Notes" folder:
+ *         GET https://www.googleapis.com/drive/v3/files?q=name='${subjectName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false
+ * Step C: If found, reuse its existing folder id.
+ * Step D: If not found, create a new folder for the subject with parents: [parentFolderId] and return the new id.
+ * Cache discovered folder IDs in localStorage under study_drive_folder_map to prevent redundant API queries.
+ *
+ * @param {string} accessToken Active Google OAuth access token
+ * @param {string} subjectName Name of target subject (e.g. 'Python', 'Mathematics')
+ * @returns {Promise<string>} Target Subject Folder ID
+ */
+export async function getOrCreateSubjectFolder(accessToken, subjectName = 'General') {
+  const cleanSubject = (subjectName || 'General').trim() || 'General';
+  const map = getStoredDriveFolderMap();
+
+  // Check cache first to prevent redundant API queries
+  if (map.folders && map.folders[cleanSubject]?.id) {
+    return map.folders[cleanSubject].id;
+  }
+  if (map[cleanSubject] && typeof map[cleanSubject] === 'string') {
+    return map[cleanSubject];
+  }
+
+  // Step A: Check if parent folder named "StudyTracker Notes" exists. If not, create it
+  let parentFolderId = map.parentFolderId || map.parentId;
+  let parentWebViewLink = map.parentWebViewLink;
+
+  if (!parentFolderId) {
+    const parentQuery = encodeURIComponent(`name='${NOTES_PARENT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const listParentUrl = `https://www.googleapis.com/drive/v3/files?q=${parentQuery}&fields=files(id,name,webViewLink)`;
+
+    const parentListRes = await fetch(listParentUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    if (parentListRes.ok) {
+      const parentData = await parentListRes.json();
+      if (parentData.files && parentData.files.length > 0) {
+        parentFolderId = parentData.files[0].id;
+        parentWebViewLink = parentData.files[0].webViewLink || `https://drive.google.com/drive/folders/${parentFolderId}`;
+      }
+    }
+
+    if (!parentFolderId) {
+      // Create parent folder "StudyTracker Notes"
+      const createParentUrl = 'https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink';
+      const createParentRes = await fetch(createParentUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: NOTES_PARENT_FOLDER_NAME,
+          mimeType: 'application/vnd.google-apps.folder'
+        })
+      });
+
+      if (!createParentRes.ok) {
+        const errText = await createParentRes.text();
+        throw new Error(`Failed to create "${NOTES_PARENT_FOLDER_NAME}" parent folder: ${errText}`);
+      }
+
+      const createdParent = await createParentRes.json();
+      parentFolderId = createdParent.id;
+      parentWebViewLink = createdParent.webViewLink || `https://drive.google.com/drive/folders/${parentFolderId}`;
+    }
+
+    map.parentFolderId = parentFolderId;
+    map.parentId = parentFolderId;
+    map.parentWebViewLink = parentWebViewLink;
+    saveStoredDriveFolderMap(map);
+  }
+
+  // Step B: Search if a folder for subjectName already exists inside the "StudyTracker Notes" folder
+  const escapedSubject = cleanSubject.replace(/'/g, "\\'");
+  const subjectQuery = encodeURIComponent(`name='${escapedSubject}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`);
+  const listSubjectUrl = `https://www.googleapis.com/drive/v3/files?q=${subjectQuery}&fields=files(id,name,webViewLink)`;
+
+  const subjectListRes = await fetch(listSubjectUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+
+  let targetFolderId = null;
+  let targetWebViewLink = null;
+
+  if (subjectListRes.ok) {
+    const subjectData = await subjectListRes.json();
+    // Step C: If found, reuse its existing folder id
+    if (subjectData.files && subjectData.files.length > 0) {
+      targetFolderId = subjectData.files[0].id;
+      targetWebViewLink = subjectData.files[0].webViewLink || `https://drive.google.com/drive/folders/${targetFolderId}`;
+    }
+  }
+
+  // Step D: If not found, create a new folder for the subject with parents: [parentFolderId] and return the new id
+  if (!targetFolderId) {
+    const createSubjectUrl = 'https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink';
+    const createSubjectRes = await fetch(createSubjectUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: cleanSubject,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentFolderId]
+      })
+    });
+
+    if (!createSubjectRes.ok) {
+      const errText = await createSubjectRes.text();
+      throw new Error(`Failed to create subject folder "${cleanSubject}": ${errText}`);
+    }
+
+    const createdSubject = await createSubjectRes.json();
+    targetFolderId = createdSubject.id;
+    targetWebViewLink = createdSubject.webViewLink || `https://drive.google.com/drive/folders/${targetFolderId}`;
+  }
+
+  // Cache discovered folder IDs in localStorage under study_drive_folder_map
+  const currentMap = getStoredDriveFolderMap();
+  currentMap.parentFolderId = parentFolderId;
+  currentMap.parentId = parentFolderId;
+  currentMap.parentWebViewLink = parentWebViewLink;
+  if (!currentMap.folders) currentMap.folders = {};
+  currentMap.folders[cleanSubject] = {
+    id: targetFolderId,
+    name: cleanSubject,
+    webViewLink: targetWebViewLink
+  };
+  currentMap[cleanSubject] = targetFolderId;
+  saveStoredDriveFolderMap(currentMap);
+
+  return targetFolderId;
 }
 
 /**
@@ -336,12 +531,14 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
   const delimiter = `\r\n--${boundary}\r\n`;
   const closeDelimiter = `\r\n--${boundary}--`;
 
+  const targetFolderId = typeof folderId === 'object' && folderId?.id ? folderId.id : folderId;
+
   const metadata = {
     name: file.name,
     mimeType: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream')
   };
-  if (folderId) {
-    metadata.parents = [folderId];
+  if (targetFolderId) {
+    metadata.parents = [String(targetFolderId)];
   }
 
   const metadataPart = new Blob([
@@ -357,7 +554,7 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
   // Stream file directly in multipart body without allocating entire buffer
   const multipartBlob = new Blob([metadataPart, file, closePart]);
 
-  const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size,mimeType';
+  const uploadUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size,mimeType,parents';
   const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -393,6 +590,7 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
     size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
     type: (file.type && file.type.includes('pdf')) || file.name.endsWith('.pdf') ? 'pdf' : 'image',
     mimeType: file.type || 'application/octet-stream',
+    parents: uploadedMeta.parents || (targetFolderId ? [String(targetFolderId)] : []),
     uploadedAt: new Date().toISOString()
   };
 }
@@ -401,8 +599,13 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
  * Direct client-side upload helper with silent background token refresh.
  * Fetches stored token strictly from sessionStorage. If expired or authorization is required,
  * triggers silent background token refresh without logging out the user.
+ * Automatically organizes files into Subject Folders inside "StudyTracker Notes".
+ *
+ * @param {File} file File to upload
+ * @param {string} subjectName Target subject folder name (e.g. 'Python', 'Mathematics')
+ * @returns {Promise<Object>} Uploaded file metadata
  */
-export async function uploadDirectToDrive(file) {
+export async function uploadDirectToDrive(file, subjectName = 'General') {
   // Purge any legacy token from localStorage to guarantee compliance
   try {
     localStorage.removeItem('google_access_token');
@@ -425,26 +628,33 @@ export async function uploadDirectToDrive(file) {
     }
   }
 
-  let folderId = localStorage.getItem('studyflow_drive_folder_id');
-  if (!folderId) {
-    try {
-      folderId = await getOrCreateStudyTrackerFolder(token);
-      if (folderId) {
-        localStorage.setItem('studyflow_drive_folder_id', folderId);
-      }
-    } catch (e) {
-      console.warn('Could not ensure MyStudyTracker_Data folder, uploading to root:', e);
-    }
+  const cleanSubject = (subjectName || 'General').trim() || 'General';
+
+  // Ensure target subject folder exists in Google Drive > StudyTracker Notes > [cleanSubject]
+  let targetFolderId = null;
+  try {
+    targetFolderId = await getOrCreateSubjectFolder(token, cleanSubject);
+  } catch (folderErr) {
+    console.warn(`Could not ensure subject folder for "${cleanSubject}", falling back to root/default:`, folderErr);
   }
 
   // Attempt upload; if 401 occurs, attempt silent background refresh and retry once
   try {
-    return await uploadFileToDriveFolder(token, folderId, file);
+    const uploaded = await uploadFileToDriveFolder(token, targetFolderId, file);
+    uploaded.subject = cleanSubject;
+    uploaded.folderId = targetFolderId;
+    uploaded.folderLink = getSubjectFolderLink(cleanSubject, targetFolderId);
+    return uploaded;
   } catch (uploadErr) {
     if (uploadErr?.code === 'DRIVE_TOKEN_EXPIRED' || uploadErr?.message?.includes('401')) {
       try {
         const refreshedToken = await requestSilentDriveToken();
-        return await uploadFileToDriveFolder(refreshedToken, folderId, file);
+        const refreshedFolderId = await getOrCreateSubjectFolder(refreshedToken, cleanSubject);
+        const uploaded = await uploadFileToDriveFolder(refreshedToken, refreshedFolderId, file);
+        uploaded.subject = cleanSubject;
+        uploaded.folderId = refreshedFolderId;
+        uploaded.folderLink = getSubjectFolderLink(cleanSubject, refreshedFolderId);
+        return uploaded;
       } catch (refreshErr) {
         throw uploadErr;
       }

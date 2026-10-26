@@ -23,6 +23,7 @@ export const AUTH_KEYS = {
   ACCESS_TOKEN: 'google_access_token',
   TOKEN_EXPIRY: 'google_token_expiry',
   USER_PROFILE: 'user_profile',
+  STUDY_USER_PROFILE: 'study_user_profile',
   GOOGLE_USER_PROFILE: 'google_user_profile',
   USER_SUB: 'google_user_sub',
   DRIVE_TOKEN: 'studyflow_drive_token',
@@ -187,9 +188,11 @@ export function clearDemoSession() {
         if (p.isDemo || p.sub === 'demo_sandbox_user') {
           deleteSessionCookie();
           localStorage.removeItem(AUTH_KEYS.USER_PROFILE);
+          localStorage.removeItem(AUTH_KEYS.STUDY_USER_PROFILE);
           localStorage.removeItem(AUTH_KEYS.GOOGLE_USER_PROFILE);
           localStorage.removeItem(AUTH_KEYS.USER_SUB);
           sessionStorage.removeItem(AUTH_KEYS.USER_PROFILE);
+          sessionStorage.removeItem(AUTH_KEYS.STUDY_USER_PROFILE);
           sessionStorage.removeItem(AUTH_KEYS.GOOGLE_USER_PROFILE);
         }
       } catch {}
@@ -206,6 +209,18 @@ export function clearDemoSession() {
 export function initDemoSession() {
   if (typeof window === 'undefined') return;
   try {
+    // Check emergency kill switch for demo mode
+    try {
+      const rawKs = localStorage.getItem('admin_killswitches');
+      if (rawKs) {
+        const parsedKs = JSON.parse(rawKs);
+        if (parsedKs && parsedKs.demoMode === false) {
+          alert('Instant Demo Mode is temporarily disabled by an administrator.');
+          return;
+        }
+      }
+    } catch {}
+
     // 1. Completely wipe previous demo data
     clearDemoSession();
 
@@ -226,6 +241,8 @@ export function initDemoSession() {
     };
     sessionStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(demoUser));
     localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(demoUser));
+    localStorage.setItem(AUTH_KEYS.STUDY_USER_PROFILE, JSON.stringify(demoUser));
+    sessionStorage.setItem(AUTH_KEYS.STUDY_USER_PROFILE, JSON.stringify(demoUser));
     localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(demoUser));
     localStorage.setItem(AUTH_KEYS.USER_SUB, demoUser.sub);
     setSessionCookie(demoUser);
@@ -246,10 +263,27 @@ export function initDemoSession() {
   }
 }
 
+function isEmailBanned(email) {
+  if (!email || typeof window === 'undefined') return false;
+  try {
+    const raw = localStorage.getItem('banned_users');
+    if (!raw) return false;
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return false;
+    const norm = String(email).trim().toLowerCase();
+    return list.some(item => {
+      const bEmail = typeof item === 'string' ? item : item?.email;
+      return String(bEmail || '').trim().toLowerCase() === norm;
+    });
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Retrieves the currently signed-in user's profile details.
- * Resolves from persistent session cookie first, falling back to LocalStorage.
- * Keeps both storage mechanisms synchronized.
+ * Resolves from study_user_profile, persistent session cookie, or LocalStorage.
+ * Keeps storage mechanisms synchronized.
  */
 export function getUserProfile() {
   if (typeof window === 'undefined') return null;
@@ -264,22 +298,48 @@ export function getUserProfile() {
       };
     }
 
-    // 1. Check persistent cookie first
+    // 1. Check study_user_profile in localStorage / sessionStorage
+    const studyRaw = localStorage.getItem(AUTH_KEYS.STUDY_USER_PROFILE) || 
+                     sessionStorage.getItem(AUTH_KEYS.STUDY_USER_PROFILE);
+    if (studyRaw) {
+      const parsedStudy = JSON.parse(studyRaw);
+      if (parsedStudy && (parsedStudy.email || parsedStudy.name || parsedStudy.sub)) {
+        if (parsedStudy.isDemo && !isDemoUser()) return null;
+        if (parsedStudy.email && isEmailBanned(parsedStudy.email)) {
+          clearAuthTokens();
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('login.html')) {
+            window.location.replace('/login.html?banned=true');
+          }
+          return null;
+        }
+        return parsedStudy;
+      }
+    }
+
+    // 2. Check persistent cookie
     const cookieUser = getSessionCookie();
     if (cookieUser && (cookieUser.email || cookieUser.name || cookieUser.sub)) {
       if (cookieUser.isDemo && !isDemoUser()) {
         return null;
       }
+      if (cookieUser.email && isEmailBanned(cookieUser.email)) {
+        clearAuthTokens();
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('login.html')) {
+          window.location.replace('/login.html?banned=true');
+        }
+        return null;
+      }
       // Sync into localStorage if not already present
       if (!localStorage.getItem(AUTH_KEYS.USER_PROFILE)) {
         localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(cookieUser));
+        localStorage.setItem(AUTH_KEYS.STUDY_USER_PROFILE, JSON.stringify(cookieUser));
         localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(cookieUser));
         if (cookieUser.sub) localStorage.setItem(AUTH_KEYS.USER_SUB, cookieUser.sub);
       }
       return cookieUser;
     }
 
-    // 2. Check LocalStorage fallback
+    // 3. Check LocalStorage fallback
     const raw = localStorage.getItem(AUTH_KEYS.USER_PROFILE) || localStorage.getItem(AUTH_KEYS.GOOGLE_USER_PROFILE);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -287,8 +347,16 @@ export function getUserProfile() {
         if (parsed.isDemo && !isDemoUser()) {
           return null;
         }
-        // Sync back into persistent cookie
+        if (parsed.email && isEmailBanned(parsed.email)) {
+          clearAuthTokens();
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('login.html')) {
+            window.location.replace('/login.html?banned=true');
+          }
+          return null;
+        }
+        // Sync back into persistent cookie and study_user_profile
         setSessionCookie(parsed);
+        localStorage.setItem(AUTH_KEYS.STUDY_USER_PROFILE, JSON.stringify(parsed));
         return parsed;
       }
     }
@@ -364,6 +432,15 @@ export function isTokenValid() {
 export function saveUserSession(userData, token = null, expiresInSec = 3600) {
   if (typeof window === 'undefined') return;
   try {
+    // Check if email is blacklisted
+    if (userData?.email && isEmailBanned(userData.email)) {
+      clearAuthTokens();
+      if (typeof window !== 'undefined') {
+        window.location.replace('/login.html?banned=true');
+      }
+      return;
+    }
+
     // Clear demo flags if logging in with genuine Google account
     if (!userData?.isDemo) {
       clearDemoSession();
@@ -378,6 +455,8 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
 
       // 2. Save only non-sensitive user identity flags in persistent localStorage
       localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(sanitized));
+      localStorage.setItem(AUTH_KEYS.STUDY_USER_PROFILE, JSON.stringify(sanitized));
+      sessionStorage.setItem(AUTH_KEYS.STUDY_USER_PROFILE, JSON.stringify(sanitized));
       localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(sanitized));
       if (sanitized.sub) {
         localStorage.setItem(AUTH_KEYS.USER_SUB, sanitized.sub);
@@ -580,6 +659,7 @@ export function clearAuthTokens() {
     localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
     localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
     localStorage.removeItem(AUTH_KEYS.USER_PROFILE);
+    localStorage.removeItem(AUTH_KEYS.STUDY_USER_PROFILE);
     localStorage.removeItem(AUTH_KEYS.GOOGLE_USER_PROFILE);
     localStorage.removeItem(AUTH_KEYS.USER_SUB);
     localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
@@ -588,6 +668,7 @@ export function clearAuthTokens() {
     // Clear sessionStorage tokens
     sessionStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
     sessionStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+    sessionStorage.removeItem(AUTH_KEYS.STUDY_USER_PROFILE);
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_USER);
   } catch (e) {
