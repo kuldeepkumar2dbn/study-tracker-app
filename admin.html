@@ -3,23 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>StudyFlow - Admin & Collaborator Portal</title>
-    <meta name="description" content="Zero-cost Admin & Collaborator Portal with role-based feature gating for Study Tracker. Manage course syllabus templates, skill roadmaps, announcements, bug drawer, emergency killswitches, and collaborator access." />
+    <title>Study Tracker Pro — Admin Control Center</title>
+    <meta name="description" content="Admin Control Center with role-based access control for Study Tracker Pro." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/styles.css" />
+    <!-- Global Admin Auth Configuration -->
+    <script src="admin-config.js"></script>
     <!-- Google Identity Services (GIS) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Canvas Confetti CDN -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" async defer></script>
 
-    <!-- Immediate Pre-Render Route Guard for /admin.html -->
-    <script type="module">
-      import { checkAdminAccess } from '/admin-config.js';
-      // If user is not Super Admin or Editor, immediately alert and redirect to /index.html
-      checkAdminAccess({ redirect: true });
+    <!-- Immediate Access Gate Route Guard for admin.html -->
+    <script>
+      (function() {
+        // Pre-render route gate using checkAdminAccess & AdminAuth
+        if (typeof checkAdminAccess === 'function') {
+          checkAdminAccess({ redirect: false });
+        }
+        if (typeof AdminAuth !== 'undefined' && !AdminAuth.canAccessAdmin()) {
+          alert("Access Denied: Administrator permissions required.");
+          window.location.replace("index.html?access_denied=admin");
+        }
+      })();
     </script>
   </head>
   <body class="bg-theme-bg text-theme-text font-sans antialiased transition-colors duration-200">

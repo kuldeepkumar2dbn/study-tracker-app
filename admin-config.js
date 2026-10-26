@@ -1,26 +1,32 @@
 /**
  * Admin & Collaborator Configuration, Access Gate & Role Definitions
- * StudyFlow Multi-Page Architecture (admin-config.js)
+ * Study Tracker Pro (admin-config.js)
  *
  * Implements:
+ * - ROLE_CONFIG & AdminAuth
  * - Role Definitions: Super Admin & Editors
- * - Access Gate & Route Guard for /admin.html
- * - Collaborator Management (admin_collaborators)
- * - Ban List Manager (banned_users)
- * - Emergency Controls & Kill Switches (admin_killswitches)
- * - Global Platform Announcement Banner (platform_announcement)
- * - Student Feedback & Bug Reports Drawer (admin_feedback_bugs)
+ * - Access Gate & Route Guard for admin.html
+ * - Collaborator Management
+ * - Ban List Manager (bannedUsers)
+ * - Emergency Controls & Kill Switches
+ * - Global Platform Announcement Banner
+ * - Student Feedback & Bug Reports Drawer
  */
 
-export const SUPER_ADMIN_EMAILS = [
-  'YOUR_GOOGLE_EMAIL@gmail.com',
-  'admin@studyflow.local'
-];
+export const ROLE_CONFIG = {
+  superAdmins: [
+    "kuldeepkumarncc2dbn@gmail.com",
+    "YOUR_GOOGLE_EMAIL@gmail.com"
+  ],
+  editors: [
+    "friend_email@gmail.com",
+    "FRIEND_EMAIL@gmail.com"
+  ],
+  bannedUsers: []
+};
 
-export const DEFAULT_EDITOR_EMAILS = [
-  'FRIEND_EMAIL@gmail.com',
-  'editor@studyflow.local'
-];
+export const SUPER_ADMIN_EMAILS = ROLE_CONFIG.superAdmins;
+export const DEFAULT_EDITOR_EMAILS = ROLE_CONFIG.editors;
 
 export const ADMIN_STORAGE_KEYS = {
   USER_PROFILE: 'study_user_profile',
@@ -36,15 +42,97 @@ export const ADMIN_STORAGE_KEYS = {
   ACCESS_DENIED_ALERT: 'admin_access_denied_alert'
 };
 
+export const AdminAuth = {
+  getUserEmail() {
+    try {
+      const profile = JSON.parse(localStorage.getItem("study_user_profile") || "{}");
+      if (profile.email) return (profile.email || "").toLowerCase().trim();
+      const alt = JSON.parse(localStorage.getItem("user_profile") || "{}");
+      return (alt.email || "").toLowerCase().trim();
+    } catch (e) {
+      return "";
+    }
+  },
+  getRole() {
+    const email = this.getUserEmail();
+    if (!email) return "guest";
+
+    let superList = [...ROLE_CONFIG.superAdmins];
+    try {
+      const storedSupers = JSON.parse(localStorage.getItem(ADMIN_STORAGE_KEYS.SUPER_ADMINS) || "[]");
+      if (Array.isArray(storedSupers)) {
+        storedSupers.forEach(s => {
+          const norm = String(s || '').trim().toLowerCase();
+          if (norm && !superList.map(e => e.toLowerCase()).includes(norm)) superList.push(norm);
+        });
+      }
+    } catch {}
+
+    if (superList.map(e => e.toLowerCase()).includes(email)) return "super_admin";
+
+    let editorList = [...ROLE_CONFIG.editors];
+    try {
+      const storedEditors = JSON.parse(localStorage.getItem(ADMIN_STORAGE_KEYS.COLLABORATORS) || "[]");
+      if (Array.isArray(storedEditors)) {
+        storedEditors.forEach(item => {
+          const em = typeof item === 'string' ? item : item?.email;
+          const norm = String(em || '').trim().toLowerCase();
+          if (norm && !editorList.map(e => e.toLowerCase()).includes(norm)) editorList.push(norm);
+        });
+      }
+    } catch {}
+
+    if (editorList.map(e => e.toLowerCase()).includes(email)) return "editor";
+    return "student";
+  },
+  canAccessAdmin() {
+    const role = this.getRole();
+    return role === "super_admin" || role === "editor";
+  },
+  isSuperAdmin() {
+    return this.getRole() === "super_admin";
+  }
+};
+
+// Global bindings for script tag usage
+if (typeof window !== 'undefined') {
+  window.ROLE_CONFIG = ROLE_CONFIG;
+  window.AdminAuth = AdminAuth;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.ROLE_CONFIG = ROLE_CONFIG;
+  globalThis.AdminAuth = AdminAuth;
+}
+
 /**
- * Retrieves the currently logged-in user profile.
- * Checks study_user_profile first (as required by spec),
- * falling back to user_profile, google_user_profile, and session cookie.
+ * Automatically update #sidebar-admin-link visibility across all views
+ */
+export function updateSidebarAdminLinkVisibility() {
+  if (typeof document === 'undefined') return;
+  const adminLink = document.getElementById('sidebar-admin-link');
+  if (!adminLink) return;
+
+  const allowed = AdminAuth.canAccessAdmin();
+  if (allowed) {
+    adminLink.style.display = '';
+  } else {
+    adminLink.style.display = 'none';
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', updateSidebarAdminLinkVisibility);
+  window.addEventListener('storage', updateSidebarAdminLinkVisibility);
+  window.addEventListener('studyflow-role-switched', updateSidebarAdminLinkVisibility);
+  window.addEventListener('studyflow-collaborators-changed', updateSidebarAdminLinkVisibility);
+}
+
+/**
+ * Retrieves the currently logged-in user profile
  */
 export function getLoggedInUserProfile() {
   if (typeof window === 'undefined') return null;
   try {
-    // 1. Primary: check study_user_profile in localStorage or sessionStorage
     const rawStudyProfile = localStorage.getItem(ADMIN_STORAGE_KEYS.USER_PROFILE) || 
                             sessionStorage.getItem(ADMIN_STORAGE_KEYS.USER_PROFILE);
     if (rawStudyProfile) {
@@ -54,7 +142,6 @@ export function getLoggedInUserProfile() {
       }
     }
 
-    // 2. Secondary: check user_profile fallback
     const rawUserProfile = localStorage.getItem('user_profile') || 
                            sessionStorage.getItem('user_profile') ||
                            localStorage.getItem('google_user_profile');
@@ -64,41 +151,18 @@ export function getLoggedInUserProfile() {
         return parsed;
       }
     }
-
-    // 3. Fallback: check session cookie
-    if (typeof document !== 'undefined' && document.cookie) {
-      const match = document.cookie.match(/(?:^|;\s*)study_session=([^;]*)/);
-      if (match) {
-        const decoded = decodeURIComponent(match[1]);
-        const parsed = JSON.parse(decoded);
-        if (parsed && (parsed.email || parsed.name || parsed.sub)) {
-          return parsed;
-        }
-      }
-    }
   } catch (err) {
-    console.warn('Error reading logged-in user profile for admin:', err);
+    console.warn('Error reading user profile:', err);
   }
   return null;
 }
 
-/**
- * Retrieves the normalized lowercase email of the logged-in user
- */
 export function getCurrentUserEmail() {
-  const profile = getLoggedInUserProfile();
-  if (profile && profile.email) {
-    return String(profile.email).trim().toLowerCase();
-  }
-  return '';
+  return AdminAuth.getUserEmail();
 }
 
-/**
- * Returns list of Super Admin emails (base list + any dynamically stored)
- */
 export function getSuperAdmins() {
-  const list = [...SUPER_ADMIN_EMAILS];
-  if (typeof window === 'undefined') return list;
+  const list = [...ROLE_CONFIG.superAdmins];
   try {
     const raw = localStorage.getItem(ADMIN_STORAGE_KEYS.SUPER_ADMINS);
     if (raw) {
@@ -112,18 +176,12 @@ export function getSuperAdmins() {
         });
       }
     }
-  } catch (e) {
-    console.warn('Error reading super admins:', e);
-  }
+  } catch {}
   return list;
 }
 
-/**
- * Returns list of Editor emails (base list + any saved in admin_collaborators)
- */
 export function getCollaborators() {
-  const list = [...DEFAULT_EDITOR_EMAILS];
-  if (typeof window === 'undefined') return list;
+  const list = [...ROLE_CONFIG.editors];
   try {
     const raw = localStorage.getItem(ADMIN_STORAGE_KEYS.COLLABORATORS);
     if (raw) {
@@ -138,17 +196,12 @@ export function getCollaborators() {
         });
       }
     }
-  } catch (e) {
-    console.warn('Error reading collaborators:', e);
-  }
+  } catch {}
   return list;
 }
 
-/**
- * Returns array of active editor collaborator objects with metadata
- */
 export function getCollaboratorsDetailed() {
-  const base = DEFAULT_EDITOR_EMAILS.map(email => ({
+  const base = ROLE_CONFIG.editors.map(email => ({
     email,
     role: 'Editor',
     addedAt: '2026-10-01',
@@ -156,7 +209,6 @@ export function getCollaboratorsDetailed() {
     isDefault: true
   }));
 
-  if (typeof window === 'undefined') return base;
   try {
     const raw = localStorage.getItem(ADMIN_STORAGE_KEYS.COLLABORATORS);
     if (raw) {
@@ -177,15 +229,10 @@ export function getCollaboratorsDetailed() {
         });
       }
     }
-  } catch (e) {
-    console.warn('Error reading detailed collaborators:', e);
-  }
+  } catch {}
   return base;
 }
 
-/**
- * Adds a new collaborator email with Editor privileges
- */
 export function addCollaborator(email, addedBy = 'Super Admin') {
   if (!email || typeof email !== 'string') return { success: false, message: 'Invalid email' };
   const norm = email.trim().toLowerCase();
@@ -211,29 +258,38 @@ export function addCollaborator(email, addedBy = 'Super Admin') {
     const list = raw ? JSON.parse(raw) : [];
     list.push(newEntry);
     localStorage.setItem(ADMIN_STORAGE_KEYS.COLLABORATORS, JSON.stringify(list));
-    window.dispatchEvent(new Event('studyflow-collaborators-changed'));
+    if (!ROLE_CONFIG.editors.map(e => e.toLowerCase()).includes(norm)) {
+      ROLE_CONFIG.editors.push(norm);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-collaborators-changed'));
+    }
     return { success: true, message: `Granted Editor access to ${norm}`, collaborator: newEntry };
   } catch (e) {
     return { success: false, message: e.message };
   }
 }
 
-/**
- * Revokes collaborator access for an email
- */
 export function removeCollaborator(email) {
   if (!email) return false;
   const norm = String(email).trim().toLowerCase();
   try {
     const raw = localStorage.getItem(ADMIN_STORAGE_KEYS.COLLABORATORS);
-    if (!raw) return true;
-    let list = JSON.parse(raw);
-    list = list.filter(item => {
-      const itemEmail = typeof item === 'string' ? item : item?.email;
-      return String(itemEmail || '').trim().toLowerCase() !== norm;
-    });
-    localStorage.setItem(ADMIN_STORAGE_KEYS.COLLABORATORS, JSON.stringify(list));
-    window.dispatchEvent(new Event('studyflow-collaborators-changed'));
+    if (raw) {
+      let list = JSON.parse(raw);
+      list = list.filter(item => {
+        const itemEmail = typeof item === 'string' ? item : item?.email;
+        return String(itemEmail || '').trim().toLowerCase() !== norm;
+      });
+      localStorage.setItem(ADMIN_STORAGE_KEYS.COLLABORATORS, JSON.stringify(list));
+    }
+    const idx = ROLE_CONFIG.editors.findIndex(e => e.toLowerCase() === norm);
+    if (idx !== -1) {
+      ROLE_CONFIG.editors.splice(idx, 1);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-collaborators-changed'));
+    }
     return true;
   } catch (e) {
     console.error('Error removing collaborator:', e);
@@ -241,54 +297,53 @@ export function removeCollaborator(email) {
   }
 }
 
-/**
- * Checks if a user is a Super Admin
- */
 export function isSuperAdmin(email = null) {
-  const checkEmail = (email || getCurrentUserEmail()).trim().toLowerCase();
-  if (!checkEmail) return false;
-  const superAdmins = getSuperAdmins();
-  return superAdmins.map(e => e.trim().toLowerCase()).includes(checkEmail);
+  if (email) {
+    const norm = String(email).trim().toLowerCase();
+    return getSuperAdmins().map(e => e.toLowerCase()).includes(norm);
+  }
+  return AdminAuth.isSuperAdmin();
 }
 
-/**
- * Checks if a user is an Editor
- */
 export function isEditor(email = null) {
-  const checkEmail = (email || getCurrentUserEmail()).trim().toLowerCase();
-  if (!checkEmail) return false;
-  const editors = getCollaborators();
-  return editors.map(e => e.trim().toLowerCase()).includes(checkEmail);
+  if (email) {
+    const norm = String(email).trim().toLowerCase();
+    return getCollaborators().map(e => e.toLowerCase()).includes(norm);
+  }
+  const role = AdminAuth.getRole();
+  return role === 'editor';
 }
 
-/**
- * Checks if user has admin/collaborator access (Super Admin or Editor)
- */
 export function canAccessAdmin(email = null) {
-  return isSuperAdmin(email) || isEditor(email);
+  if (email) {
+    const norm = String(email).trim().toLowerCase();
+    return getSuperAdmins().map(e => e.toLowerCase()).includes(norm) ||
+           getCollaborators().map(e => e.toLowerCase()).includes(norm);
+  }
+  return AdminAuth.canAccessAdmin();
 }
 
-/**
- * Returns role string: 'SUPER_ADMIN' | 'EDITOR' | 'STUDENT'
- */
 export function getUserRole(email = null) {
-  if (isSuperAdmin(email)) return 'SUPER_ADMIN';
-  if (isEditor(email)) return 'EDITOR';
+  if (email) {
+    const norm = String(email).trim().toLowerCase();
+    if (getSuperAdmins().map(e => e.toLowerCase()).includes(norm)) return 'SUPER_ADMIN';
+    if (getCollaborators().map(e => e.toLowerCase()).includes(norm)) return 'EDITOR';
+    return 'STUDENT';
+  }
+  const r = AdminAuth.getRole();
+  if (r === 'super_admin') return 'SUPER_ADMIN';
+  if (r === 'editor') return 'EDITOR';
   return 'STUDENT';
 }
 
-/**
- * Ban List Manager (banned_users)
- */
 export function getBannedUsers() {
-  if (typeof window === 'undefined') return [];
+  if (typeof localStorage === 'undefined') return [...(ROLE_CONFIG.bannedUsers || [])];
   try {
     const raw = localStorage.getItem(ADMIN_STORAGE_KEYS.BANNED_USERS);
-    if (!raw) return [];
+    if (!raw) return [...(ROLE_CONFIG.bannedUsers || [])];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    console.warn('Error reading banned users:', e);
+    return Array.isArray(parsed) ? parsed : [...(ROLE_CONFIG.bannedUsers || [])];
+  } catch {
     return [];
   }
 }
@@ -325,10 +380,14 @@ export function banUser(email, reason = 'Administrative suspension', bannedBy = 
   try {
     banned.push(newBan);
     localStorage.setItem(ADMIN_STORAGE_KEYS.BANNED_USERS, JSON.stringify(banned));
-    window.dispatchEvent(new Event('studyflow-banned-users-changed'));
+    if (!ROLE_CONFIG.bannedUsers.map(e => e.toLowerCase()).includes(norm)) {
+      ROLE_CONFIG.bannedUsers.push(norm);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-banned-users-changed'));
+    }
 
-    // If currently logged-in user is the one being banned, force signout immediately
-    if (getCurrentUserEmail() === norm) {
+    if (getCurrentUserEmail() === norm && typeof window !== 'undefined') {
       localStorage.removeItem(ADMIN_STORAGE_KEYS.USER_PROFILE);
       localStorage.removeItem('user_profile');
       sessionStorage.clear();
@@ -351,21 +410,19 @@ export function unbanUser(email) {
       return String(bEmail || '').trim().toLowerCase() !== norm;
     });
     localStorage.setItem(ADMIN_STORAGE_KEYS.BANNED_USERS, JSON.stringify(banned));
-    window.dispatchEvent(new Event('studyflow-banned-users-changed'));
+    const idx = ROLE_CONFIG.bannedUsers.findIndex(e => e.toLowerCase() === norm);
+    if (idx !== -1) {
+      ROLE_CONFIG.bannedUsers.splice(idx, 1);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-banned-users-changed'));
+    }
     return true;
   } catch (e) {
-    console.error('Error unbanning user:', e);
     return false;
   }
 }
 
-/**
- * Emergency Controls & Kill Switches
- * Defaults:
- * - driveSync: true (enabled)
- * - demoMode: true (enabled)
- * - maintenanceMode: false (disabled)
- */
 export function getEmergencyKillswitches() {
   const defaults = {
     driveSync: true,
@@ -383,8 +440,7 @@ export function getEmergencyKillswitches() {
       demoMode: parsed.demoMode !== undefined ? !!parsed.demoMode : defaults.demoMode,
       maintenanceMode: parsed.maintenanceMode !== undefined ? !!parsed.maintenanceMode : defaults.maintenanceMode
     };
-  } catch (e) {
-    console.warn('Error reading kill switches:', e);
+  } catch {
     return defaults;
   }
 }
@@ -395,21 +451,19 @@ export function setEmergencyKillswitch(key, value) {
     current[key] = !!value;
     try {
       localStorage.setItem(ADMIN_STORAGE_KEYS.KILLSWITCHES, JSON.stringify(current));
-      window.dispatchEvent(new CustomEvent('studyflow-killswitch-changed', {
-        detail: { key, value: !!value, killswitches: current }
-      }));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('studyflow-killswitch-changed', {
+          detail: { key, value: !!value, killswitches: current }
+        }));
+      }
       return true;
-    } catch (e) {
-      console.error('Error saving killswitch:', e);
+    } catch {
       return false;
     }
   }
   return false;
 }
 
-/**
- * Global Announcement Banner (platform_announcement)
- */
 export function getPlatformAnnouncement() {
   if (typeof window === 'undefined') return null;
   try {
@@ -418,16 +472,14 @@ export function getPlatformAnnouncement() {
     const announcement = JSON.parse(raw);
     if (!announcement || !announcement.text || !announcement.active) return null;
 
-    // Check expiration date
     if (announcement.expiresAt) {
       const today = new Date().toISOString().split('T')[0];
       if (announcement.expiresAt < today) {
-        return null; // Expired
+        return null;
       }
     }
     return announcement;
-  } catch (e) {
-    console.warn('Error reading announcement:', e);
+  } catch {
     return null;
   }
 }
@@ -437,17 +489,18 @@ export function setPlatformAnnouncement({ text, urgency = 'normal', expiresAt = 
   const announcement = {
     id: 'announcement_' + Date.now(),
     text: text.trim(),
-    urgency, // 'normal' | 'motivational' | 'warning'
+    urgency,
     expiresAt: expiresAt || '',
     createdAt: new Date().toISOString().split('T')[0],
     active: true
   };
   try {
     localStorage.setItem(ADMIN_STORAGE_KEYS.ANNOUNCEMENT, JSON.stringify(announcement));
-    window.dispatchEvent(new Event('studyflow-announcement-changed'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-announcement-changed'));
+    }
     return announcement;
-  } catch (e) {
-    console.error('Error saving announcement:', e);
+  } catch {
     return false;
   }
 }
@@ -455,16 +508,15 @@ export function setPlatformAnnouncement({ text, urgency = 'normal', expiresAt = 
 export function clearPlatformAnnouncement() {
   try {
     localStorage.removeItem(ADMIN_STORAGE_KEYS.ANNOUNCEMENT);
-    window.dispatchEvent(new Event('studyflow-announcement-changed'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-announcement-changed'));
+    }
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
 
-/**
- * Feedback & Bug Drawer (admin_feedback_bugs)
- */
 export const INITIAL_BUG_REPORTS = [
   {
     id: 'BUG-101',
@@ -522,7 +574,7 @@ export function getBugReports() {
     }
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : INITIAL_BUG_REPORTS;
-  } catch (e) {
+  } catch {
     return INITIAL_BUG_REPORTS;
   }
 }
@@ -532,9 +584,11 @@ export function updateBugStatus(id, newStatus) {
     const bugs = getBugReports();
     const updated = bugs.map(b => b.id === id ? { ...b, status: newStatus } : b);
     localStorage.setItem(ADMIN_STORAGE_KEYS.FEEDBACK_BUGS, JSON.stringify(updated));
-    window.dispatchEvent(new Event('studyflow-bugs-changed'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-bugs-changed'));
+    }
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -555,37 +609,28 @@ export function addBugReport(report) {
     };
     bugs.unshift(newEntry);
     localStorage.setItem(ADMIN_STORAGE_KEYS.FEEDBACK_BUGS, JSON.stringify(bugs));
-    window.dispatchEvent(new Event('studyflow-bugs-changed'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('studyflow-bugs-changed'));
+    }
     return newEntry;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
-/**
- * Access Gate & Route Guard for /admin.html
- * If an unauthorized student visits /admin.html:
- * Immediately redirect them to /index.html with alert:
- * "Access Denied: Administrator privileges required."
- */
 export function checkAdminAccess({ redirect = true } = {}) {
-  if (typeof window === 'undefined') return false;
+  const allowed = AdminAuth.canAccessAdmin();
 
-  const email = getCurrentUserEmail();
-  const allowed = canAccessAdmin(email);
-
-  if (!allowed && redirect) {
+  if (!allowed && redirect && typeof window !== 'undefined') {
     const alertMessage = "Access Denied: Administrator privileges required.";
     try {
       sessionStorage.setItem(ADMIN_STORAGE_KEYS.ACCESS_DENIED_ALERT, alertMessage);
     } catch {}
 
-    // Synchronous browser alert prompt for immediate user feedback
     try {
       window.alert(alertMessage);
     } catch {}
 
-    // Immediate redirection to index.html with query parameter
     window.location.replace('/index.html?access_denied=admin');
     return false;
   }
@@ -593,9 +638,6 @@ export function checkAdminAccess({ redirect = true } = {}) {
   return allowed;
 }
 
-/**
- * Helper to simulate roles in development / zero-cost testing
- */
 export function setSimulatedRole(role) {
   if (typeof window === 'undefined') return;
   let testProfile = null;
@@ -603,7 +645,7 @@ export function setSimulatedRole(role) {
     testProfile = {
       sub: 'super_admin_simulated',
       name: 'Super Admin',
-      email: 'YOUR_GOOGLE_EMAIL@gmail.com',
+      email: 'kuldeepkumarncc2dbn@gmail.com',
       picture: '',
       isLoggedIn: true
     };
@@ -611,7 +653,7 @@ export function setSimulatedRole(role) {
     testProfile = {
       sub: 'editor_simulated',
       name: 'Collaborator Editor',
-      email: 'FRIEND_EMAIL@gmail.com',
+      email: 'friend_email@gmail.com',
       picture: '',
       isLoggedIn: true
     };
@@ -630,4 +672,7 @@ export function setSimulatedRole(role) {
   sessionStorage.setItem(ADMIN_STORAGE_KEYS.USER_PROFILE, JSON.stringify(testProfile));
   sessionStorage.setItem('user_profile', JSON.stringify(testProfile));
   window.dispatchEvent(new Event('studyflow-role-switched'));
+  updateSidebarAdminLinkVisibility();
 }
+
+export default AdminAuth;

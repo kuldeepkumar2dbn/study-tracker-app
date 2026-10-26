@@ -327,6 +327,10 @@ export default function AdminPortal() {
     });
 
     if (result) {
+      // Saves to platform_announcement in localStorage so student dashboards display it
+      try {
+        localStorage.setItem('platform_announcement', JSON.stringify(result));
+      } catch {}
       setActiveAnnouncement(result);
       setAnnouncementText('');
       showToast('Global announcement banner published across all student pages!', 'success');
@@ -336,6 +340,9 @@ export default function AdminPortal() {
 
   const handleClearAnnouncement = () => {
     clearPlatformAnnouncement();
+    try {
+      localStorage.removeItem('platform_announcement');
+    } catch {}
     setActiveAnnouncement(null);
     showToast('Global announcement cleared from all pages.', 'info');
   };
@@ -557,18 +564,18 @@ export default function AdminPortal() {
       <div className="p-6 rounded-3xl glass-panel border border-theme-border shadow-xl backdrop-blur-xl bg-theme-surface/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 text-white shadow-md">
+            <div className="p-2 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white shadow-md">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <h1 className="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-theme-text">
-              Admin & Collaborator Portal
+              Study Tracker Pro — Admin Control Center
             </h1>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
               isSuper 
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.45)]' 
                 : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
             }`}>
-              {isSuper ? '👑 Super Admin' : '✏️ Editor'}
+              {isSuper ? 'Super Admin' : 'Editor'}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-theme-muted max-w-2xl">
@@ -578,22 +585,22 @@ export default function AdminPortal() {
           </p>
         </div>
 
-        {/* User Identity Pill */}
+        {/* User Identity Pill & Back Button */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="p-2.5 rounded-2xl bg-theme-bg/60 border border-theme-border/60 flex items-center gap-2.5 text-xs">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-amber-500 text-white font-bold flex items-center justify-center text-xs">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white font-bold flex items-center justify-center text-xs">
               {(userProfile?.name || 'A').charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-theme-text truncate max-w-[140px]">{userProfile?.name || 'Administrator'}</p>
-              <p className="text-[11px] text-theme-muted truncate max-w-[140px]">{userEmail || 'admin@studyflow.local'}</p>
+              <p className="text-[11px] text-theme-muted truncate max-w-[140px]">{userEmail || 'kuldeepkumarncc2dbn@gmail.com'}</p>
             </div>
           </div>
           <a
             href="/index.html"
-            className="px-3.5 py-2.5 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all hover:brightness-105 active:scale-95 text-center shrink-0"
+            className="px-3.5 py-2.5 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all hover:brightness-105 active:scale-95 text-center shrink-0 flex items-center gap-1.5"
           >
-            ← Main Tracker
+            <span>← Back to Workspace</span>
           </a>
         </div>
       </div>

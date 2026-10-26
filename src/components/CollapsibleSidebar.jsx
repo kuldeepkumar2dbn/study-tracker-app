@@ -21,7 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { soundEngine } from '../utils/audio';
 import { celebrateTaskCompletion } from '../utils/confetti';
-import { canAccessAdmin } from '../../admin-config';
+import { canAccessAdmin, AdminAuth } from '../../admin-config';
 
 /**
  * Minimalist Stopwatch / Hourglass SVG icon for Focus Timer
@@ -143,12 +143,18 @@ export default function CollapsibleSidebar({
 
   // Dynamic Admin Portal navigation visibility check (Super Admin or Editor only)
   const [hasAdminAccess, setHasAdminAccess] = useState(() => {
-    return typeof canAccessAdmin === 'function' ? canAccessAdmin() : false;
+    return typeof AdminAuth !== 'undefined' && typeof AdminAuth.canAccessAdmin === 'function'
+      ? AdminAuth.canAccessAdmin()
+      : (typeof canAccessAdmin === 'function' ? canAccessAdmin() : false);
   });
 
   useEffect(() => {
     const checkAccess = () => {
-      setHasAdminAccess(typeof canAccessAdmin === 'function' ? canAccessAdmin() : false);
+      setHasAdminAccess(
+        typeof AdminAuth !== 'undefined' && typeof AdminAuth.canAccessAdmin === 'function'
+          ? AdminAuth.canAccessAdmin()
+          : (typeof canAccessAdmin === 'function' ? canAccessAdmin() : false)
+      );
     };
     checkAccess();
     window.addEventListener('studyflow-role-switched', checkAccess);
@@ -318,18 +324,9 @@ export default function CollapsibleSidebar({
           </div>
         </div>
 
-        {/* Navigation Items (Core 9 views + Admin Portal for authorized administrators) */}
+        {/* Navigation Items (Core 9 views in clean order) */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
-          {(hasAdminAccess ? [
-            ...SIDEBAR_ITEMS,
-            {
-              id: 'admin',
-              name: '🛡️ Admin Portal',
-              icon: ShieldCheck,
-              href: '/admin.html',
-              tooltip: '🛡️ Admin & Collaborator Portal'
-            }
-          ] : SIDEBAR_ITEMS).map((item) => {
+          {SIDEBAR_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = item.id === activeTabId;
             const isDemoLockedNotes = isDemo && item.id === 'notes';
@@ -506,6 +503,40 @@ export default function CollapsibleSidebar({
             );
           })}
         </nav>
+
+        {/* Dedicated Admin Portal Navigation Link at bottom above profile/footer section */}
+        <div className="px-2 py-1.5 shrink-0 border-t border-theme-border/60">
+          <a
+            id="sidebar-admin-link"
+            href="/admin.html"
+            style={{ display: hasAdminAccess ? 'flex' : 'none' }}
+            onClick={() => {
+              if (isMobileOpen && onCloseMobile) onCloseMobile();
+            }}
+            className={`group relative flex items-center h-10 px-3 rounded-xl transition-all duration-200 cursor-pointer ${
+              activeTabId === 'admin'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30 border border-purple-400/40 font-semibold'
+                : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-purple-200 border border-purple-500/30 font-medium'
+            }`}
+            title="🛡️ Admin Portal"
+          >
+            <div className="flex items-center justify-center shrink-0 w-5 h-5">
+              <ShieldCheck className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+            </div>
+
+            {isDrawerExpanded && (
+              <span className="ml-2.5 text-xs font-medium tracking-tight truncate flex-1">
+                Admin Portal
+              </span>
+            )}
+
+            {!isDrawerExpanded && (
+              <div className="hidden lg:group-hover:flex absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-theme-surface/95 border border-theme-border shadow-xl text-xs font-medium text-theme-text whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
+                <span>🛡️ Admin Portal</span>
+              </div>
+            )}
+          </a>
+        </div>
 
         {/* Sidebar Footer Stats / Quick Ticker */}
         <div className="p-3 border-t border-theme-border/60 shrink-0">
