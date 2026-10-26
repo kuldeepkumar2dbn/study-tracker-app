@@ -13,34 +13,22 @@ import {
 } from 'lucide-react';
 import { LogoMark } from '../components/Logo';
 import { ThemeProvider } from '../context/ThemeContext';
-
-const GOOGLE_CLIENT_ID = '316205351069-hnmklkhtlbqufp22dm0poqvo6lfjjs1c.apps.googleusercontent.com';
-const GOOGLE_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+import { isAuthenticated, saveUserSession } from '../../auth-guard';
+import { DEFAULT_GOOGLE_CLIENT_ID, DEFAULT_GOOGLE_SCOPES } from '../services/googleDrive';
 
 function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [statusText, setStatusText] = useState('');
 
-  // Auto-redirect if already authenticated and unexpired
+  // Auto-redirect to dashboard if already authenticated with active session
   useEffect(() => {
     try {
-      const existingToken = localStorage.getItem('google_access_token');
-      const expiryStr = localStorage.getItem('google_token_expiry');
-      if (existingToken) {
-        if (expiryStr && Date.now() > Number(expiryStr)) {
-          // Token expired, clear it
-          localStorage.removeItem('google_access_token');
-          localStorage.removeItem('google_token_expiry');
-          localStorage.removeItem('user_profile');
-          localStorage.removeItem('google_user_profile');
-          localStorage.removeItem('google_user_sub');
-        } else {
-          window.location.replace('/index.html');
-        }
+      if (isAuthenticated()) {
+        window.location.replace('/index.html');
       }
     } catch (e) {
-      console.warn('LocalStorage error:', e);
+      console.warn('Auth check error:', e);
     }
   }, []);
 
@@ -56,7 +44,7 @@ function LoginPage() {
         if (window.google?.accounts?.oauth2) {
           clearInterval(interval);
           resolve(window.google.accounts.oauth2);
-        } else if (attempts > 30) {
+        } else if (attempts > 35) {
           clearInterval(interval);
           resolve(null);
         }
@@ -78,23 +66,22 @@ function LoginPage() {
       setStatusText('Waiting for approval in Google popup...');
 
       const tokenClient = oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: GOOGLE_SCOPES,
+        client_id: DEFAULT_GOOGLE_CLIENT_ID,
+        scope: DEFAULT_GOOGLE_SCOPES,
         callback: async (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             const accessToken = tokenResponse.access_token;
+            const expiresInSec = Number(tokenResponse.expires_in) || 3600;
             setStatusText('Saving authorization and loading profile...');
 
-            // Store primary access token and calculate expiry timestamp
-            localStorage.setItem('google_access_token', accessToken);
-            const expiresInSec = Number(tokenResponse.expires_in) || 3600;
-            const tokenExpiry = Date.now() + expiresInSec * 1000;
-            localStorage.setItem('google_token_expiry', String(tokenExpiry));
+            let userData = {
+              sub: 'user_' + Date.now(),
+              name: 'Student',
+              email: '',
+              picture: ''
+            };
 
-            localStorage.setItem('studyflow_drive_token', accessToken);
-            sessionStorage.setItem('studyflow_drive_token', accessToken);
-
-            // Fetch student's profile information including unique Google subject ID (sub)
+            // Fetch student's profile information from Google
             try {
               const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                 headers: { Authorization: `Bearer ${accessToken}` }
@@ -102,25 +89,21 @@ function LoginPage() {
 
               if (res.ok) {
                 const profile = await res.json();
-                const userSub = profile.sub || '';
-                localStorage.setItem('google_user_sub', userSub);
-
-                const userData = {
-                  sub: userSub,
+                userData = {
+                  sub: profile.sub || userData.sub,
                   name: profile.name || profile.given_name || 'Student',
                   email: profile.email || '',
                   picture: profile.picture || ''
                 };
-                localStorage.setItem('user_profile', JSON.stringify(userData));
-                localStorage.setItem('google_user_profile', JSON.stringify(userData));
-                localStorage.setItem('studyflow_drive_user', JSON.stringify(userData));
               }
             } catch (profileErr) {
               console.warn('Could not fetch user profile details:', profileErr);
             }
 
+            // Write persistent cookie (study_session) and localStorage
+            saveUserSession(userData, accessToken, expiresInSec);
+
             setStatusText('Redirecting to Study Tracker...');
-            // Redirect to index.html
             window.location.replace('/index.html');
           } else if (tokenResponse && tokenResponse.error) {
             setErrorMessage(tokenResponse.error_description || tokenResponse.error || 'Authentication was cancelled.');
@@ -189,7 +172,7 @@ function LoginPage() {
             <div className="flex items-start gap-2.5 text-theme-text/90">
               <FolderLock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <span>
-                <strong>Scoped Access:</strong> Only files created by Study Tracker (<code className="text-[10px] font-mono bg-theme-surface px-1 py-0.5 rounded">drive.file</code>) are accessed.
+                <strong>Persistent 1-Year Login:</strong> Stay signed in securely until you explicitly log out.
               </span>
             </div>
           </div>
@@ -244,8 +227,19 @@ function LoginPage() {
             </span>
           </button>
 
+          {/* Guest Preview Mode Link */}
+          <div className="mt-4 text-center">
+            <a
+              href="/index.html"
+              className="inline-flex items-center gap-1.5 text-xs text-theme-accent hover:underline font-semibold"
+            >
+              <span>Explore as Guest First</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
           {/* Footer Notice */}
-          <div className="mt-6 pt-4 border-t border-theme-border/60 text-center">
+          <div className="mt-5 pt-4 border-t border-theme-border/60 text-center">
             <p className="text-[11px] text-theme-muted leading-relaxed">
               By continuing, you agree to allow Study Tracker to save notes to your personal Google Drive. 
               Review our <a href="/privacy.html" className="text-theme-accent hover:underline font-medium">Privacy Policy</a>.

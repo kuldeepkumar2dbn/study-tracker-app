@@ -25,9 +25,11 @@ import {
   Lock
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { sanitizeUrl } from '../../utils/security';
 
 export default function NotesTab({ onOpenDriveModal }) {
+  const { renewDriveToken } = useAuth();
   const { 
     notes = [], 
     addNote, 
@@ -125,7 +127,24 @@ export default function NotesTab({ onOpenDriveModal }) {
     setUploadProgress(`Uploading ${file.name} directly to Google Drive via API v3...`);
 
     try {
-      const uploaded = await uploadDriveFile(file);
+      let uploaded;
+      try {
+        uploaded = await uploadDriveFile(file);
+      } catch (uploadErr) {
+        if (
+          uploadErr?.code === 'DRIVE_TOKEN_EXPIRED' || 
+          uploadErr?.message?.includes('expired') || 
+          uploadErr?.message?.includes('401')
+        ) {
+          setUploadProgress('Renewing Google Drive token...');
+          await renewDriveToken();
+          setUploadProgress(`Retrying upload of ${file.name}...`);
+          uploaded = await uploadDriveFile(file);
+        } else {
+          throw uploadErr;
+        }
+      }
+
       setUploadSuccess(`Successfully uploaded "${uploaded.name}" directly to your Google Drive!`);
 
       // If viewing/editing a note, append attachment markdown

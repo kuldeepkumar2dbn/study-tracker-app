@@ -14,17 +14,23 @@ import {
   RefreshCw, 
   ChevronDown, 
   Check, 
-  X,
-  ExternalLink,
-  Plus,
-  Trash2,
-  LogOut
+  X, 
+  ExternalLink, 
+  Plus, 
+  Trash2, 
+  LogOut,
+  LogIn,
+  Lock,
+  ShieldCheck,
+  User
 } from 'lucide-react';
 import Logo from './Logo';
 import DriveModal from './DriveModal';
+import AuthModal from './AuthModal';
+import LockedFeatureOverlay from './LockedFeatureOverlay';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { DataProvider, useData } from '../context/DataContext';
-import { logout, validateAuthToken } from '../../auth-guard';
+import { AuthProvider, useAuth } from '../context/AuthContext';
 import { sanitizeUrl } from '../utils/security';
 
 export const STORAGE_KEY_PREFIX = 'studyflow_data_';
@@ -34,34 +40,35 @@ export const NAV_TABS = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, href: '/index.html', pathRegex: /^\/(index\.html)?$/ },
   { id: 'routine', name: 'Daily Routine', icon: Clock, href: '/routine.html', pathRegex: /\/routine\.html$/ },
   { id: 'calendar', name: 'Calendar', icon: CalendarIcon, href: '/calendar.html', pathRegex: /\/calendar\.html$/ },
-  { id: 'syllabus', name: 'Subjects & Syllabus', icon: BookOpen, href: '/syllabus.html', pathRegex: /\/syllabus\.html$/ },
-  { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', pathRegex: /\/revision\.html$/ },
-  { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', pathRegex: /\/radar\.html$/ },
-  { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', pathRegex: /\/skills\.html$/ },
-  { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', pathRegex: /\/notes\.html$/ },
+  { id: 'syllabus', name: 'Subjects & Syllabus', icon: BookOpen, href: '/syllabus.html', pathRegex: /\/syllabus\.html$/, isProtected: true },
+  { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', pathRegex: /\/revision\.html$/, isProtected: true },
+  { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', pathRegex: /\/radar\.html$/, isProtected: true },
+  { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', pathRegex: /\/skills\.html$/, isProtected: true },
+  { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', pathRegex: /\/notes\.html$/, isProtected: true },
   { id: 'timer', name: 'Focus Timer', icon: Clock, href: '/timer.html', pathRegex: /\/timer\.html$/ },
 ];
+
+export const LOCKED_TAB_IDS = ['syllabus', 'revision', 'radar', 'skills', 'notes'];
 
 // Persistent Shared Top Header
 export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
-  const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks, driveUser, signOut } = useData();
+  const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks } = useData();
+  const { isAuthenticated, userProfile, signOut, openAuthModal } = useAuth();
+  
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  const userProfile = (() => {
-    try {
-      const raw = localStorage.getItem('user_profile') || localStorage.getItem('google_user_profile') || sessionStorage.getItem('studyflow_drive_user');
-      return raw ? JSON.parse(raw) : (driveUser || null);
-    } catch {
-      return driveUser || null;
-    }
-  })();
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  
+  const themeDropdownRef = useRef(null);
+  const profileDropdownRef = useRef(null);
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (themeDropdownRef.current && !themeDropdownRef.current.contains(event.target)) {
         setThemeDropdownOpen(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -73,8 +80,6 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
     month: 'short',
     day: 'numeric'
   }).format(new Date());
-
-  const isConnected = !!driveAccessToken;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200">
@@ -98,7 +103,7 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
 
           {/* Live Streak Counter */}
           <div 
-            title={`Study Streak: ${streakData.streakCount} days active! Keep it up.`}
+            title={`Study Streak: ${streakData?.streakCount || 0} days active! Keep it up.`}
             className="group flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-default"
           >
             <div className="relative">
@@ -106,7 +111,7 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
             </div>
             <span className="font-mono-numbers font-bold text-xs sm:text-sm text-amber-500">
-              {streakData.streakCount}
+              {streakData?.streakCount || 0}
             </span>
             <span className="hidden sm:inline text-xs text-amber-600/90 dark:text-amber-400/90 font-medium">
               days streak
@@ -129,62 +134,135 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
           </button>
 
           {/* Google Drive Status & "Drive Synced" Badge */}
-          <div className="flex items-center gap-1.5">
-            <div
-              onClick={onOpenDriveModal}
-              title="Google Drive is connected and synced with your account"
-              className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all"
-            >
-              <div className="relative flex items-center justify-center">
-                <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
+          {isAuthenticated ? (
+            <div className="flex items-center gap-1.5">
+              <div
+                onClick={onOpenDriveModal}
+                title="Google Drive is connected and synchronized with your account"
+                className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all"
+              >
+                <div className="relative flex items-center justify-center">
+                  <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
+                </div>
+                <span className="hidden sm:inline font-semibold">Drive Synced</span>
               </div>
-              <span className="hidden sm:inline font-semibold">Drive Synced</span>
+
+              <button
+                onClick={syncNowToDrive}
+                title="Sync now to personal Google Drive"
+                className="top-action-link p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              </button>
             </div>
-
-            <button
-              onClick={syncNowToDrive}
-              title="Sync now to personal Google Drive"
-              className="top-action-link p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
+          ) : (
+            <div
+              onClick={() => openAuthModal('general')}
+              title="Sign in with Google to enable Drive cloud synchronization"
+              className="hidden sm:flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-theme-border/60 bg-theme-surface/60 text-theme-muted hover:text-theme-text text-xs font-medium shadow-sm cursor-pointer transition-all"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
+              <Cloud className="w-4 h-4 text-theme-muted" />
+              <span className="text-[11px]">Drive Sync</span>
+            </div>
+          )}
 
-          {/* Logged-In Student Profile (Avatar & Name) */}
-          <div 
-            className="flex items-center space-x-2 px-2 sm:px-2.5 py-1 rounded-xl bg-theme-surface border border-theme-border text-xs shadow-sm"
-            title={`Signed in as ${userProfile?.name || 'Student'} (${userProfile?.email || ''})`}
-          >
-            {userProfile?.picture ? (
-              <img 
-                src={userProfile.picture} 
-                alt={userProfile.name || 'Student'} 
-                referrerPolicy="no-referrer"
-                className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
-              />
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-[10px]">
-                {(userProfile?.name || 'S').charAt(0).toUpperCase()}
+          {/* User Profile OR Clean Sign-In Button */}
+          {isAuthenticated && userProfile ? (
+            <div className="flex items-center gap-1.5">
+              {/* Profile Dropdown Launcher */}
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center space-x-2 px-2 sm:px-2.5 py-1 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none"
+                  title={`Signed in as ${userProfile.name} (${userProfile.email})`}
+                >
+                  {userProfile.picture ? (
+                    <img 
+                      src={userProfile.picture} 
+                      alt={userProfile.name} 
+                      referrerPolicy="no-referrer"
+                      className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-[10px]">
+                      {(userProfile.name || 'S').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="hidden md:inline font-semibold text-theme-text truncate max-w-[100px]">
+                    {userProfile.name?.split(' ')[0] || 'Student'}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 text-theme-muted transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Profile & Sign Out Dropdown Menu */}
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-2xl glass-dropdown p-3 shadow-2xl z-50 animate-fadeIn border border-theme-border">
+                    {/* User Info Header */}
+                    <div className="flex items-center gap-2.5 pb-2.5 mb-2 border-b border-theme-border/60">
+                      {userProfile.picture ? (
+                        <img 
+                          src={userProfile.picture} 
+                          alt="" 
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-500/30" 
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-xs">
+                          {(userProfile.name || 'S').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-xs text-theme-text truncate">{userProfile.name}</p>
+                        <p className="text-[11px] text-theme-muted truncate">{userProfile.email}</p>
+                      </div>
+                    </div>
+
+                    {/* Persistent Session Indicator */}
+                    <div className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-medium mb-2 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>Persistent Session Active (1 Year)</span>
+                    </div>
+
+                    {/* Sign Out Option */}
+                    <button
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        signOut();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4 text-rose-400" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-            <span className="hidden md:inline font-semibold text-theme-text truncate max-w-[110px]">
-              {userProfile?.name?.split(' ')[0] || 'Student'}
-            </span>
-          </div>
 
-          {/* Hardened Sign Out Button (calls google.accounts.oauth2.revoke) */}
-          <button
-            onClick={() => logout()}
-            title="Sign Out of Study Tracker and Revoke Google Session"
-            className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
-          >
-            <LogOut className="w-3.5 h-3.5 text-rose-400" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
+              {/* Quick Sign Out Action Button */}
+              <button
+                onClick={() => signOut()}
+                title="Sign Out of Study Tracker and Revoke Google Session"
+                className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            </div>
+          ) : (
+            /* Clean Sign-In Button for Guests */
+            <button
+              onClick={() => openAuthModal('general')}
+              className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/35 transition-all duration-200 hover:brightness-105 active:scale-95 cursor-pointer"
+              title="Sign in with Google to unlock all features"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          )}
 
-          {/* Appearance / Clean Mode Toggle Dropdown */}
-          <div className="relative" ref={dropdownRef}>
+          {/* Appearance / Theme Dropdown */}
+          <div className="relative" ref={themeDropdownRef}>
             <button
               onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}
               className="top-action-link flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-medium text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95 shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-accent/30"
@@ -271,15 +349,16 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
 // Top Tab Navigation Bar linking to dedicated HTML files
 export function SharedNavBar({ activeTabId }) {
   const { exams, getTodayRevisionQueue, routineSlots } = useData();
+  const { isAuthenticated, openAuthModal } = useAuth();
 
-  const urgentCount = exams.filter(e => {
+  const urgentCount = (exams || []).filter(e => {
     if (e.isCompleted) return false;
     const diffDays = (new Date(e.date) - new Date()) / (1000 * 60 * 60 * 24);
     return diffDays > 0 && diffDays <= 7;
   }).length;
 
   const dueRevisionCount = getTodayRevisionQueue ? getTodayRevisionQueue().length : 0;
-  const pendingRoutineSlots = routineSlots.filter(s => !s.completed).length;
+  const pendingRoutineSlots = (routineSlots || []).filter(s => !s.completed).length;
 
   return (
     <div className="mb-6 overflow-x-auto pb-1 sm:pb-0">
@@ -287,20 +366,42 @@ export function SharedNavBar({ activeTabId }) {
         {NAV_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = tab.id === activeTabId;
+          const isLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(tab.id);
+
+          const handleClick = (e) => {
+            if (isLocked) {
+              e.preventDefault();
+              openAuthModal(tab.id, tab.href);
+            }
+          };
+
           return (
             <a
               key={tab.id}
               href={tab.href}
+              onClick={handleClick}
               className={`nav-tab-item flex items-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ease-in-out relative whitespace-nowrap active:scale-95 ${
                 isActive
                   ? 'bg-theme-accent text-white shadow-glow-accent font-semibold'
                   : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
-              }`}
+              } ${isLocked ? 'cursor-pointer hover:border-amber-500/40' : ''}`}
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-theme-muted'}`} />
               <span>{tab.name}</span>
 
-              {tab.id === 'routine' && pendingRoutineSlots > 0 && (
+              {/* Padlock Icon Visual Cue for Locked Tabs in Guest Mode */}
+              {isLocked && (
+                <span 
+                  title="Sign in with Google required"
+                  className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold"
+                >
+                  <Lock className="w-2.5 h-2.5" />
+                  <span className="hidden xl:inline text-[8px] uppercase tracking-wider">Locked</span>
+                </span>
+              )}
+
+              {/* Status Counters */}
+              {!isLocked && tab.id === 'routine' && pendingRoutineSlots > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
                   isActive ? 'bg-white text-indigo-700' : 'bg-theme-accent text-white'
                 }`}>
@@ -308,7 +409,7 @@ export function SharedNavBar({ activeTabId }) {
                 </span>
               )}
 
-              {tab.id === 'revision' && dueRevisionCount > 0 && (
+              {!isLocked && tab.id === 'revision' && dueRevisionCount > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
                   isActive ? 'bg-white text-emerald-700' : 'bg-emerald-500 text-white'
                 }`}>
@@ -316,7 +417,7 @@ export function SharedNavBar({ activeTabId }) {
                 </span>
               )}
 
-              {tab.id === 'radar' && urgentCount > 0 && (
+              {!isLocked && tab.id === 'radar' && urgentCount > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
                   isActive ? 'bg-white text-rose-700' : 'bg-rose-500 text-white'
                 }`}>
@@ -342,7 +443,7 @@ export function SharedFooter() {
           <span>Personal Daily Study & Skill Tracker</span>
         </p>
         <p className="text-[11px] font-mono-numbers">
-          Client-Side Google Drive API v3 (GIS) & LocalStorage Active
+          Client-Side Google Drive API v3 (GIS) & Persistent Local Storage Active
         </p>
       </div>
     </footer>
@@ -394,7 +495,7 @@ export function QuickLinksModal({ isOpen, onClose }) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-4 space-y-3">
-          {importantLinks.map((link) => (
+          {(importantLinks || []).map((link) => (
             <div 
               key={link.id} 
               className="p-3 rounded-xl bg-theme-surface/70 border border-theme-border flex items-start justify-between gap-3 hover:border-theme-accent/30 transition-all"
@@ -423,7 +524,7 @@ export function QuickLinksModal({ isOpen, onClose }) {
             </div>
           ))}
 
-          {importantLinks.length === 0 && (
+          {(!importantLinks || importantLinks.length === 0) && (
             <p className="text-center text-xs text-theme-muted py-6">No links saved yet.</p>
           )}
 
@@ -487,11 +588,9 @@ export function QuickLinksModal({ isOpen, onClose }) {
 export function AppLayout({ activeTabId, children }) {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
 
-  // Auth Guard: Validate token existence and expiration (Date.now() > google_token_expiry)
-  useEffect(() => {
-    validateAuthToken({ redirect: true });
-  }, []);
+  const isLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
 
   return (
     <div className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200">
@@ -507,9 +606,15 @@ export function AppLayout({ activeTabId, children }) {
         {/* Navigation Tabs Bar */}
         <SharedNavBar activeTabId={activeTabId} />
 
-        {/* Page Content Container with smooth enter transition */}
+        {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
         <div className="transition-all duration-300 animate-tab-enter">
-          {children}
+          {isLockedTab ? (
+            <LockedFeatureOverlay featureKey={activeTabId}>
+              {children}
+            </LockedFeatureOverlay>
+          ) : (
+            children
+          )}
         </div>
       </main>
 
@@ -528,16 +633,15 @@ export function AppLayout({ activeTabId, children }) {
         onClose={() => setIsLinksModalOpen(false)}
       />
 
+      {/* Sign In to Unlock Modal */}
+      <AuthModal />
+
     </div>
   );
 }
 
 // Multi-Page Initializer Helper
 export function initPage(Component, activeTabId) {
-  if (typeof window !== 'undefined' && !validateAuthToken({ redirect: true })) {
-    return;
-  }
-
   const rootElement = document.getElementById('root');
   if (!rootElement) return;
 
@@ -545,11 +649,13 @@ export function initPage(Component, activeTabId) {
   root.render(
     <React.StrictMode>
       <ThemeProvider>
-        <DataProvider>
-          <AppLayout activeTabId={activeTabId}>
-            <Component />
-          </AppLayout>
-        </DataProvider>
+        <AuthProvider>
+          <DataProvider>
+            <AppLayout activeTabId={activeTabId}>
+              <Component />
+            </AppLayout>
+          </DataProvider>
+        </AuthProvider>
       </ThemeProvider>
     </React.StrictMode>
   );

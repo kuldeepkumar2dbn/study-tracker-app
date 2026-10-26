@@ -126,37 +126,48 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
             </button>
           </div>
 
-          {/* Logged-In Student Profile (Avatar & Name) */}
-          <div 
-            className="flex items-center space-x-2 px-2 sm:px-2.5 py-1 rounded-xl bg-theme-surface border border-theme-border text-xs shadow-sm"
-            title={`Signed in as ${userProfile?.name || 'Student'} (${userProfile?.email || ''})`}
-          >
-            {userProfile?.picture ? (
-              <img 
-                src={userProfile.picture} 
-                alt={userProfile.name || 'Student'} 
-                referrerPolicy="no-referrer"
-                className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
-              />
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-[10px]">
-                {(userProfile?.name || 'S').charAt(0).toUpperCase()}
+          {/* User Profile OR Clean Sign-In Button */}
+          {userProfile ? (
+            <div className="flex items-center gap-1.5">
+              <div 
+                className="flex items-center space-x-2 px-2 sm:px-2.5 py-1 rounded-xl bg-theme-surface border border-theme-border text-xs shadow-sm"
+                title={`Signed in as ${userProfile?.name || 'Student'} (${userProfile?.email || ''})`}
+              >
+                {userProfile?.picture ? (
+                  <img 
+                    src={userProfile.picture} 
+                    alt={userProfile.name || 'Student'} 
+                    referrerPolicy="no-referrer"
+                    className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-[10px]">
+                    {(userProfile?.name || 'S').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="hidden md:inline font-semibold text-theme-text truncate max-w-[110px]">
+                  {userProfile?.name?.split(' ')[0] || 'Student'}
+                </span>
               </div>
-            )}
-            <span className="hidden md:inline font-semibold text-theme-text truncate max-w-[110px]">
-              {userProfile?.name?.split(' ')[0] || 'Student'}
-            </span>
-          </div>
 
-          {/* Hardened Sign Out Button (calls google.accounts.oauth2.revoke) */}
-          <button
-            onClick={() => logout()}
-            title="Sign Out of Study Tracker and Revoke Google Session"
-            className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
-          >
-            <LogOut className="w-3.5 h-3.5 text-rose-400" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
+              {/* Hardened Sign Out Button (calls google.accounts.oauth2.revoke) */}
+              <button
+                onClick={() => logout()}
+                title="Sign Out of Study Tracker and Revoke Google Session"
+                className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/login.html"
+              className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-all duration-200 active:scale-95"
+            >
+              <span>Sign In</span>
+            </a>
+          )}
 
           {/* Persistent Theme Toggle Dropdown */}
           <div className="relative" ref={dropdownRef}>

@@ -391,12 +391,22 @@ export default function DashboardTab({ onNavigateTab }) {
               <Calendar className="w-4 h-4 text-rose-400" />
               Exam & Assignment Radar
             </h2>
-            <button 
-              onClick={() => onNavigateTab('exams')}
-              className="text-xs text-theme-accent hover:underline font-medium"
-            >
-              View radar ({upcomingDeadlines.length})
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => onNavigateTab('exams')}
+                className="btn-schedule-exam flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
+                title="Schedule an upcoming test or assignment"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Schedule Exam</span>
+              </button>
+              <button 
+                onClick={() => onNavigateTab('exams')}
+                className="text-xs text-theme-accent hover:underline font-medium"
+              >
+                View radar ({upcomingDeadlines.length})
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -406,6 +416,7 @@ export default function DashboardTab({ onNavigateTab }) {
               return (
                 <div 
                   key={item.id}
+                  onClick={() => onNavigateTab('exams')}
                   className="exam-card p-3.5 rounded-xl bg-theme-surface/70 border border-theme-border flex items-center justify-between gap-3 hover:border-theme-accent/30 cursor-pointer"
                 >
                   <div className="min-w-0 flex-1">

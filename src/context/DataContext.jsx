@@ -668,14 +668,10 @@ export function DataProvider({ children }) {
 
   const disconnectGoogleDrive = () => {
     setDriveAccessToken(null);
-    setDriveUser(null);
     localStorage.removeItem('google_access_token');
     localStorage.removeItem('google_token_expiry');
-    localStorage.removeItem('user_profile');
-    localStorage.removeItem('google_user_profile');
-    localStorage.removeItem('google_user_sub');
+    localStorage.removeItem('studyflow_drive_token');
     sessionStorage.removeItem('studyflow_drive_token');
-    sessionStorage.removeItem('studyflow_drive_user');
     setSyncStatus('offline');
   };
 

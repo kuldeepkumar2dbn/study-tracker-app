@@ -288,7 +288,9 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
       localStorage.removeItem('google_access_token');
       sessionStorage.removeItem('studyflow_drive_token');
     } catch {}
-    throw new Error('Google authorization expired (401). Please sign in again.');
+    const err = new Error('Google Drive authorization expired (401). Please renew access.');
+    err.code = 'DRIVE_TOKEN_EXPIRED';
+    throw err;
   }
 
   if (!response.ok) {
@@ -314,8 +316,12 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
  */
 export async function uploadDirectToDrive(file) {
   const token = localStorage.getItem('google_access_token') || sessionStorage.getItem('studyflow_drive_token');
-  if (!token) {
-    throw new Error('Not signed in to Google. Please sign in via login.html first.');
+  const expiry = localStorage.getItem('google_token_expiry');
+
+  if (!token || (expiry && Date.now() > Number(expiry))) {
+    const err = new Error('Google Drive authorization expired. Please renew access.');
+    err.code = 'DRIVE_TOKEN_EXPIRED';
+    throw err;
   }
 
   let folderId = localStorage.getItem('studyflow_drive_folder_id');
