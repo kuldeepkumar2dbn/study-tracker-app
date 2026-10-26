@@ -71,7 +71,7 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
 
           {/* Live Study Streak Counter */}
           <div 
-            title={`Study Streak: ${streakData.streakCount} days active! Keep it up.`}
+            title={streakData?.streakCount === 0 ? "Day 1 - Ready to start!" : `Study Streak: ${streakData?.streakCount || 0} days active! Keep it up.`}
             className="group flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-default"
           >
             <div className="relative">
@@ -79,10 +79,10 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
             </div>
             <span className="font-mono-numbers font-bold text-xs sm:text-sm text-amber-500">
-              {streakData.streakCount}
+              {streakData?.streakCount || 0}
             </span>
             <span className="hidden sm:inline text-xs text-amber-600/90 dark:text-amber-400/90 font-medium">
-              days streak
+              {streakData?.streakCount === 0 ? "0 days streak" : "days streak"}
             </span>
           </div>
 

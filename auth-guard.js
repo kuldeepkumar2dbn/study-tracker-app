@@ -381,6 +381,10 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
       localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(sanitized));
       if (sanitized.sub) {
         localStorage.setItem(AUTH_KEYS.USER_SUB, sanitized.sub);
+        // Initialize dynamic Zero-State data for real Google user if not already present
+        if (!sanitized.isDemo) {
+          getOrCreateZeroStateData(sanitized.sub);
+        }
       }
     }
 
@@ -402,6 +406,104 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
     }
   } catch (e) {
     console.error('Error saving user session:', e);
+  }
+}
+
+/**
+ * Timezone-Safe Local Date Formatter (YYYY-MM-DD)
+ */
+export function getLocalDateString(date = new Date()) {
+  if (!date) return '';
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    return date.trim();
+  }
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Creates the clean initial Zero-State Schema for first-time Google users
+ */
+export function createZeroStateData(userId) {
+  const today = getLocalDateString(new Date());
+  return {
+    userId: String(userId || ''),
+    streak: 0,
+    lastActiveDate: null,
+    dailyTargetHours: 4.0,
+    todayLoggedHours: 0.0,
+    todayLogDate: today,
+    weeklyVelocityHours: 0.0,
+    routine: [],
+    revisionQueue: [],
+    exams: [],
+    skills: []
+  };
+}
+
+/**
+ * Retrieves the namespaced storage key for the user's master state document:
+ * studyflow_${user.sub}_data
+ */
+export function getUserDataStorageKey(userId) {
+  const id = userId || getActiveUserId();
+  if (isDemoUser() || id === 'demo_sandbox_user') {
+    return 'demo_tracker_data_master';
+  }
+  return `studyflow_${id}_data`;
+}
+
+/**
+ * Checks if studyflow_${user.sub}_data exists in storage.
+ * If not (first-time login), initializes and saves the clean zero-state schema.
+ * Also performs automatic midnight reset if a new day has arrived.
+ */
+export function getOrCreateZeroStateData(userId) {
+  if (!userId || userId === 'guest') return null;
+  if (isDemoUser() || userId === 'demo_sandbox_user') return null;
+
+  const storageKey = `studyflow_${userId}_data`;
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const today = getLocalDateString(new Date());
+
+    if (!raw) {
+      const zeroState = createZeroStateData(userId);
+      localStorage.setItem(storageKey, JSON.stringify(zeroState));
+      return zeroState;
+    }
+
+    const data = JSON.parse(raw);
+    
+    // Auto-Midnight Reset check
+    if (data.todayLogDate && data.todayLogDate !== today) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = getLocalDateString(yesterday);
+
+      // Check Streak: If they studied yesterday, keep/increment streak; if they missed yesterday, reset streak to 0.
+      if (data.lastActiveDate === yesterdayStr) {
+        // Studied yesterday, keep streak
+      } else {
+        // Missed yesterday, reset streak to 0
+        data.streak = 0;
+      }
+
+      // Reset todayLoggedHours to 0.0h for the new day
+      data.todayLoggedHours = 0.0;
+      data.todayLogDate = today;
+
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error in getOrCreateZeroStateData:', err);
+    return null;
   }
 }
 
@@ -438,8 +540,14 @@ export function getUserStorageKey(baseKey) {
   if (isDemoUser()) {
     return `demo_tracker_data_${baseKey}`;
   }
-  const sub = getUserSub();
-  return sub ? `studyflow_data_${sub}_${baseKey}` : `studyflow_data_${baseKey}`;
+  const sub = getUserSub() || getActiveUserId();
+  if (!sub || sub === 'guest') {
+    return `studyflow_data_${baseKey}`;
+  }
+  if (baseKey === 'data') {
+    return `studyflow_${sub}_data`;
+  }
+  return `studyflow_${sub}_${baseKey}`;
 }
 
 /**

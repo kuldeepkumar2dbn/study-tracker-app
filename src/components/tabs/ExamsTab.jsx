@@ -419,10 +419,17 @@ export default function ExamsTab() {
         })}
 
         {filteredDeadlines.length === 0 && (
-          <div className="col-span-full py-12 rounded-2xl glass-panel border border-dashed border-theme-border text-center text-theme-muted">
-            <Calendar className="w-12 h-12 mx-auto mb-2 text-theme-border" />
-            <p className="text-sm font-semibold text-theme-text">No items found</p>
-            <p className="text-xs mt-1">There are no deadlines matching your selected filter.</p>
+          <div className="col-span-full py-12 rounded-2xl glass-panel border border-dashed border-theme-border text-center text-theme-muted p-6">
+            <Calendar className="w-12 h-12 mx-auto mb-3 text-theme-border opacity-50" />
+            <p className="text-base font-semibold text-theme-text">Radar clear. No pending tests or assignments.</p>
+            <p className="text-xs text-theme-muted mt-1">Radar clear. No pending tests or assignments.</p>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="mt-4 px-4 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs hover:bg-theme-accentHover transition-colors inline-flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Schedule Exam</span>
+            </button>
           </div>
         )}
       </div>

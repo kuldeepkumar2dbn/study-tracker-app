@@ -399,8 +399,17 @@ export default function DailyRoutine() {
             ))}
 
             {routineSlots.length === 0 && (
-              <div className="py-8 text-center text-xs text-theme-muted">
-                No routine time-blocks added. Click "+ Add Routine Time-Block" above.
+              <div className="py-12 text-center rounded-2xl border border-dashed border-theme-border bg-theme-surface/30 p-6">
+                <Clock className="w-10 h-10 text-theme-muted mx-auto mb-3 opacity-50" />
+                <p className="text-sm font-semibold text-theme-text">No time blocks scheduled today.</p>
+                <p className="text-xs text-theme-muted mt-1">No time blocks scheduled today. Click '+ Add Block' to plan your day.</p>
+                <button
+                  onClick={() => setIsSlotModalOpen(true)}
+                  className="mt-4 px-3.5 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs hover:bg-theme-accentHover transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add Block</span>
+                </button>
               </div>
             )}
           </div>

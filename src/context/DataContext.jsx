@@ -11,7 +11,14 @@ import {
   FOLDER_NAME
 } from '../services/googleDrive';
 import { extractYouTubeId } from '../utils/youtube';
-import { getUserStorageKey, logout, getActiveUserId, isDemoUser } from '../../auth-guard';
+import { 
+  getUserStorageKey, 
+  logout, 
+  getActiveUserId, 
+  isDemoUser, 
+  getOrCreateZeroStateData, 
+  getUserDataStorageKey 
+} from '../../auth-guard';
 
 const DataContext = createContext();
 
@@ -411,64 +418,140 @@ const initialNotes = [
 ];
 
 export function DataProvider({ children }) {
+  const isDemo = isDemoUser();
+  const activeId = getActiveUserId();
+  const initialUserData = (!isDemo && activeId && activeId !== 'guest')
+    ? getOrCreateZeroStateData(activeId)
+    : null;
+
   // State: Subjects
   const [subjects, setSubjects] = useState(() => {
-    return readScoped('subjects', initialSubjects);
+    if (isDemo) {
+      return readScoped('subjects', initialSubjects);
+    }
+    return readScoped('subjects', []);
   });
 
   // State: Exams & Assignment Deadlines
   const [exams, setExams] = useState(() => {
-    return readScoped('exams', initialDeadlines);
+    if (isDemo) {
+      return readScoped('exams', initialDeadlines);
+    }
+    if (initialUserData && Array.isArray(initialUserData.exams)) {
+      return initialUserData.exams;
+    }
+    return readScoped('exams', []);
   });
 
   // State: Daily Routine Slots
   const [routineSlots, setRoutineSlots] = useState(() => {
-    return readScoped('routine_slots', initialRoutineSlots);
+    if (isDemo) {
+      return readScoped('routine_slots', initialRoutineSlots);
+    }
+    if (initialUserData && Array.isArray(initialUserData.routine)) {
+      return initialUserData.routine;
+    }
+    return readScoped('routine_slots', []);
   });
 
   // State: Weekly Goals
   const [weeklyGoals, setWeeklyGoals] = useState(() => {
-    return readScoped('weekly_goals', initialWeeklyGoals);
+    if (isDemo) {
+      return readScoped('weekly_goals', initialWeeklyGoals);
+    }
+    return readScoped('weekly_goals', []);
   });
 
   // Daily & Weekly Targets
   const [dailyTargetMinutes, setDailyTargetMinutesState] = useState(() => {
+    if (isDemo) {
+      const saved = readScoped('daily_target_mins', 240);
+      return Number(saved) || 240;
+    }
+    if (initialUserData && initialUserData.dailyTargetHours) {
+      return Math.round(Number(initialUserData.dailyTargetHours) * 60);
+    }
     const saved = readScoped('daily_target_mins', 240);
     return Number(saved) || 240;
   });
 
   const [weeklyTargetHours, setWeeklyTargetHoursState] = useState(() => {
+    if (isDemo) {
+      const saved = readScoped('weekly_target_hrs', 28);
+      return Number(saved) || 28;
+    }
     const saved = readScoped('weekly_target_hrs', 28);
     return Number(saved) || 28;
   });
 
   // Streak & Activity Log
   const [streakData, setStreakData] = useState(() => {
+    if (isDemo) {
+      return readScoped('streak', {
+        streakCount: 14,
+        lastActiveDate: todayDateStr(),
+        todayHours: 3.5,
+        dailyTarget: 4.0,
+        weeklyVelocityHours: 24.5,
+        weeklyLog: [
+          { day: 'Mon', hours: 4.5, target: 4.0 },
+          { day: 'Tue', hours: 3.8, target: 4.0 },
+          { day: 'Wed', hours: 5.2, target: 4.0 },
+          { day: 'Thu', hours: 3.5, target: 4.0 },
+          { day: 'Fri', hours: 4.0, target: 4.0 },
+          { day: 'Sat', hours: 2.5, target: 4.0 },
+          { day: 'Sun', hours: 1.0, target: 4.0 }
+        ]
+      });
+    }
+    if (initialUserData) {
+      return {
+        streakCount: Number(initialUserData.streak) || 0,
+        lastActiveDate: initialUserData.lastActiveDate || null,
+        todayHours: Number(initialUserData.todayLoggedHours) || 0.0,
+        dailyTarget: Number(initialUserData.dailyTargetHours) || 4.0,
+        todayLogDate: initialUserData.todayLogDate || todayDateStr(),
+        weeklyVelocityHours: Number(initialUserData.weeklyVelocityHours) || 0.0,
+        weeklyLog: [
+          { day: 'Mon', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
+          { day: 'Tue', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
+          { day: 'Wed', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
+          { day: 'Thu', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
+          { day: 'Fri', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
+          { day: 'Sat', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
+          { day: 'Sun', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 }
+        ]
+      };
+    }
     return readScoped('streak', {
-      streakCount: 14,
-      lastActiveDate: todayDateStr(),
-      todayHours: 3.5,
+      streakCount: 0,
+      lastActiveDate: null,
+      todayHours: 0.0,
       dailyTarget: 4.0,
+      todayLogDate: todayDateStr(),
+      weeklyVelocityHours: 0.0,
       weeklyLog: [
-        { day: 'Mon', hours: 4.5, target: 4.0 },
-        { day: 'Tue', hours: 3.8, target: 4.0 },
-        { day: 'Wed', hours: 5.2, target: 4.0 },
-        { day: 'Thu', hours: 3.5, target: 4.0 },
-        { day: 'Fri', hours: 4.0, target: 4.0 },
-        { day: 'Sat', hours: 2.5, target: 4.0 },
-        { day: 'Sun', hours: 1.0, target: 4.0 }
+        { day: 'Mon', hours: 0, target: 4.0 },
+        { day: 'Tue', hours: 0, target: 4.0 },
+        { day: 'Wed', hours: 0, target: 4.0 },
+        { day: 'Thu', hours: 0, target: 4.0 },
+        { day: 'Fri', hours: 0, target: 4.0 },
+        { day: 'Sat', hours: 0, target: 4.0 },
+        { day: 'Sun', hours: 0, target: 4.0 }
       ]
     });
   });
 
   // Skills - Persisted under studyflow_${userId}_skills and readScoped fallback
   const [skills, setSkills] = useState(() => {
-    if (isDemoUser()) {
+    if (isDemo) {
       return readScoped('skills', initialSkills);
     }
+    if (initialUserData && Array.isArray(initialUserData.skills)) {
+      return initialUserData.skills;
+    }
     try {
-      const userId = getActiveUserId();
-      const customKey = `studyflow_${userId}_skills`;
+      const customKey = `studyflow_${activeId}_skills`;
       const savedCustom = localStorage.getItem(customKey);
       if (savedCustom !== null) {
         return JSON.parse(savedCustom);
@@ -476,7 +559,7 @@ export function DataProvider({ children }) {
     } catch (e) {
       console.warn('Failed reading skills from studyflow_${userId}_skills:', e);
     }
-    return readScoped('skills', initialSkills);
+    return readScoped('skills', []);
   });
 
   // Focus Timer History
@@ -582,34 +665,103 @@ export function DataProvider({ children }) {
     writeScoped('weekly_target_hrs', val);
   };
 
-  // Automatic Midnight Rollover Check
+  // Automatic Midnight Rollover Check (Requirement 3)
   useEffect(() => {
     const checkMidnightRollover = () => {
       const today = todayDateStr();
-      const lastRollover = localStorage.getItem(STORAGE_KEY_PREFIX + 'last_rollover_date') || today;
+      const isDemo = isDemoUser();
+      const activeId = getActiveUserId();
 
-      if (lastRollover !== today) {
-        // A new day has dawned!
-        // 1. Check if all daily routine items were completed
-        const allCompleted = routineSlots.length > 0 && routineSlots.every(s => s.completed);
-        if (allCompleted) {
-          setStreakData(prev => ({ ...prev, streakCount: prev.streakCount + 1 }));
+      if (!isDemo && activeId && activeId !== 'guest') {
+        const key = `studyflow_${activeId}_data`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          try {
+            const data = JSON.parse(raw);
+            if (data.todayLogDate && data.todayLogDate !== today) {
+              const yesterday = new Date();
+              yesterday.setDate(yesterday.getDate() - 1);
+              const yesterdayStr = getLocalDateString(yesterday);
+
+              // Check Streak: If they studied yesterday, keep/increment streak; if they missed yesterday, reset streak to 0.
+              let newStreak = data.streak;
+              if (data.lastActiveDate === yesterdayStr) {
+                // Studied yesterday, preserve streak
+              } else {
+                // Missed yesterday, reset streak to 0
+                newStreak = 0;
+              }
+
+              data.streak = newStreak;
+              data.todayLoggedHours = 0.0;
+              data.todayLogDate = today;
+
+              localStorage.setItem(key, JSON.stringify(data));
+
+              // Update state
+              setStreakData(prev => ({
+                ...prev,
+                streakCount: newStreak,
+                todayHours: 0.0,
+                todayLogDate: today
+              }));
+
+              // Reset routine checklist for the new day
+              setRoutineSlots(prev => prev.map(s => ({ ...s, completed: false })));
+            }
+          } catch (e) {
+            console.error('Error during midnight rollover check:', e);
+          }
         }
-
-        // 2. Reset routine items for the new day
-        setRoutineSlots(prev => prev.map(s => ({ ...s, completed: false })));
-
-        // 3. Reset today hours to 0
-        setStreakData(prev => ({ ...prev, todayHours: 0, lastActiveDate: today }));
-
-        localStorage.setItem(STORAGE_KEY_PREFIX + 'last_rollover_date', today);
+      } else {
+        const lastRollover = localStorage.getItem(STORAGE_KEY_PREFIX + 'last_rollover_date') || today;
+        if (lastRollover !== today) {
+          const allCompleted = routineSlots.length > 0 && routineSlots.every(s => s.completed);
+          if (allCompleted) {
+            setStreakData(prev => ({ ...prev, streakCount: prev.streakCount + 1 }));
+          }
+          setRoutineSlots(prev => prev.map(s => ({ ...s, completed: false })));
+          setStreakData(prev => ({ ...prev, todayHours: 0, lastActiveDate: today }));
+          localStorage.setItem(STORAGE_KEY_PREFIX + 'last_rollover_date', today);
+        }
       }
     };
 
     checkMidnightRollover();
-    const interval = setInterval(checkMidnightRollover, 60000); // Check every minute
+    const interval = setInterval(checkMidnightRollover, 30000); // Check every 30s
     return () => clearInterval(interval);
   }, [routineSlots]);
+
+  // Synchronize master user state document (studyflow_${user.sub}_data) for real Google users
+  useEffect(() => {
+    const isDemo = isDemoUser();
+    const activeId = getActiveUserId();
+    if (!isDemo && activeId && activeId !== 'guest') {
+      const storageKey = `studyflow_${activeId}_data`;
+      try {
+        let existing = {};
+        const raw = localStorage.getItem(storageKey);
+        if (raw) existing = JSON.parse(raw);
+
+        const updated = {
+          userId: activeId,
+          streak: streakData.streakCount ?? 0,
+          lastActiveDate: streakData.lastActiveDate ?? null,
+          dailyTargetHours: streakData.dailyTarget ?? 4.0,
+          todayLoggedHours: streakData.todayHours ?? 0.0,
+          todayLogDate: streakData.todayLogDate || todayDateStr(),
+          weeklyVelocityHours: streakData.weeklyVelocityHours ?? 0.0,
+          routine: routineSlots || [],
+          revisionQueue: existing.revisionQueue || [],
+          exams: exams || [],
+          skills: skills || []
+        };
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error syncing master user state:', err);
+      }
+    }
+  }, [exams, routineSlots, skills, streakData]);
 
   // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
@@ -896,19 +1048,56 @@ export function DataProvider({ children }) {
     ));
   };
 
-  const updateSubjectHours = (subjectId, additionalHours) => {
-    const hrs = Math.round(additionalHours * 10) / 10;
-    setSubjects(prev => prev.map(s => {
-      if (s.id === subjectId) {
-        return { ...s, completedHours: Math.round((s.completedHours + hrs) * 10) / 10 };
-      }
-      return s;
-    }));
+  const logStudyHours = (additionalHours, subjectId = null) => {
+    const hrs = Math.round(Number(additionalHours) * 10) / 10;
+    if (hrs <= 0) return;
+    const today = todayDateStr();
 
-    setStreakData(prev => ({
-      ...prev,
-      todayHours: Math.round((prev.todayHours + hrs) * 10) / 10
-    }));
+    setStreakData(prev => {
+      const newTodayHours = Math.round(((prev?.todayHours || 0) + hrs) * 10) / 10;
+      const newWeeklyVelocity = Math.round(((prev?.weeklyVelocityHours || 0) + hrs) * 10) / 10;
+      const currentStreak = prev?.streakCount || 0;
+      // If streak was 0 and student logs study, kickstart day 1 streak!
+      const newStreak = currentStreak === 0 ? 1 : currentStreak;
+
+      const currentDayAbbr = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(new Date());
+      const newWeeklyLog = (prev?.weeklyLog || []).map(day => {
+        if (day.day === currentDayAbbr) {
+          return { ...day, hours: Math.round(((day.hours || 0) + hrs) * 10) / 10 };
+        }
+        return day;
+      });
+
+      return {
+        ...prev,
+        todayHours: newTodayHours,
+        weeklyVelocityHours: newWeeklyVelocity,
+        streakCount: newStreak,
+        lastActiveDate: today,
+        todayLogDate: today,
+        weeklyLog: newWeeklyLog
+      };
+    });
+
+    if (subjectId) {
+      setSubjects(prev => prev.map(s => {
+        if (s.id === subjectId) {
+          return { ...s, completedHours: Math.round(((s.completedHours || 0) + hrs) * 10) / 10 };
+        }
+        return s;
+      }));
+    } else if (subjects.length > 0) {
+      setSubjects(prev => prev.map((s, idx) => {
+        if (idx === 0) {
+          return { ...s, completedHours: Math.round(((s.completedHours || 0) + hrs) * 10) / 10 };
+        }
+        return s;
+      }));
+    }
+  };
+
+  const updateSubjectHours = (subjectId, additionalHours) => {
+    logStudyHours(additionalHours, subjectId);
   };
 
   const logChapterStudyMinutes = (subjectId, chapterId, minutes) => {
@@ -1491,24 +1680,17 @@ export function DataProvider({ children }) {
 
     setTimerHistory(prev => [sessionObj, ...prev]);
 
-    const hours = Number(session.durationMin || 0) / 60;
+    const hours = Math.round((Number(session.durationMin || 0) / 60) * 10) / 10;
+    const currentSubjectObj = subjects.find(s => s.name === session.subject || s.id === session.subjectId);
 
-    // Automatically update student's daily study hours (updating the "3.5h logged" metric on the Dashboard)
-    setStreakData(prev => ({
-      ...prev,
-      todayHours: Math.round(((prev?.todayHours || 0) + hours) * 10) / 10
-    }));
+    // Dynamically increase todayLoggedHours, streak, and weeklyVelocityHours
+    logStudyHours(hours, currentSubjectObj?.id);
 
     if (session.subjectId && session.chapterId) {
       logChapterStudyMinutes(session.subjectId, session.chapterId, session.durationMin);
     } else if (session.subject) {
-      const match = subjects.find(s => s.name === session.subject);
-      if (match) {
-        if (session.chapterId) {
-          logChapterStudyMinutes(match.id, session.chapterId, session.durationMin);
-        } else {
-          updateSubjectHours(match.id, hours);
-        }
+      if (currentSubjectObj && session.chapterId) {
+        logChapterStudyMinutes(currentSubjectObj.id, session.chapterId, session.durationMin);
       }
     }
   };
@@ -1522,6 +1704,7 @@ export function DataProvider({ children }) {
         updateSubjectName,
         updateSubjectTargetHours,
         updateSubjectHours,
+        logStudyHours,
         logChapterStudyMinutes,
         addTopic,
         updateTopicStatus,

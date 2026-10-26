@@ -264,10 +264,10 @@ export default function SkillsTab() {
         <div className="p-12 text-center rounded-2xl border border-dashed border-theme-border bg-theme-surface/30">
           <Award className="w-10 h-10 text-theme-muted mx-auto mb-3 opacity-50" />
           <h3 className="font-display font-bold text-base text-theme-text mb-1">
-            No competencies found in this view
+            No active skill roadmaps. Import a YouTube course or create your first skill.
           </h3>
           <p className="text-xs text-theme-muted max-w-sm mx-auto mb-4">
-            Import a complete YouTube course syllabus or add a custom skill to begin tracking mastery.
+            No active skill roadmaps. Import a YouTube course or create your first skill.
           </p>
           <div className="flex justify-center gap-3">
             <button
@@ -282,7 +282,7 @@ export default function SkillsTab() {
               className="px-3.5 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs hover:bg-theme-accentHover transition-colors flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Custom Skill</span>
+              <span>Create First Skill</span>
             </button>
           </div>
         </div>
