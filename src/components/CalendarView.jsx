@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { sanitizeUrl } from '../utils/security';
+import AnimatedHeadline from './AnimatedHeadline';
+import RollingNumber from './RollingNumber';
+import { celebrateTaskCompletion } from '../utils/confetti';
 
 /**
  * Timezone-Safe Local Date Formatter
@@ -176,6 +179,8 @@ export default function CalendarView() {
       submissionLink: newSubmissionLink.trim()
     });
 
+    celebrateTaskCompletion();
+
     setNewTitle('');
     setNewSubmissionLink('');
     setIsAddModalOpen(false);
@@ -187,10 +192,13 @@ export default function CalendarView() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <CalendarIcon className="w-6 h-6 text-theme-accent" />
-            Interactive Study & Milestone Calendar
-          </h1>
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-6 h-6 text-theme-accent shrink-0" />
+            <AnimatedHeadline 
+              text="Interactive Study & Milestone Calendar" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Synchronized calendar displaying exams, homework assignments, and spaced repetition curves.
           </p>
@@ -217,7 +225,7 @@ export default function CalendarView() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Calendar Grid (8 cols) */}
-        <div className="lg:col-span-8 rounded-2xl glass-panel p-5 sm:p-6 border border-theme-border space-y-4">
+        <div className="lg:col-span-8 rounded-2xl glass-panel p-5 sm:p-6 border border-theme-border card-glow-hover space-y-4">
           
           {/* Calendar Navigation Bar */}
           <div className="flex items-center justify-between">
@@ -325,12 +333,16 @@ export default function CalendarView() {
         </div>
 
         {/* Selected Date Agenda Panel (4 cols) */}
-        <div className="lg:col-span-4 rounded-2xl glass-panel p-5 sm:p-6 border border-theme-border flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-4 rounded-2xl glass-panel p-5 sm:p-6 border border-theme-border card-glow-hover flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-theme-border/60 mb-3">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-theme-muted">
-                  Agenda Detail
+                <span className="text-[10px] font-bold uppercase tracking-wider text-theme-muted flex items-center gap-1.5">
+                  <span>Agenda Detail</span>
+                  <span>•</span>
+                  <span className="text-theme-accent font-mono-numbers">
+                    <RollingNumber value={selectedEvents.length} /> events
+                  </span>
                 </span>
                 <h3 className="font-display font-bold text-base text-theme-text font-mono-numbers">
                   {(() => {
@@ -362,7 +374,7 @@ export default function CalendarView() {
               {selectedEvents.map((ev, idx) => (
                 <div
                   key={idx}
-                  className="p-3.5 rounded-xl bg-theme-surface border border-theme-border space-y-1.5 shadow-sm"
+                  className="card-glow-hover p-3.5 rounded-xl bg-theme-surface border border-theme-border space-y-1.5 shadow-sm transition-all"
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${

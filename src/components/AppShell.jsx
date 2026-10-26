@@ -29,9 +29,10 @@ import DriveModal from './DriveModal';
 import AuthModal from './AuthModal';
 import LockedFeatureOverlay from './LockedFeatureOverlay';
 import DriveNotesDemoModal from './DriveNotesDemoModal';
-import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import { ThemeProvider, useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { DataProvider, useData } from '../context/DataContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import RollingNumber from './RollingNumber';
 import { sanitizeUrl } from '../utils/security';
 import { isDemoUser, getDemoRemainingSeconds, clearDemoSession } from '../../auth-guard';
 
@@ -129,14 +130,14 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNo
           {/* Live Streak Counter */}
           <div 
             title={`Study Streak: ${streakData?.streakCount || 0} days active! Keep it up.`}
-            className="group flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-default"
+            className="streak-flame-badge group flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-default"
           >
             <div className="relative">
-              <Flame className="w-4 h-4 text-amber-500 fill-amber-500 animate-bounce-soft" />
+              <Flame className="w-4 h-4 text-amber-500 fill-amber-500 animate-flame-flicker" />
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
             </div>
             <span className="font-mono-numbers font-bold text-xs sm:text-sm text-amber-500">
-              {streakData?.streakCount || 0}
+              <RollingNumber value={streakData?.streakCount || 0} duration={700} />
             </span>
             <span className="hidden sm:inline text-xs text-amber-600/90 dark:text-amber-400/90 font-medium">
               days streak
@@ -316,13 +317,14 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNo
               onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}
               className="top-action-link flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-medium text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95 shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-accent/30"
               aria-label="Toggle Theme"
+              title={`Active Theme: ${currentThemeMeta.name}`}
             >
-              <div 
-                className="w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white/20"
-                style={{ backgroundColor: currentThemeMeta.primaryColor }}
-              />
-              <span className="hidden md:inline font-medium">
-                {currentThemeMeta.name.split(' ')[0]}
+              {(() => {
+                const ThemeIcon = currentThemeMeta.icon || Sparkles;
+                return <ThemeIcon className="w-3.5 h-3.5 text-theme-accent" />;
+              })()}
+              <span className="hidden sm:inline font-semibold">
+                {currentThemeMeta.name}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-theme-muted transition-transform duration-200 ${themeDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -399,6 +401,7 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNo
 export function SharedNavBar({ activeTabId, onOpenDriveNotesDemoModal }) {
   const { exams, getTodayRevisionQueue, routineSlots } = useData();
   const { isAuthenticated, openAuthModal, isDemo } = useAuth();
+  const { isFeatureCoded } = useTheme();
 
   const urgentCount = (exams || []).filter(e => {
     if (e.isCompleted) return false;
@@ -418,6 +421,11 @@ export function SharedNavBar({ activeTabId, onOpenDriveNotesDemoModal }) {
           const isDemoLockedNotes = isDemo && tab.id === 'notes';
           const isGuestLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(tab.id);
           const isLocked = isDemoLockedNotes || isGuestLocked;
+          const featureMeta = FEATURE_COLORS[tab.id];
+
+          const activeStyle = isActive && isFeatureCoded && featureMeta
+            ? { backgroundColor: featureMeta.hex, boxShadow: `0 8px 24px -4px ${featureMeta.glow}` }
+            : undefined;
 
           const handleClick = (e) => {
             if (isDemoLockedNotes) {
@@ -439,6 +447,7 @@ export function SharedNavBar({ activeTabId, onOpenDriveNotesDemoModal }) {
               key={tab.id}
               href={tab.href}
               onClick={handleClick}
+              style={activeStyle}
               className={`nav-tab-item flex items-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ease-in-out relative whitespace-nowrap active:scale-95 ${
                 isActive
                   ? 'bg-theme-accent text-white shadow-glow-accent font-semibold'
@@ -670,8 +679,16 @@ export function AppLayout({ activeTabId, children }) {
     }
   }, [isDemo, activeTabId]);
 
+  useEffect(() => {
+    const feature = activeTabId || 'dashboard';
+    document.documentElement.setAttribute('data-active-feature', feature);
+  }, [activeTabId]);
+
   return (
-    <div className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200">
+    <div 
+      className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200"
+      data-active-feature={activeTabId || 'dashboard'}
+    >
       
       {/* Top Header */}
       <SharedHeader 

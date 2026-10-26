@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { sanitizeUrl } from '../../utils/security';
+import { celebrateTaskCompletion } from '../../utils/confetti';
+import AnimatedHeadline from '../AnimatedHeadline';
+import RollingNumber from '../RollingNumber';
 
 export default function ExamsTab() {
   const { exams, addExam, updateAssignmentStatus, toggleExamCompleted, deleteExam, subjects } = useData();
@@ -143,10 +146,13 @@ export default function ExamsTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-rose-500" />
-            Exam & Assignment Deadline Radar
-          </h1>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-rose-500 shrink-0" />
+            <AnimatedHeadline 
+              text="Exam & Assignment Deadline Radar" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Real-time countdown radar tracking academic tests, homework submissions, and milestone deliverables.
           </p>
@@ -166,21 +172,26 @@ export default function ExamsTab() {
         {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           {[
-            { id: 'All', label: `Active Radar (${examsCount + assignmentsCount})` },
-            { id: 'exams', label: `Exams Only (${examsCount})` },
-            { id: 'assignments', label: `Assignments Only (${assignmentsCount})` },
-            { id: 'submitted', label: `Submitted/Completed (${submittedCount})` },
+            { id: 'All', title: 'Active Radar', count: examsCount + assignmentsCount },
+            { id: 'exams', title: 'Exams Only', count: examsCount },
+            { id: 'assignments', title: 'Assignments Only', count: assignmentsCount },
+            { id: 'submitted', title: 'Submitted/Completed', count: submittedCount },
           ].map((pill) => (
             <button
               key={pill.id}
               onClick={() => setCategoryFilter(pill.id)}
-              className={`filter-pill px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap active:scale-95 ${
+              className={`filter-pill px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap active:scale-95 flex items-center gap-1.5 ${
                 categoryFilter === pill.id
                   ? 'bg-theme-accent text-white shadow-sm'
                   : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'
               }`}
             >
-              {pill.label}
+              <span>{pill.title}</span>
+              <span className={`px-1.5 py-0.2 rounded-md font-mono-numbers text-[10px] ${
+                categoryFilter === pill.id ? 'bg-white/20 text-white' : 'bg-theme-bg text-theme-muted'
+              }`}>
+                <RollingNumber value={pill.count} />
+              </span>
             </button>
           ))}
         </div>
@@ -220,7 +231,7 @@ export default function ExamsTab() {
           return (
             <div 
               key={item.id}
-              className={`exam-card rounded-2xl glass-panel p-6 border relative overflow-hidden flex flex-col justify-between ${
+              className={`exam-card card-glow-hover rounded-2xl glass-panel p-6 border relative overflow-hidden flex flex-col justify-between transition-all duration-200 ${
                 item.isCompleted
                   ? 'border-theme-border/50 opacity-75 bg-theme-surface/40'
                   : isUrgent 
@@ -266,7 +277,13 @@ export default function ExamsTab() {
                     {isAssignment ? (
                       <select
                         value={item.assignmentStatus || 'Pending'}
-                        onChange={(e) => updateAssignmentStatus(item.id, e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'Submitted' && item.assignmentStatus !== 'Submitted') {
+                            celebrateTaskCompletion();
+                          }
+                          updateAssignmentStatus(item.id, val);
+                        }}
                         className={`card-action-select text-[11px] font-semibold px-2 py-1 rounded-lg border focus:outline-none transition-all duration-150 active:scale-95 cursor-pointer ${
                           item.assignmentStatus === 'Submitted'
                             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
@@ -281,7 +298,12 @@ export default function ExamsTab() {
                       </select>
                     ) : (
                       <button
-                        onClick={() => toggleExamCompleted(item.id)}
+                        onClick={() => {
+                          if (!item.isCompleted) {
+                            celebrateTaskCompletion();
+                          }
+                          toggleExamCompleted(item.id);
+                        }}
                         className={`card-action-btn px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all duration-150 active:scale-95 ${
                           item.isCompleted
                             ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'

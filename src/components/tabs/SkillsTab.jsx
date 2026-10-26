@@ -27,7 +27,10 @@ import { useData } from '../../context/DataContext';
 import YouTubeCourseModal from '../YouTubeCourseModal';
 import DeleteConfirmModal from '../DeleteConfirmModal';
 import UndoToast from '../UndoToast';
+import AnimatedHeadline from '../AnimatedHeadline';
+import RollingNumber from '../RollingNumber';
 import { calculateCourseProgress } from '../../utils/youtubeCourseParser';
+import { celebrateTaskCompletion } from '../../utils/confetti';
 
 export default function SkillsTab() {
   const { 
@@ -173,10 +176,13 @@ export default function SkillsTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <Award className="w-6 h-6 text-theme-accent" />
-            Skill Tracker & Course Mastery
-          </h1>
+          <div className="flex items-center gap-2">
+            <Award className="w-6 h-6 text-theme-accent shrink-0" />
+            <AnimatedHeadline 
+              text="Skill Tracker & Course Mastery" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Track competency mastery, import multi-tier YouTube courses with actionable checkboxes, and manage deliberate practice.
           </p>
@@ -298,7 +304,7 @@ export default function SkillsTab() {
             return (
               <div 
                 key={skill.id}
-                className="rounded-2xl glass-panel p-6 border border-theme-border hover:border-theme-accent/40 transition-all shadow-sm space-y-5"
+                className="skill-card-hover card-glow-hover rounded-2xl glass-panel p-6 border border-theme-border hover:border-theme-accent/40 transition-all shadow-sm space-y-5"
               >
                 {/* Course Header */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-theme-border">
@@ -398,11 +404,11 @@ export default function SkillsTab() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-theme-text">Course Progress</span>
                       <span className="text-[11px] font-mono-numbers text-theme-muted">
-                        ({progress.completedSubtopics} / {progress.totalSubtopics} items checked)
+                        (<RollingNumber value={progress.completedSubtopics} /> / <RollingNumber value={progress.totalSubtopics} /> items checked)
                       </span>
                     </div>
                     <span className="font-mono-numbers font-bold text-theme-accent text-sm">
-                      {progress.percentage}% Completed
+                      <RollingNumber value={progress.percentage} suffix="%" /> Completed
                     </span>
                   </div>
 
@@ -414,7 +420,7 @@ export default function SkillsTab() {
                   </div>
 
                   <div className="flex justify-between items-center text-[10px] text-theme-muted pt-1">
-                    <span>{totalLevels} Levels &bull; {totalLectures} Lectures</span>
+                    <span>{totalLevels} Levels &bull; <RollingNumber value={totalLectures} /> Lectures</span>
                     {progress.percentage === 100 && (
                       <span className="font-bold text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" />
@@ -562,7 +568,12 @@ export default function SkillsTab() {
                                       {/* Checkbox & Title */}
                                       <button
                                         type="button"
-                                        onClick={() => toggleSubtopic(skill.id, lvl.id, lec.id, st.id)}
+                                        onClick={() => {
+                                          if (!st.done) {
+                                            celebrateTaskCompletion();
+                                          }
+                                          toggleSubtopic(skill.id, lvl.id, lec.id, st.id);
+                                        }}
                                         className="flex items-center gap-2 text-left min-w-0 flex-1 cursor-pointer"
                                       >
                                         {st.done ? (
@@ -649,7 +660,7 @@ export default function SkillsTab() {
           return (
             <div 
               key={skill.id}
-              className="rounded-2xl glass-panel p-6 border border-theme-border hover:border-theme-accent/40 transition-all flex flex-col justify-between shadow-sm"
+              className="skill-card-hover card-glow-hover rounded-2xl glass-panel p-6 border border-theme-border hover:border-theme-accent/40 transition-all flex flex-col justify-between shadow-sm"
             >
               <div>
                 {/* Header with Tier & Trash Icon */}
@@ -683,7 +694,7 @@ export default function SkillsTab() {
                     {skill.name}
                   </h3>
                   <span className="font-mono-numbers font-bold text-theme-accent text-sm">
-                    {skill.masteryPct}% Mastery
+                    <RollingNumber value={skill.masteryPct} suffix="%" /> Mastery
                   </span>
                 </div>
 
@@ -756,7 +767,12 @@ export default function SkillsTab() {
                         }`}
                       >
                         <div 
-                          onClick={() => toggleSkillMilestone(skill.id, m.id)}
+                          onClick={() => {
+                            if (!m.done) {
+                              celebrateTaskCompletion();
+                            }
+                            toggleSkillMilestone(skill.id, m.id);
+                          }}
                           className="flex items-center gap-2 min-w-0 cursor-pointer flex-1"
                         >
                           {m.done ? (
@@ -836,7 +852,7 @@ export default function SkillsTab() {
               {/* Quick Hours Log Footer */}
               <div className="pt-3 border-t border-theme-border/60 flex items-center justify-between text-xs">
                 <span className="text-theme-muted">
-                  Logged: <strong className="text-theme-text font-mono-numbers">{skill.hoursLogged} hrs</strong>
+                  Logged: <strong className="text-theme-text font-mono-numbers"><RollingNumber value={skill.hoursLogged || 0} decimals={1} suffix=" hrs" /></strong>
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button

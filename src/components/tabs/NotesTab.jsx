@@ -27,6 +27,9 @@ import {
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { sanitizeUrl } from '../../utils/security';
+import AnimatedHeadline from '../AnimatedHeadline';
+import RollingNumber from '../RollingNumber';
+import { celebrateTaskCompletion } from '../../utils/confetti';
 
 export default function NotesTab({ onOpenDriveModal }) {
   const { renewDriveToken } = useAuth();
@@ -146,6 +149,7 @@ export default function NotesTab({ onOpenDriveModal }) {
       }
 
       setUploadSuccess(`Successfully uploaded "${uploaded.name}" directly to your Google Drive!`);
+      celebrateTaskCompletion();
 
       // If viewing/editing a note, append attachment markdown
       if (selectedNote) {
@@ -201,6 +205,7 @@ export default function NotesTab({ onOpenDriveModal }) {
       tags: tagsArr
     });
     setIsEditing(false);
+    celebrateTaskCompletion();
   };
 
   const handleCopyNote = () => {
@@ -227,6 +232,7 @@ export default function NotesTab({ onOpenDriveModal }) {
     if (created?.id) setSelectedNoteId(created.id);
     setNewTitle('');
     setIsNewNoteOpen(false);
+    celebrateTaskCompletion();
   };
 
   const handleInsertDriveFileIntoNote = (file) => {
@@ -249,10 +255,13 @@ export default function NotesTab({ onOpenDriveModal }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <FileText className="w-6 h-6 text-theme-accent" />
-            Google Drive Notes & Document Vault
-          </h1>
+          <div className="flex items-center gap-2">
+            <FileText className="w-6 h-6 text-theme-accent shrink-0" />
+            <AnimatedHeadline 
+              text="Google Drive Notes & Document Vault" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Zero-backend direct upload & Markdown notes synced directly to your personal Google Drive storage.
           </p>
@@ -371,14 +380,14 @@ export default function NotesTab({ onOpenDriveModal }) {
           <div className="mt-4 pt-3 border-t border-theme-border/60">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-theme-muted">
-                Uploaded Drive Documents ({driveFiles.length})
+                Uploaded Drive Documents (<RollingNumber value={driveFiles.length} />)
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
               {driveFiles.map((df) => (
                 <div 
                   key={df.id} 
-                  className="p-2.5 rounded-xl bg-theme-surface/80 border border-theme-border hover:border-theme-accent/40 flex items-center justify-between gap-2 text-xs transition-all shadow-sm"
+                  className="p-2.5 rounded-xl bg-theme-surface/80 border border-theme-border hover:border-theme-accent/40 flex items-center justify-between gap-2 text-xs transition-all shadow-sm card-glow-hover"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-7 h-7 rounded-lg bg-theme-bg flex items-center justify-center shrink-0 border border-theme-border">
@@ -479,7 +488,7 @@ export default function NotesTab({ onOpenDriveModal }) {
                     setSelectedNoteId(note.id);
                     setIsEditing(false);
                   }}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer card-glow-hover ${
                     isSelected
                       ? 'bg-theme-accent/10 border-theme-accent/40 shadow-sm'
                       : 'glass-panel border-theme-border hover:border-theme-accent/30'

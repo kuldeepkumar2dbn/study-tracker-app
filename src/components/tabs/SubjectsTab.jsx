@@ -23,9 +23,11 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { getYouTubeThumbnail, getYouTubeEmbedUrl } from '../../utils/youtube';
-import { sanitizeUrl } from '../../utils/security';
 import InlineEdit from '../InlineEdit';
 import ChapterReportCard from '../ChapterReportCard';
+import AnimatedHeadline from '../AnimatedHeadline';
+import RollingNumber from '../RollingNumber';
+import { celebrateTaskCompletion } from '../../utils/confetti';
 
 const YoutubeIcon = ({ className = "w-4 h-4 text-rose-500" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -208,10 +210,13 @@ export default function SubjectsTab() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-theme-accent" />
-            Subjects, Sub-Topics & YouTube Video Vault
-          </h1>
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-theme-accent shrink-0" />
+            <AnimatedHeadline 
+              text="Subjects, Sub-Topics & YouTube Video Vault" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Break courses into chapters, track sub-topic mastery, and watch embedded YouTube lectures in-app.
           </p>
@@ -219,7 +224,7 @@ export default function SubjectsTab() {
 
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all self-start sm:self-auto"
+          className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Subject</span>
@@ -244,7 +249,7 @@ export default function SubjectsTab() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+              className={`filter-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
                 selectedCategory === cat
                   ? 'bg-theme-accent text-white shadow-sm'
                   : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'
@@ -266,7 +271,7 @@ export default function SubjectsTab() {
           return (
             <div 
               key={sub.id}
-              className="rounded-2xl glass-panel border border-theme-border transition-all overflow-hidden shadow-sm hover:border-theme-accent/30"
+              className="rounded-2xl glass-panel border border-theme-border transition-all overflow-hidden shadow-sm hover:border-theme-accent/40 card-glow-hover"
             >
               {/* Subject Bar Header */}
               <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -302,7 +307,7 @@ export default function SubjectsTab() {
                     <div className="flex flex-wrap items-center gap-3 text-xs text-theme-muted pt-0.5">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-theme-accent" />
-                        <strong className="text-theme-text font-mono-numbers">{sub.completedHours}h</strong> studied / 
+                        <strong className="text-theme-text font-mono-numbers"><RollingNumber value={sub.completedHours || 0} decimals={1} suffix="h" /></strong> studied / 
                         <InlineEdit
                           type="number"
                           min={1}
@@ -339,7 +344,7 @@ export default function SubjectsTab() {
                   <div className="w-44 hidden sm:block">
                     <div className="flex justify-between text-xs text-theme-muted mb-1 font-mono-numbers">
                       <span>Sub-Topic Mastery</span>
-                      <span className="font-bold text-theme-text">{completionPct}%</span>
+                      <span className="font-bold text-theme-text"><RollingNumber value={completionPct} suffix="%" /></span>
                     </div>
                     <div className="w-full h-2.5 rounded-full bg-theme-surface overflow-hidden border border-theme-border/60">
                       <div 
@@ -552,6 +557,7 @@ export default function SubjectsTab() {
                                         <button
                                           onClick={() => {
                                             const nextStatus = st.status === 'Mastered' ? 'In Progress' : st.status === 'In Progress' ? 'Not Started' : 'Mastered';
+                                            if (nextStatus === 'Mastered') celebrateTaskCompletion();
                                             updateSubTopicStatus(sub.id, topic.id, st.id, nextStatus);
                                           }}
                                           className="shrink-0"
@@ -575,7 +581,10 @@ export default function SubjectsTab() {
                                       <div className="flex items-center gap-1.5 shrink-0">
                                         <select
                                           value={st.status}
-                                          onChange={(e) => updateSubTopicStatus(sub.id, topic.id, st.id, e.target.value)}
+                                          onChange={(e) => {
+                                            if (e.target.value === 'Mastered') celebrateTaskCompletion();
+                                            updateSubTopicStatus(sub.id, topic.id, st.id, e.target.value);
+                                          }}
                                           className="text-[10px] font-semibold px-2 py-0.5 rounded bg-theme-bg border border-theme-border text-theme-text focus:outline-none"
                                         >
                                           <option value="Not Started">Not Started</option>

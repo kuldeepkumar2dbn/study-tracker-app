@@ -16,9 +16,11 @@ import {
   Edit2,
   X
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { useData } from '../context/DataContext';
 import InlineEdit from './InlineEdit';
+import RollingNumber from './RollingNumber';
+import AnimatedHeadline from './AnimatedHeadline';
+import { celebrateTaskCompletion, celebrateMajorMilestone } from '../utils/confetti';
 
 export default function DailyRoutine() {
   const { 
@@ -71,18 +73,23 @@ export default function DailyRoutine() {
   const allSlotsCompleted = totalSlots > 0 && completedSlots === totalSlots;
 
   const handleToggleSlot = (id) => {
-    toggleRoutineSlot(id);
     const targetSlot = routineSlots.find(s => s.id === id);
-    // If completing the last slot
-    if (!targetSlot?.completed && completedSlots + 1 === totalSlots) {
-      try {
-        confetti({
-          particleCount: 75,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      } catch {}
+    if (targetSlot && !targetSlot.completed) {
+      if (completedSlots + 1 === totalSlots && totalSlots > 0) {
+        celebrateMajorMilestone();
+      } else {
+        celebrateTaskCompletion();
+      }
     }
+    toggleRoutineSlot(id);
+  };
+
+  const handleToggleWeeklyGoal = (id) => {
+    const targetGoal = weeklyGoals.find(g => g.id === id);
+    if (targetGoal && !targetGoal.done) {
+      celebrateTaskCompletion();
+    }
+    toggleWeeklyGoal(id);
   };
 
   const handleAddSlot = (e) => {
@@ -133,10 +140,13 @@ export default function DailyRoutine() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <Clock className="w-6 h-6 text-theme-accent" />
-            Daily Routine & Weekly Targets
-          </h1>
+          <div className="flex items-center gap-2">
+            <Clock className="w-6 h-6 text-theme-accent shrink-0" />
+            <AnimatedHeadline 
+              text="Daily Routine & Weekly Targets" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Time-blocked discipline, circular target tracking, and 7-day velocity analytics.
           </p>
@@ -144,7 +154,7 @@ export default function DailyRoutine() {
 
         <button
           onClick={() => setIsSlotModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all self-start sm:self-auto"
+          className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Add Routine Time-Block</span>
@@ -155,7 +165,7 @@ export default function DailyRoutine() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Daily Study Target Ring Card */}
-        <div className="rounded-2xl glass-panel p-6 border border-theme-border flex flex-col sm:flex-row items-center gap-6 justify-between">
+        <div className="rounded-2xl glass-panel p-6 border border-theme-border card-glow-hover flex flex-col sm:flex-row items-center gap-6 justify-between">
           <div className="flex items-center gap-5">
             {/* SVG Circular Ring */}
             <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
@@ -183,7 +193,7 @@ export default function DailyRoutine() {
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                 <span className="font-display font-extrabold text-2xl text-theme-text font-mono-numbers">
-                  {dailyProgressPct}%
+                  <RollingNumber value={dailyProgressPct} suffix="%" />
                 </span>
                 <span className="text-[10px] text-theme-muted uppercase tracking-wider font-semibold">
                   Today
@@ -250,7 +260,7 @@ export default function DailyRoutine() {
         </div>
 
         {/* Weekly Target Progress & 7-Day Mini Bar Chart */}
-        <div className="rounded-2xl glass-panel p-6 border border-theme-border flex flex-col justify-between">
+        <div className="rounded-2xl glass-panel p-6 border border-theme-border card-glow-hover flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -275,7 +285,9 @@ export default function DailyRoutine() {
             <div className="flex items-baseline justify-between text-xs text-theme-muted mb-1.5 font-mono-numbers">
               <span>Monday – Sunday Accumulator</span>
               <span>
-                <strong className="text-theme-text text-sm">{totalWeeklyHoursLogged.toFixed(1)}h</strong> / {weeklyTargetHours}h ({weeklyProgressPct}%)
+                <strong className="text-theme-text text-sm">
+                  <RollingNumber value={totalWeeklyHoursLogged} decimals={1} suffix="h" />
+                </strong> / {weeklyTargetHours}h (<RollingNumber value={weeklyProgressPct} suffix="%" />)
               </span>
             </div>
 
@@ -344,7 +356,7 @@ export default function DailyRoutine() {
               <div
                 key={slot.id}
                 onClick={() => handleToggleSlot(slot.id)}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm ${
+                className={`routine-block-item card-glow-hover p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm ${
                   slot.completed
                     ? 'bg-theme-bg/50 border-theme-border/50 text-theme-muted'
                     : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
@@ -415,8 +427,8 @@ export default function DailyRoutine() {
               {weeklyGoals.map((goal) => (
                 <div
                   key={goal.id}
-                  onClick={() => toggleWeeklyGoal(goal.id)}
-                  className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2.5 cursor-pointer transition-colors ${
+                  onClick={() => handleToggleWeeklyGoal(goal.id)}
+                  className={`card-glow-hover p-3 rounded-xl border text-xs flex items-center justify-between gap-2.5 cursor-pointer transition-colors ${
                     goal.done ? 'bg-theme-bg/50 text-theme-muted border-theme-border/50 line-through' : 'bg-theme-surface text-theme-text border-theme-border hover:border-theme-accent/40'
                   }`}
                 >

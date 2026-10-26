@@ -13,6 +13,9 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import RollingNumber from '../RollingNumber';
+import AnimatedHeadline from '../AnimatedHeadline';
+import { celebrateTaskCompletion } from '../../utils/confetti';
 
 export default function RevisionTab() {
   const { subjects, completeRevision, getTodayRevisionQueue } = useData();
@@ -51,10 +54,13 @@ export default function RevisionTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-theme-border">
         <div>
-          <h1 className="font-display text-2xl font-bold text-theme-text flex items-center gap-2">
-            <Repeat className="w-6 h-6 text-emerald-400" />
-            Spaced Repetition Revision Queue
-          </h1>
+          <div className="flex items-center gap-2">
+            <Repeat className="w-6 h-6 text-emerald-400 shrink-0" />
+            <AnimatedHeadline 
+              text="Spaced Repetition Revision Queue" 
+              className="font-display text-2xl font-bold text-theme-text" 
+            />
+          </div>
           <p className="text-xs text-theme-muted mt-1">
             Combat the Ebbinghaus forgetting curve with automated review intervals: <strong className="text-theme-text">D+1</strong>, <strong className="text-theme-text">D+3</strong>, <strong className="text-theme-text">D+7</strong>, and <strong className="text-theme-text">D+30</strong>.
           </p>
@@ -62,7 +68,9 @@ export default function RevisionTab() {
 
         <div className="flex items-center gap-2 text-xs">
           <span className="px-3 py-1.5 rounded-xl bg-theme-surface border border-theme-border font-mono-numbers">
-            <strong className="text-emerald-400 font-bold">{todayQueue.length}</strong> items due today
+            <strong className="text-emerald-400 font-bold">
+              <RollingNumber value={todayQueue.length} />
+            </strong> items due today
           </span>
         </div>
       </div>
@@ -75,7 +83,7 @@ export default function RevisionTab() {
           { step: 'D+7', title: '1-Week Bridge', desc: 'Deep memory storage', days: 7 },
           { step: 'D+30', title: '1-Month Lock', desc: 'Permanent retrieval', days: 30 },
         ].map((int, i) => (
-          <div key={int.step} className="p-3.5 rounded-xl glass-panel border border-theme-border flex items-start gap-3">
+          <div key={int.step} className="p-3.5 rounded-xl glass-panel border border-theme-border flex items-start gap-3 card-glow-hover transition-all">
             <div className="w-8 h-8 rounded-lg bg-theme-accent/10 border border-theme-accent/20 flex items-center justify-center font-display font-extrabold text-xs text-theme-accent shrink-0">
               {int.step}
             </div>
@@ -121,15 +129,20 @@ export default function RevisionTab() {
         <div className="space-y-3">
           {filteredTodayQueue.map((item) => {
             const meta = getStageMeta(item.repetitionStage);
+            const handleComplete = () => {
+              celebrateTaskCompletion();
+              completeRevision(item.subjectId, item.id);
+            };
+
             return (
               <div
                 key={item.id}
-                className="p-4 rounded-xl bg-theme-surface border border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-theme-accent/40 transition-all shadow-sm"
+                className="revision-card-hover card-glow-hover p-4 rounded-xl bg-theme-surface border border-theme-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all shadow-sm"
               >
                 <div className="flex items-start gap-3.5 min-w-0 flex-1">
                   {/* Complete Checkbox */}
                   <button
-                    onClick={() => completeRevision(item.subjectId, item.id)}
+                    onClick={handleComplete}
                     className="mt-0.5 w-5 h-5 rounded-md border-2 border-theme-muted/60 hover:border-emerald-400 flex items-center justify-center transition-colors group shrink-0"
                     title="Mark review complete and schedule next repetition"
                   >
@@ -166,7 +179,7 @@ export default function RevisionTab() {
                     Due Today
                   </span>
                   <button
-                    onClick={() => completeRevision(item.subjectId, item.id)}
+                    onClick={handleComplete}
                     className="px-3 py-1.5 rounded-xl bg-theme-accent/15 hover:bg-theme-accent text-theme-accent hover:text-white border border-theme-accent/30 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
                   >
                     <Check className="w-3.5 h-3.5" />

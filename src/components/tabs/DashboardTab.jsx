@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Flame, 
   Clock, 
@@ -19,6 +19,9 @@ import {
   Calendar as CalendarIcon 
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import RollingNumber from '../RollingNumber';
+import RadialProgressRing from '../RadialProgressRing';
+import { celebrateTaskCompletion } from '../../utils/confetti';
 
 export default function DashboardTab({ onNavigateTab }) {
   const { 
@@ -34,10 +37,16 @@ export default function DashboardTab({ onNavigateTab }) {
     toggleRoutineSlot
   } = useData();
 
+  const safeSubjects = subjects || [];
+  const safeExams = exams || [];
+  const safeRoutineSlots = routineSlots || [];
+  const safeStreakData = streakData || { streakCount: 0, todayHours: 0 };
+  const safeDailyTarget = dailyTargetMinutes || 120;
+
   // Metrics calculation
-  const totalTopics = subjects.reduce((acc, s) => acc + s.topics.length, 0);
-  const totalScore = subjects.reduce((acc, s) => {
-    return acc + s.topics.reduce((tAcc, t) => {
+  const totalTopics = safeSubjects.reduce((acc, s) => acc + (s.topics || []).length, 0);
+  const totalScore = safeSubjects.reduce((acc, s) => {
+    return acc + (s.topics || []).reduce((tAcc, t) => {
       if (t.status === 'Mastered') return tAcc + 100;
       if (t.status === 'In Progress') return tAcc + 50;
       return tAcc;
@@ -46,7 +55,7 @@ export default function DashboardTab({ onNavigateTab }) {
   const overallMasteryPct = totalTopics > 0 ? Math.round(totalScore / totalTopics) : 0;
 
   // Upcoming non-completed deadlines sorted by date
-  const upcomingDeadlines = exams
+  const upcomingDeadlines = safeExams
     .filter(e => !e.isCompleted)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
   const nearestDeadline = upcomingDeadlines[0];
@@ -66,29 +75,63 @@ export default function DashboardTab({ onNavigateTab }) {
     return { text: `In ${days} Days`, class: 'bg-sky-500/15 text-sky-400 border-sky-500/30' };
   };
 
-  const todayRevisionQueue = getTodayRevisionQueue();
+  const todayRevisionQueue = typeof getTodayRevisionQueue === 'function' ? getTodayRevisionQueue() : [];
 
   // Daily target vs actual calculation
-  const actualMinutesToday = Math.round(streakData.todayHours * 60);
-  const dailyProgressPct = Math.min(100, Math.round((actualMinutesToday / dailyTargetMinutes) * 100));
+  const actualMinutesToday = Math.round(safeStreakData.todayHours * 60);
+  const dailyProgressPct = Math.min(100, Math.round((actualMinutesToday / safeDailyTarget) * 100));
 
-  const radius = 24;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (dailyProgressPct / 100) * circumference;
+  // Dynamic Motivational Greeting based on user streak and time of day
+  const motivationalGreeting = useMemo(() => {
+    const hour = new Date().getHours();
+    const streak = safeStreakData.streakCount || 0;
+    if (streak >= 14) {
+      return `Incredible ${streak}-day streak! Ready to dominate today's academic goals?`;
+    }
+    if (streak >= 7) {
+      return `Unstoppable momentum! Ready to crush today's study routine?`;
+    }
+    if (streak >= 3) {
+      return `Strong habit forming! Ready to level up your mastery today?`;
+    }
+    if (hour >= 5 && hour < 12) {
+      return "Rise and grind! Ready to conquer today's study sessions?";
+    }
+    if (hour >= 12 && hour < 17) {
+      return "Afternoon focus zone: Ready to turn effort into academic mastery?";
+    }
+    if (hour >= 17 && hour < 22) {
+      return "Golden hour revision: Ready to finish today's routine strong?";
+    }
+    return "Night owl focus mode: Ready to lock in today's knowledge?";
+  }, [safeStreakData.streakCount]);
 
-  const completedRoutineSlots = routineSlots.filter(s => s.completed).length;
+  const completedRoutineSlots = safeRoutineSlots.filter(s => s.completed).length;
 
   const handleQuickLog = () => {
-    if (subjects.length > 0) {
-      updateSubjectHours(subjects[0].id, 0.5);
+    if (safeSubjects.length > 0 && updateSubjectHours) {
+      updateSubjectHours(safeSubjects[0].id, 0.5);
     }
+  };
+
+  const handleToggleRoutineSlot = (slotId) => {
+    const slot = safeRoutineSlots.find(s => s.id === slotId);
+    if (slot && !slot.completed) {
+      celebrateTaskCompletion();
+    }
+    if (toggleRoutineSlot) toggleRoutineSlot(slotId);
+  };
+
+  const handleCompleteRevision = (subjectId, itemId) => {
+    celebrateTaskCompletion();
+    if (completeRevision) completeRevision(subjectId, itemId);
   };
 
   return (
     <div className="space-y-6 animate-fadeIn">
       
       {/* Top Banner & Motivation */}
-      <div className="relative overflow-hidden rounded-2xl glass-panel p-6 sm:p-8 border border-theme-border shadow-glow-card">
+      <div className="relative overflow-hidden rounded-2xl glass-panel p-6 sm:p-8 border border-theme-border shadow-glow-card card-glow-hover">
         <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-theme-accent/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
@@ -96,12 +139,30 @@ export default function DashboardTab({ onNavigateTab }) {
               <Zap className="w-3.5 h-3.5" />
               <span>Deliberate Practice Mode • Peak Retention</span>
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-theme-text tracking-tight">
-              Ready to crush today's academic routine?
+            
+            {/* Dynamic Motivational Headline with Kinetic Letter-by-Letter Fade-In */}
+            <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-theme-text tracking-tight flex flex-wrap gap-x-1.5">
+              {motivationalGreeting.split(' ').map((word, wordIndex) => (
+                <span key={wordIndex} className="inline-block whitespace-nowrap">
+                  {word.split('').map((char, charIndex) => {
+                    const delay = (wordIndex * 5 + charIndex) * 18;
+                    return (
+                      <span 
+                        key={charIndex} 
+                        className="letter-fade-in"
+                        style={{ animationDelay: `${delay}ms` }}
+                      >
+                        {char}
+                      </span>
+                    );
+                  })}
+                </span>
+              ))}
             </h1>
+
             <p className="text-sm text-theme-muted leading-relaxed">
-              You've logged <span className="font-semibold text-theme-text font-mono-numbers">{streakData.todayHours}h</span> of focused study today. 
-              <span className="font-semibold text-emerald-400 font-mono-numbers"> {todayRevisionQueue.length}</span> revision topics due today, and <span className="font-semibold text-theme-accent font-mono-numbers">{completedRoutineSlots}/{routineSlots.length}</span> routine blocks checked off.
+              You've logged <span className="font-semibold text-theme-text font-mono-numbers"><RollingNumber value={safeStreakData.todayHours} decimals={1} suffix="h" /></span> of focused study today. 
+              <span className="font-semibold text-emerald-400 font-mono-numbers"> <RollingNumber value={todayRevisionQueue.length} /></span> revision topics due today, and <span className="font-semibold text-theme-accent font-mono-numbers"><RollingNumber value={completedRoutineSlots} />/{safeRoutineSlots.length}</span> routine blocks checked off.
             </p>
           </div>
 
@@ -127,10 +188,10 @@ export default function DashboardTab({ onNavigateTab }) {
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Today's Target Circular Mini Card */}
+        {/* Metric 1: Today's Target Circular Mini Card with Interactive SVG Radial Progress Ring */}
         <div 
           onClick={() => onNavigateTab('routine')}
-          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-theme-accent/40 transition-all cursor-pointer group"
+          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-theme-accent/40 card-glow-hover transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Daily Target</span>
@@ -142,52 +203,37 @@ export default function DashboardTab({ onNavigateTab }) {
             <div>
               <div className="flex items-baseline space-x-1.5">
                 <span className="font-display font-extrabold text-2xl font-mono-numbers text-theme-text">
-                  {streakData.todayHours}h
+                  <RollingNumber value={safeStreakData.todayHours} decimals={1} suffix="h" />
                 </span>
                 <span className="text-xs text-theme-muted font-medium font-mono-numbers">
-                  / {Math.round((dailyTargetMinutes / 60) * 10) / 10}h
+                  / {Math.round((safeDailyTarget / 60) * 10) / 10}h
                 </span>
               </div>
               <p className="text-[11px] text-theme-muted mt-1 font-mono-numbers">
-                {dailyProgressPct}% goal met
+                <RollingNumber value={dailyProgressPct} suffix="%" /> goal met
               </p>
             </div>
 
-            {/* Circular Ring Mini */}
-            <div className="relative w-14 h-14 flex items-center justify-center">
-              <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 60 60">
-                <circle cx="30" cy="30" r={radius} className="stroke-theme-surface" strokeWidth="5" fill="transparent" />
-                <circle 
-                  cx="30" 
-                  cy="30" 
-                  r={radius} 
-                  stroke="var(--color-accent)" 
-                  strokeWidth="5" 
-                  strokeDasharray={circumference} 
-                  strokeDashoffset={strokeDashoffset} 
-                  strokeLinecap="round" 
-                  fill="transparent" 
-                  className="transition-all duration-500" 
-                />
-              </svg>
-              <span className="absolute text-[11px] font-bold font-mono-numbers text-theme-text">
-                {dailyProgressPct}%
-              </span>
-            </div>
+            {/* Kinetic SVG Radial Progress Ring */}
+            <RadialProgressRing 
+              percentage={dailyProgressPct} 
+              size={58} 
+              strokeWidth={5} 
+            />
           </div>
         </div>
 
         {/* Metric 2: Active Streak */}
-        <div className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-amber-500/40 transition-all">
+        <div className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-amber-500/40 card-glow-hover transition-all">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Active Streak</span>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
-              <Flame className="w-4 h-4 fill-amber-500" />
+              <Flame className="w-4 h-4 fill-amber-500 animate-flame-flicker" />
             </div>
           </div>
           <div className="flex items-baseline space-x-2">
             <span className="font-display font-extrabold text-2xl sm:text-3xl font-mono-numbers text-amber-500">
-              {streakData.streakCount}
+              <RollingNumber value={safeStreakData.streakCount} />
             </span>
             <span className="text-xs text-theme-muted font-medium">consecutive days</span>
           </div>
@@ -200,7 +246,7 @@ export default function DashboardTab({ onNavigateTab }) {
         {/* Metric 3: Next Exam or Assignment */}
         <div 
           onClick={() => onNavigateTab('exams')}
-          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-rose-500/40 transition-all cursor-pointer"
+          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-rose-500/40 card-glow-hover transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Next Deadline</span>
@@ -212,7 +258,7 @@ export default function DashboardTab({ onNavigateTab }) {
             <>
               <div className="flex items-baseline space-x-2">
                 <span className="font-display font-extrabold text-2xl font-mono-numbers text-rose-500">
-                  {getDaysLeft(nearestDeadline.date)}d
+                  <RollingNumber value={getDaysLeft(nearestDeadline.date)} suffix="d" />
                 </span>
                 <span className="text-xs text-theme-muted font-medium">remaining</span>
               </div>
@@ -228,7 +274,7 @@ export default function DashboardTab({ onNavigateTab }) {
         {/* Metric 4: Spaced Repetition Due */}
         <div 
           onClick={() => onNavigateTab('revision')}
-          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-emerald-500/40 transition-all cursor-pointer"
+          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-emerald-500/40 card-glow-hover transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Revision Queue</span>
@@ -238,7 +284,7 @@ export default function DashboardTab({ onNavigateTab }) {
           </div>
           <div className="flex items-baseline space-x-2">
             <span className="font-display font-extrabold text-2xl font-mono-numbers text-emerald-400">
-              {todayRevisionQueue.length}
+              <RollingNumber value={todayRevisionQueue.length} />
             </span>
             <span className="text-xs text-theme-muted font-mono-numbers">
               topics due today
@@ -263,16 +309,16 @@ export default function DashboardTab({ onNavigateTab }) {
                 <h2 className="font-display font-bold text-base text-theme-text">Today's Time-Blocked Routine</h2>
               </div>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-theme-surface border border-theme-border text-theme-muted font-mono-numbers">
-                {completedRoutineSlots}/{routineSlots.length} Completed
+                {completedRoutineSlots}/{safeRoutineSlots.length} Completed
               </span>
             </div>
 
             <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {routineSlots.map((slot) => (
+              {safeRoutineSlots.map((slot) => (
                 <div
                   key={slot.id}
-                  onClick={() => toggleRoutineSlot(slot.id)}
-                  className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 cursor-pointer transition-all shadow-sm ${
+                  onClick={() => handleToggleRoutineSlot(slot.id)}
+                  className={`routine-block-item card-glow-hover p-3 rounded-xl border text-xs flex items-center justify-between gap-3 cursor-pointer transition-all shadow-sm ${
                     slot.completed
                       ? 'bg-theme-bg/40 border-theme-border/40 text-theme-muted line-through'
                       : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
@@ -332,10 +378,10 @@ export default function DashboardTab({ onNavigateTab }) {
                 return (
                   <div 
                     key={item.id}
-                    className="p-3 rounded-xl bg-theme-surface border border-theme-border flex items-start gap-3 hover:border-theme-accent/40 transition-all shadow-sm"
+                    className="revision-card-hover p-3 rounded-xl bg-theme-surface border border-theme-border flex items-start gap-3 hover:border-theme-accent/40 transition-all shadow-sm"
                   >
                     <button 
-                      onClick={() => completeRevision(item.subjectId, item.id)}
+                      onClick={() => handleCompleteRevision(item.subjectId, item.id)}
                       className="mt-0.5 w-4 h-4 rounded border-2 border-theme-muted hover:border-emerald-400 flex items-center justify-center transition-colors group shrink-0"
                       title="Mark reviewed"
                     >

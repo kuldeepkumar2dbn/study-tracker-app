@@ -14,6 +14,8 @@ import {
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
 import { soundEngine } from '../../utils/audio';
+import AnimatedHeadline from '../AnimatedHeadline';
+import RollingNumber from '../RollingNumber';
 
 const PRESETS = [
   { id: 'pomo', name: '25m Focus', durationSec: 25 * 60, label: '25m' },
@@ -141,10 +143,13 @@ export default function TimerTab() {
       
       {/* Header */}
       <div className="text-center pb-4 border-b border-theme-border">
-        <h1 className="font-display text-2xl font-bold text-theme-text flex items-center justify-center gap-2">
-          <Clock className="w-6 h-6 text-theme-accent" />
-          Pomodoro Focus Timer
-        </h1>
+        <div className="flex items-center justify-center gap-2">
+          <Clock className="w-6 h-6 text-theme-accent shrink-0" />
+          <AnimatedHeadline 
+            text="Deep Work Pomodoro & Focus Timer" 
+            className="font-display text-2xl font-bold text-theme-text" 
+          />
+        </div>
         <p className="text-xs text-theme-muted mt-1">
           Stay in the flow. Completed focus sessions automatically update your subject's studied hours.
         </p>
@@ -156,7 +161,7 @@ export default function TimerTab() {
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <span>
-              Great focus! Logged <strong>+{sessionCompletedNotice.minutes} minutes</strong> directly to <strong>{sessionCompletedNotice.subject}</strong>.
+              Great focus! Logged <strong><RollingNumber value={sessionCompletedNotice.minutes} prefix="+" suffix=" minutes" /></strong> directly to <strong>{sessionCompletedNotice.subject}</strong>.
             </span>
           </div>
           <span className="font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
@@ -183,7 +188,7 @@ export default function TimerTab() {
       </div>
 
       {/* Main Circular Timer Dial */}
-      <div className="rounded-3xl glass-panel p-8 border border-theme-border flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
+      <div className="rounded-3xl glass-panel p-8 border border-theme-border flex flex-col items-center justify-center relative overflow-hidden shadow-2xl card-glow-hover">
         <div className="relative w-72 h-72 flex items-center justify-center">
           
           {/* Circular SVG Progress */}
@@ -364,8 +369,8 @@ export default function TimerTab() {
         <div className="space-y-2">
           {timerHistory.slice(0, 5).map((log) => (
             <div 
-              key={log.id}
-              className="p-3 rounded-xl bg-theme-surface/70 border border-theme-border flex items-center justify-between text-xs"
+              key={log.id} 
+              className="p-3 rounded-xl bg-theme-surface/70 border border-theme-border flex items-center justify-between text-xs card-glow-hover transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -378,7 +383,7 @@ export default function TimerTab() {
               </div>
               <div className="text-right">
                 <span className="font-mono-numbers font-bold text-emerald-400">
-                  +{log.durationMin}m
+                  <RollingNumber value={log.durationMin} prefix="+" suffix="m" />
                 </span>
                 <span className="block text-[10px] text-theme-muted">added to subject</span>
               </div>

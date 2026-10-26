@@ -20,6 +20,8 @@
   --color-card-shadow: rgba(0, 0, 0, 0.45);
 }
 
+/* Clean Studio (Default Modern Light) */
+html[data-theme='clean'],
 html[data-theme='light'] {
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
@@ -35,57 +37,142 @@ html[data-theme='light'] {
   --color-highlight: #0284c7;
   --color-accent-glow: rgba(79, 70, 229, 0.2);
   --color-card-shadow: rgba(15, 23, 42, 0.08);
+  --feature-theme-color: #4f46e5;
+  --feature-theme-glow: rgba(79, 70, 229, 0.2);
 }
 
+/* Chromatic Identity (Vibrant Feature Color Palettes) */
+html[data-theme='chromatic'],
+html[data-theme='nord'] {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-card: #ffffff;
+  --color-card-hover: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-muted: #64748b;
+  --color-subtle: #f1f5f9;
+  --color-card-shadow: rgba(15, 23, 42, 0.09);
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-accent-muted: rgba(99, 102, 241, 0.14);
+  --color-highlight: #06b6d4;
+  --color-accent-glow: rgba(99, 102, 241, 0.35);
+  --feature-theme-color: #6366f1;
+  --feature-theme-glow: rgba(99, 102, 241, 0.35);
+}
+
+/* Midnight Cyberpunk (OLED Dark Mode with Neon Feature Accents) */
+html[data-theme='cyberpunk'],
+html[data-theme='oled'],
 html[data-theme='dark'] {
-  --color-bg: #121316;
-  --color-surface: #18191e;
-  --color-card: #1e2026;
-  --color-card-hover: #262931;
-  --color-border: #2e323b;
-  --color-text: #f3f4f6;
-  --color-muted: #9ca3af;
-  --color-subtle: #15161b;
+  --color-bg: #050508;
+  --color-surface: #0c0d14;
+  --color-card: #121320;
+  --color-card-hover: #191b2c;
+  --color-border: #202336;
+  --color-text: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-subtle: #08090f;
   --color-accent: #6366f1;
   --color-accent-hover: #818cf8;
-  --color-accent-muted: rgba(99, 102, 241, 0.15);
+  --color-accent-muted: rgba(99, 102, 241, 0.22);
   --color-highlight: #38bdf8;
-  --color-accent-glow: rgba(99, 102, 241, 0.35);
-  --color-card-shadow: rgba(0, 0, 0, 0.45);
+  --color-accent-glow: rgba(99, 102, 241, 0.45);
+  --color-card-shadow: rgba(0, 0, 0, 0.75);
+  --feature-theme-color: #6366f1;
+  --feature-theme-glow: rgba(99, 102, 241, 0.4);
 }
 
-html[data-theme='oled'] {
-  --color-bg: #000000;
-  --color-surface: #0a0a0a;
-  --color-card: #121212;
-  --color-card-hover: #1c1c1c;
-  --color-border: #262626;
-  --color-text: #ffffff;
-  --color-muted: #8e8e93;
-  --color-subtle: #050505;
-  --color-accent: #3b82f6;
-  --color-accent-hover: #60a5fa;
-  --color-accent-muted: rgba(59, 130, 246, 0.18);
-  --color-highlight: #06b6d4;
-  --color-accent-glow: rgba(59, 130, 246, 0.45);
-  --color-card-shadow: rgba(0, 0, 0, 0.85);
+/* Feature Color Coded Sections for Chromatic Identity & Midnight Cyberpunk */
+/* Dashboard: Royal Indigo (#6366F1) */
+html[data-theme='chromatic'][data-active-feature='dashboard'],
+html[data-theme='cyberpunk'][data-active-feature='dashboard'] {
+  --color-accent: #6366F1;
+  --color-accent-hover: #4F46E5;
+  --color-accent-glow: rgba(99, 102, 241, 0.4);
+  --feature-theme-color: #6366F1;
+  --feature-theme-glow: rgba(99, 102, 241, 0.35);
 }
 
-html[data-theme='nord'] {
-  --color-bg: #242933;
-  --color-surface: #2e3440;
-  --color-card: #3b4252;
-  --color-card-hover: #434c5e;
-  --color-border: #4c566a;
-  --color-text: #eceff4;
-  --color-muted: #d8dee9;
-  --color-subtle: #2b303c;
-  --color-accent: #88c0d0;
-  --color-accent-hover: #81a1c1;
-  --color-accent-muted: rgba(136, 192, 208, 0.2);
-  --color-highlight: #a3be8c;
-  --color-accent-glow: rgba(136, 192, 208, 0.35);
-  --color-card-shadow: rgba(15, 23, 42, 0.5);
+/* Daily Routine: Emerald Teal (#10B981) */
+html[data-theme='chromatic'][data-active-feature='routine'],
+html[data-theme='cyberpunk'][data-active-feature='routine'] {
+  --color-accent: #10B981;
+  --color-accent-hover: #059669;
+  --color-accent-glow: rgba(16, 185, 129, 0.4);
+  --feature-theme-color: #10B981;
+  --feature-theme-glow: rgba(16, 185, 129, 0.35);
+}
+
+/* Calendar: Amber Gold (#F59E0B) */
+html[data-theme='chromatic'][data-active-feature='calendar'],
+html[data-theme='cyberpunk'][data-active-feature='calendar'] {
+  --color-accent: #F59E0B;
+  --color-accent-hover: #D97706;
+  --color-accent-glow: rgba(245, 158, 11, 0.4);
+  --feature-theme-color: #F59E0B;
+  --feature-theme-glow: rgba(245, 158, 11, 0.35);
+}
+
+/* Subjects & Syllabus: Cyan Blue (#06B6D4) */
+html[data-theme='chromatic'][data-active-feature='syllabus'],
+html[data-theme='cyberpunk'][data-active-feature='syllabus'] {
+  --color-accent: #06B6D4;
+  --color-accent-hover: #0891B2;
+  --color-accent-glow: rgba(6, 182, 212, 0.4);
+  --feature-theme-color: #06B6D4;
+  --feature-theme-glow: rgba(6, 182, 212, 0.35);
+}
+
+/* Revision Queue: Neon Mint (#14B8A6) */
+html[data-theme='chromatic'][data-active-feature='revision'],
+html[data-theme='cyberpunk'][data-active-feature='revision'] {
+  --color-accent: #14B8A6;
+  --color-accent-hover: #0D9488;
+  --color-accent-glow: rgba(20, 184, 166, 0.4);
+  --feature-theme-color: #14B8A6;
+  --feature-theme-glow: rgba(20, 184, 166, 0.35);
+}
+
+/* Exam Radar: Crimson Rose (#F43F5E) */
+html[data-theme='chromatic'][data-active-feature='radar'],
+html[data-theme='cyberpunk'][data-active-feature='radar'] {
+  --color-accent: #F43F5E;
+  --color-accent-hover: #E11D48;
+  --color-accent-glow: rgba(244, 63, 94, 0.4);
+  --feature-theme-color: #F43F5E;
+  --feature-theme-glow: rgba(244, 63, 94, 0.35);
+}
+
+/* Skill Tracker: Electric Purple (#A855F7) */
+html[data-theme='chromatic'][data-active-feature='skills'],
+html[data-theme='cyberpunk'][data-active-feature='skills'] {
+  --color-accent: #A855F7;
+  --color-accent-hover: #9333EA;
+  --color-accent-glow: rgba(168, 85, 247, 0.4);
+  --feature-theme-color: #A855F7;
+  --feature-theme-glow: rgba(168, 85, 247, 0.35);
+}
+
+/* Drive Notes: Ocean Blue (#3B82F6) */
+html[data-theme='chromatic'][data-active-feature='notes'],
+html[data-theme='cyberpunk'][data-active-feature='notes'] {
+  --color-accent: #3B82F6;
+  --color-accent-hover: #2563EB;
+  --color-accent-glow: rgba(59, 130, 246, 0.4);
+  --feature-theme-color: #3B82F6;
+  --feature-theme-glow: rgba(59, 130, 246, 0.35);
+}
+
+/* Focus Timer: Royal Indigo (#6366F1) */
+html[data-theme='chromatic'][data-active-feature='timer'],
+html[data-theme='cyberpunk'][data-active-feature='timer'] {
+  --color-accent: #6366F1;
+  --color-accent-hover: #4F46E5;
+  --color-accent-glow: rgba(99, 102, 241, 0.4);
+  --feature-theme-color: #6366F1;
+  --feature-theme-glow: rgba(99, 102, 241, 0.35);
 }
 
 /* Custom scrollbar */
@@ -243,4 +330,112 @@ body {
 .top-action-link:active {
   transform: scale(0.96);
 }
+
+/* Streak Flame Badge & Animations */
+@keyframes flameFlicker {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.65));
+  }
+  25% {
+    transform: scale(1.08) rotate(-3deg);
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.85));
+  }
+  50% {
+    transform: scale(0.97) rotate(2deg);
+    filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.75));
+  }
+  75% {
+    transform: scale(1.12) rotate(-2deg);
+    filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.95));
+  }
+}
+
+@keyframes streakPillPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+  50% {
+    box-shadow: 0 0 14px 2px rgba(249, 115, 22, 0.28);
+  }
+}
+
+.animate-flame-flicker {
+  animation: flameFlicker 2.2s infinite ease-in-out;
+  display: inline-block;
+  transform-origin: center bottom;
+}
+
+.streak-flame-badge {
+  animation: streakPillPulse 2.6s infinite ease-in-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.streak-flame-badge:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+
+/* Kinetic Letter Fade In Animation for Motivational Headline */
+@keyframes letterFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.letter-fade-in {
+  display: inline-block;
+  animation: letterFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+}
+
+/* Feature-Coded Ambient Card Hover Glows */
+.card-glow-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.card-glow-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px var(--feature-theme-glow, rgba(99, 102, 241, 0.25));
+  border-color: var(--feature-theme-color, var(--color-accent));
+}
+
+/* Section Specific Ambient Hover Glows */
+.routine-block-item {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.routine-block-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px rgba(16, 185, 129, 0.28);
+  border-color: #10B981;
+}
+
+.exam-card:hover {
+  box-shadow: 0 12px 28px -6px rgba(244, 63, 94, 0.28);
+  border-color: #F43F5E;
+}
+
+.revision-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.revision-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -4px rgba(20, 184, 166, 0.28);
+  border-color: #14B8A6;
+}
+
+.skill-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.skill-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -4px rgba(168, 85, 247, 0.28);
+  border-color: #A855F7;
+}
+
 
