@@ -200,6 +200,21 @@ export function AuthProvider({ children }) {
     });
   }, [refreshAuthState]);
 
+  /**
+   * Fast Demo Student Login for Localhost & Offline Exploration
+   */
+  const loginAsDemoStudent = useCallback((name = 'Alex Rivera', email = 'alex.rivera@student.edu') => {
+    const demoUser = {
+      sub: 'demo_student_42',
+      name,
+      email,
+      picture: ''
+    };
+    saveUserSession(demoUser);
+    refreshAuthState();
+    return demoUser;
+  }, [refreshAuthState]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -210,6 +225,7 @@ export function AuthProvider({ children }) {
         openAuthModal,
         closeAuthModal,
         loginWithGoogle,
+        loginAsDemoStudent,
         renewDriveToken,
         signOut,
         refreshAuthState

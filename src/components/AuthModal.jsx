@@ -132,7 +132,7 @@ export const LOCKED_FEATURE_CONFIGS = {
 };
 
 export default function AuthModal() {
-  const { authModalState, closeAuthModal, loginWithGoogle } = useAuth();
+  const { authModalState, closeAuthModal, loginWithGoogle, loginAsDemoStudent } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -255,6 +255,25 @@ export default function AuthModal() {
           <span className="text-zinc-800 group-hover:text-black">
             {isLoading ? 'Connecting to Google...' : 'Continue with Google'}
           </span>
+        </button>
+
+        {/* Instant Demo Sign-In */}
+        <button
+          type="button"
+          onClick={() => {
+            loginAsDemoStudent();
+            closeAuthModal();
+            const targetUrl = authModalState.redirectOnSuccess || feature.defaultUrl;
+            if (targetUrl && !window.location.pathname.endsWith(targetUrl)) {
+              window.location.href = targetUrl;
+            } else {
+              window.location.reload();
+            }
+          }}
+          className="w-full mt-2.5 py-3 px-4 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+        >
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>Instant Demo Sign-In (Local Preview)</span>
         </button>
 
         {/* Privacy & Session Persistence Notice */}

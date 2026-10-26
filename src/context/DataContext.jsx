@@ -11,7 +11,7 @@ import {
   FOLDER_NAME
 } from '../services/googleDrive';
 import { extractYouTubeId } from '../utils/youtube';
-import { getUserStorageKey, logout } from '../../auth-guard';
+import { getUserStorageKey, logout, getActiveUserId } from '../../auth-guard';
 
 const DataContext = createContext();
 
@@ -434,8 +434,18 @@ export function DataProvider({ children }) {
     });
   });
 
-  // Skills
+  // Skills - Persisted under studyflow_${userId}_skills and readScoped fallback
   const [skills, setSkills] = useState(() => {
+    try {
+      const userId = getActiveUserId();
+      const customKey = `studyflow_${userId}_skills`;
+      const savedCustom = localStorage.getItem(customKey);
+      if (savedCustom !== null) {
+        return JSON.parse(savedCustom);
+      }
+    } catch (e) {
+      console.warn('Failed reading skills from studyflow_${userId}_skills:', e);
+    }
     return readScoped('skills', initialSkills);
   });
 
@@ -573,6 +583,14 @@ export function DataProvider({ children }) {
       writeScoped('exams', exams);
       writeScoped('routine_slots', routineSlots);
       writeScoped('weekly_goals', weeklyGoals);
+      // Persist skills to both studyflow_${userId}_skills and writeScoped
+      try {
+        const userId = getActiveUserId();
+        const customKey = `studyflow_${userId}_skills`;
+        localStorage.setItem(customKey, JSON.stringify(skills));
+      } catch (e) {
+        console.error('Failed writing studyflow_${userId}_skills:', e);
+      }
       writeScoped('skills', skills);
       writeScoped('streak', streakData);
       writeScoped('timer_history', timerHistory);
@@ -1184,18 +1202,176 @@ export function DataProvider({ children }) {
     setWeeklyGoals(prev => prev.filter(g => g.id !== id));
   };
 
+  // Helper to recalculate course completion percentage based on checked subtopics
+  const recalculateSkillProgress = (skill) => {
+    if (!skill.levels || skill.levels.length === 0) return skill.masteryPct || 0;
+    let total = 0;
+    let completed = 0;
+    for (const lvl of skill.levels) {
+      for (const lec of (lvl.lectures || [])) {
+        for (const st of (lec.subtopics || [])) {
+          total++;
+          if (st.done) completed++;
+        }
+      }
+    }
+    return total > 0 ? Math.round((completed / total) * 100) : (skill.masteryPct || 0);
+  };
+
   // Skills Actions
   const addSkill = (newSkill) => {
     setSkills(prev => [...prev, {
-      id: 'sk-' + Date.now(),
+      id: newSkill.id || ('sk-' + Date.now()),
       name: newSkill.name,
       category: newSkill.category || 'Engineering',
       levelNum: Number(newSkill.levelNum) || 3,
-      masteryPct: Number(newSkill.masteryPct) || 50,
-      hoursLogged: 0,
+      masteryPct: Number(newSkill.masteryPct) || 0,
+      hoursLogged: Number(newSkill.hoursLogged) || 0,
       tags: newSkill.tags || ['Skill'],
-      milestones: []
+      isCourse: !!newSkill.isCourse,
+      youtubeUrl: newSkill.youtubeUrl || '',
+      thumbnailUrl: newSkill.thumbnailUrl || '',
+      authorName: newSkill.authorName || '',
+      levels: newSkill.levels || [],
+      milestones: newSkill.milestones || []
     }]);
+  };
+
+  const deleteSkill = (skillId) => {
+    setSkills(prev => prev.filter(s => s.id !== skillId));
+  };
+
+  const restoreSkill = (skill, index) => {
+    setSkills(prev => {
+      if (prev.some(s => s.id === skill.id)) return prev;
+      const next = [...prev];
+      if (typeof index === 'number' && index >= 0 && index <= next.length) {
+        next.splice(index, 0, skill);
+      } else {
+        next.push(skill);
+      }
+      return next;
+    });
+  };
+
+  const toggleSubtopic = (skillId, levelId, lectureId, subtopicId) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedLevels = (s.levels || []).map(lvl => {
+        if (lvl.id !== levelId) return lvl;
+        const updatedLectures = (lvl.lectures || []).map(lec => {
+          if (lec.id !== lectureId) return lec;
+          const updatedSubtopics = (lec.subtopics || []).map(st => {
+            if (st.id !== subtopicId) return st;
+            return { ...st, done: !st.done };
+          });
+          return { ...lec, subtopics: updatedSubtopics };
+        });
+        return { ...lvl, lectures: updatedLectures };
+      });
+      const updatedSkill = { ...s, levels: updatedLevels };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const deleteSubtopic = (skillId, levelId, lectureId, subtopicId) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedLevels = (s.levels || []).map(lvl => {
+        if (lvl.id !== levelId) return lvl;
+        const updatedLectures = (lvl.lectures || []).map(lec => {
+          if (lec.id !== lectureId) return lec;
+          return { ...lec, subtopics: (lec.subtopics || []).filter(st => st.id !== subtopicId) };
+        });
+        return { ...lvl, lectures: updatedLectures };
+      });
+      const updatedSkill = { ...s, levels: updatedLevels };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const restoreSubtopic = (skillId, levelId, lectureId, subtopic, index) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedLevels = (s.levels || []).map(lvl => {
+        if (lvl.id !== levelId) return lvl;
+        const updatedLectures = (lvl.lectures || []).map(lec => {
+          if (lec.id !== lectureId) return lec;
+          const list = [...(lec.subtopics || [])];
+          if (list.some(st => st.id === subtopic.id)) return lec;
+          if (typeof index === 'number' && index >= 0 && index <= list.length) {
+            list.splice(index, 0, subtopic);
+          } else {
+            list.push(subtopic);
+          }
+          return { ...lec, subtopics: list };
+        });
+        return { ...lvl, lectures: updatedLectures };
+      });
+      const updatedSkill = { ...s, levels: updatedLevels };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const deleteLecture = (skillId, levelId, lectureId) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedLevels = (s.levels || []).map(lvl => {
+        if (lvl.id !== levelId) return lvl;
+        return { ...lvl, lectures: (lvl.lectures || []).filter(lec => lec.id !== lectureId) };
+      });
+      const updatedSkill = { ...s, levels: updatedLevels };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const restoreLecture = (skillId, levelId, lecture, index) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedLevels = (s.levels || []).map(lvl => {
+        if (lvl.id !== levelId) return lvl;
+        const list = [...(lvl.lectures || [])];
+        if (list.some(l => l.id === lecture.id)) return lvl;
+        if (typeof index === 'number' && index >= 0 && index <= list.length) {
+          list.splice(index, 0, lecture);
+        } else {
+          list.push(lecture);
+        }
+        return { ...lvl, lectures: list };
+      });
+      const updatedSkill = { ...s, levels: updatedLevels };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const deleteLevel = (skillId, levelId) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedSkill = { ...s, levels: (s.levels || []).filter(lvl => lvl.id !== levelId) };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const restoreLevel = (skillId, level, index) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const list = [...(s.levels || [])];
+      if (list.some(l => l.id === level.id)) return s;
+      if (typeof index === 'number' && index >= 0 && index <= list.length) {
+        list.splice(index, 0, level);
+      } else {
+        list.push(level);
+      }
+      const updatedSkill = { ...s, levels: list };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
   };
 
   const updateSkillLevel = (skillId, levelNum, masteryPct) => {
@@ -1226,6 +1402,30 @@ export function DataProvider({ children }) {
         ...s,
         milestones: s.milestones.map(m => m.id === milestoneId ? { ...m, done: !m.done } : m)
       };
+    }));
+  };
+
+  const deleteSkillMilestone = (skillId, milestoneId) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      return {
+        ...s,
+        milestones: s.milestones.filter(m => m.id !== milestoneId)
+      };
+    }));
+  };
+
+  const restoreSkillMilestone = (skillId, milestone, index) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const list = [...(s.milestones || [])];
+      if (list.some(m => m.id === milestone.id)) return s;
+      if (typeof index === 'number' && index >= 0 && index <= list.length) {
+        list.splice(index, 0, milestone);
+      } else {
+        list.push(milestone);
+      }
+      return { ...s, milestones: list };
     }));
   };
 
@@ -1305,10 +1505,22 @@ export function DataProvider({ children }) {
         weeklyTargetHours,
         setWeeklyTargetHours,
         skills,
+        setSkills,
         addSkill,
+        deleteSkill,
+        restoreSkill,
+        toggleSubtopic,
+        deleteSubtopic,
+        restoreSubtopic,
+        deleteLecture,
+        restoreLecture,
+        deleteLevel,
+        restoreLevel,
         updateSkillLevel,
         addSkillMilestone,
         toggleSkillMilestone,
+        deleteSkillMilestone,
+        restoreSkillMilestone,
         logSkillHours,
         streakData,
         timerHistory,

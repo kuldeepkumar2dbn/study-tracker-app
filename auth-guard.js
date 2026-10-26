@@ -181,6 +181,21 @@ export function getUserSub() {
 }
 
 /**
+ * Retrieves an active unique identifier for the current student session
+ */
+export function getActiveUserId() {
+  try {
+    const profile = getUserProfile();
+    if (profile?.sub) return profile.sub;
+    if (profile?.id) return profile.id;
+    if (profile?.email) return profile.email.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return 'guest';
+  } catch {
+    return 'guest';
+  }
+}
+
+/**
  * Returns namespaced LocalStorage key based on authenticated user's Google ID (user.sub)
  */
 export function getUserStorageKey(baseKey) {

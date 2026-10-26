@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { LOCKED_FEATURE_CONFIGS } from './AuthModal';
 
 export default function LockedFeatureOverlay({ featureKey, children }) {
-  const { isAuthenticated, loginWithGoogle } = useAuth();
+  const { isAuthenticated, loginWithGoogle, loginAsDemoStudent } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -125,6 +125,18 @@ export default function LockedFeatureOverlay({ featureKey, children }) {
             <span className="text-zinc-800 group-hover:text-black">
               {isLoading ? 'Connecting to Google...' : 'Continue with Google'}
             </span>
+          </button>
+
+          {/* Instant Demo Sign-In for Localhost Testing */}
+          <button
+            type="button"
+            onClick={() => {
+              loginAsDemoStudent();
+            }}
+            className="w-full mt-2.5 py-3 px-4 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Instant Demo Sign-In (Local Preview)</span>
           </button>
 
           {/* Secondary Option: Return to Dashboard */}
