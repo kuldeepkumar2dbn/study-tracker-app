@@ -173,10 +173,15 @@ export function AuthProvider({ children }) {
               const accessToken = tokenResponse.access_token;
               const expiresInSec = Number(tokenResponse.expires_in) || 3600;
 
-              localStorage.setItem(AUTH_KEYS.ACCESS_TOKEN, accessToken);
-              localStorage.setItem(AUTH_KEYS.TOKEN_EXPIRY, String(Date.now() + expiresInSec * 1000));
-              localStorage.setItem(AUTH_KEYS.DRIVE_TOKEN, accessToken);
+              // Store OAuth access token strictly in sessionStorage
+              sessionStorage.setItem(AUTH_KEYS.ACCESS_TOKEN, accessToken);
               sessionStorage.setItem(AUTH_KEYS.DRIVE_TOKEN, accessToken);
+              sessionStorage.setItem(AUTH_KEYS.TOKEN_EXPIRY, String(Date.now() + expiresInSec * 1000));
+
+              // Guarantee no OAuth tokens leak to persistent localStorage
+              localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+              localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+              localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
 
               refreshAuthState();
               resolve(accessToken);

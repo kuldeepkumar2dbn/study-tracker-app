@@ -79,12 +79,12 @@ export const FEATURE_COLORS = {
   },
   timer: {
     id: 'timer',
-    name: 'Royal Indigo',
-    hex: '#6366F1',
-    glow: 'rgba(99, 102, 241, 0.4)',
-    bgTint: 'rgba(99, 102, 241, 0.12)',
-    borderTint: 'rgba(99, 102, 241, 0.4)',
-    textClass: 'text-indigo-500 dark:text-indigo-400'
+    name: 'Electric Violet',
+    hex: '#8B5CF6',
+    glow: 'rgba(139, 92, 246, 0.5)',
+    bgTint: 'rgba(139, 92, 246, 0.15)',
+    borderTint: 'rgba(139, 92, 246, 0.5)',
+    textClass: 'text-violet-500 dark:text-violet-400'
   }
 };
 

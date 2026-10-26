@@ -530,7 +530,12 @@ export function DataProvider({ children }) {
 
   const [driveAccessToken, setDriveAccessToken] = useState(() => {
     try {
-      return localStorage.getItem('google_access_token') || sessionStorage.getItem('studyflow_drive_token') || null;
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('google_access_token');
+        localStorage.removeItem('studyflow_drive_token');
+        localStorage.removeItem('google_token_expiry');
+      }
+      return sessionStorage.getItem('studyflow_drive_token') || sessionStorage.getItem('google_access_token') || null;
     } catch {
       return null;
     }
@@ -659,6 +664,10 @@ export function DataProvider({ children }) {
         setDriveAccessToken(token);
         try {
           sessionStorage.setItem('studyflow_drive_token', token);
+          sessionStorage.setItem('google_access_token', token);
+          localStorage.removeItem('google_access_token');
+          localStorage.removeItem('studyflow_drive_token');
+          localStorage.removeItem('google_token_expiry');
         } catch {}
 
         setSyncStatus('syncing');
@@ -722,6 +731,8 @@ export function DataProvider({ children }) {
     localStorage.removeItem('google_token_expiry');
     localStorage.removeItem('studyflow_drive_token');
     sessionStorage.removeItem('studyflow_drive_token');
+    sessionStorage.removeItem('google_access_token');
+    sessionStorage.removeItem('google_token_expiry');
     setSyncStatus('offline');
   };
 
@@ -1480,7 +1491,14 @@ export function DataProvider({ children }) {
 
     setTimerHistory(prev => [sessionObj, ...prev]);
 
-    const hours = session.durationMin / 60;
+    const hours = Number(session.durationMin || 0) / 60;
+
+    // Automatically update student's daily study hours (updating the "3.5h logged" metric on the Dashboard)
+    setStreakData(prev => ({
+      ...prev,
+      todayHours: Math.round(((prev?.todayHours || 0) + hours) * 10) / 10
+    }));
+
     if (session.subjectId && session.chapterId) {
       logChapterStudyMinutes(session.subjectId, session.chapterId, session.durationMin);
     } else if (session.subject) {

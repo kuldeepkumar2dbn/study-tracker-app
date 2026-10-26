@@ -24,6 +24,7 @@ import SkillsTab from './components/tabs/SkillsTab';
 import NotesTab from './components/tabs/NotesTab';
 import TimerTab from './components/tabs/TimerTab';
 import ImportantLinks from './components/ImportantLinks';
+import { StopwatchIcon } from './components/CollapsibleSidebar';
 import { useData } from './context/DataContext';
 
 const TABS = [
@@ -36,7 +37,7 @@ const TABS = [
   { id: 'skills', name: 'Skill Tracker', icon: Award },
   { id: 'notes', name: 'Drive Notes', icon: FileText },
   { id: 'links', name: 'Important Links', icon: Link2 },
-  { id: 'timer', name: 'Focus Timer', icon: Clock },
+  { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon },
 ];
 
 export default function App() {
@@ -65,55 +66,7 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        
-        {/* Navigation Tabs Bar */}
-        <div className="mb-6 overflow-x-auto pb-1 sm:pb-0">
-          <nav className="flex space-x-1 sm:space-x-2 p-1.5 rounded-2xl glass-panel border border-theme-border w-max min-w-full sm:min-w-0" aria-label="Dashboard Navigation">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`nav-tab-item flex items-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ease-in-out relative whitespace-nowrap ${
-                    isActive
-                      ? 'bg-theme-accent text-white shadow-glow-accent font-semibold'
-                      : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-theme-muted'}`} />
-                  <span>{tab.name}</span>
-
-                  {tab.id === 'routine' && pendingRoutineSlots > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
-                      isActive ? 'bg-white text-indigo-700' : 'bg-theme-accent text-white'
-                    }`}>
-                      {pendingRoutineSlots}
-                    </span>
-                  )}
-
-                  {tab.id === 'revision' && dueRevisionCount > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
-                      isActive ? 'bg-white text-emerald-700' : 'bg-emerald-500 text-white'
-                    }`}>
-                      {dueRevisionCount}
-                    </span>
-                  )}
-
-                  {tab.id === 'exams' && urgentCount > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
-                      isActive ? 'bg-white text-rose-700' : 'bg-rose-500 text-white'
-                    }`}>
-                      {urgentCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+      <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-8">
 
         {/* Tab Content Display */}
         <div key={activeTab} className="transition-all duration-300 animate-tab-enter">

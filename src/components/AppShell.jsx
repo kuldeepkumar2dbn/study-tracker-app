@@ -22,19 +22,23 @@ import {
   LogIn,
   Lock,
   ShieldCheck,
-  User
+  User,
+  Menu
 } from 'lucide-react';
 import Logo from './Logo';
 import DriveModal from './DriveModal';
 import AuthModal from './AuthModal';
 import LockedFeatureOverlay from './LockedFeatureOverlay';
 import DriveNotesDemoModal from './DriveNotesDemoModal';
+import CollapsibleSidebar, { StopwatchIcon, SIDEBAR_ITEMS } from './CollapsibleSidebar';
 import { ThemeProvider, useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { DataProvider, useData } from '../context/DataContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import RollingNumber from './RollingNumber';
 import { sanitizeUrl } from '../utils/security';
 import { isDemoUser, getDemoRemainingSeconds, clearDemoSession } from '../../auth-guard';
+
+export { default as CollapsibleSidebar, StopwatchIcon, SIDEBAR_ITEMS } from './CollapsibleSidebar';
 
 export const STORAGE_KEY_PREFIX = 'studyflow_data_';
 
@@ -48,13 +52,19 @@ export const NAV_TABS = [
   { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', pathRegex: /\/radar\.html$/, isProtected: true },
   { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', pathRegex: /\/skills\.html$/, isProtected: true },
   { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', pathRegex: /\/notes\.html$/, isProtected: true },
-  { id: 'timer', name: 'Focus Timer', icon: Clock, href: '/timer.html', pathRegex: /\/timer\.html$/ },
+  { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', pathRegex: /\/timer\.html$/, tooltip: 'Focus Timer & Deep Work' },
 ];
 
 export const LOCKED_TAB_IDS = ['syllabus', 'revision', 'radar', 'skills', 'notes'];
 
 // Persistent Shared Top Header
-export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNotesDemoModal }) {
+export function SharedHeader({ 
+  onOpenDriveModal, 
+  onOpenLinksModal, 
+  onOpenDriveNotesDemoModal,
+  onToggleSidebar,
+  isSidebarExpanded = true
+}) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
   const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks } = useData();
   const { isAuthenticated, userProfile, signOut, openAuthModal, isDemo } = useAuth();
@@ -111,9 +121,19 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNo
     <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* Brand Logo - Navigates to Dashboard index.html */}
-        <div className="shrink-0">
-          <a href="/index.html" className="focus:outline-none">
+        {/* Brand Logo & Sidebar Hamburger Toggle */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <button
+            id="sidebar-toggle-btn"
+            onClick={onToggleSidebar}
+            title={isSidebarExpanded ? "Collapse Sidebar (64px rail)" : "Expand Sidebar (250px drawer)"}
+            aria-label="Toggle navigation sidebar"
+            aria-expanded={isSidebarExpanded}
+            className="p-2 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-cardHover border border-theme-border/60 transition-all cursor-pointer flex items-center justify-center active:scale-95"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+          <a href="/index.html" className="focus:outline-none flex items-center">
             <Logo />
           </a>
         </div>
@@ -397,118 +417,10 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNo
   );
 }
 
-// Top Tab Navigation Bar linking to dedicated HTML files
-export function SharedNavBar({ activeTabId, onOpenDriveNotesDemoModal }) {
-  const { exams, getTodayRevisionQueue, routineSlots } = useData();
-  const { isAuthenticated, openAuthModal, isDemo } = useAuth();
-  const { isFeatureCoded } = useTheme();
-
-  const urgentCount = (exams || []).filter(e => {
-    if (e.isCompleted) return false;
-    const diffDays = (new Date(e.date) - new Date()) / (1000 * 60 * 60 * 24);
-    return diffDays > 0 && diffDays <= 7;
-  }).length;
-
-  const dueRevisionCount = getTodayRevisionQueue ? getTodayRevisionQueue().length : 0;
-  const pendingRoutineSlots = (routineSlots || []).filter(s => !s.completed).length;
-
-  return (
-    <div className="mb-6 overflow-x-auto pb-1 sm:pb-0">
-      <nav className="flex space-x-1 sm:space-x-2 p-1.5 rounded-2xl glass-panel border border-theme-border w-max min-w-full sm:min-w-0" aria-label="Study Tracker Navigation">
-        {NAV_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = tab.id === activeTabId;
-          const isDemoLockedNotes = isDemo && tab.id === 'notes';
-          const isGuestLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(tab.id);
-          const isLocked = isDemoLockedNotes || isGuestLocked;
-          const featureMeta = FEATURE_COLORS[tab.id];
-
-          const activeStyle = isActive && isFeatureCoded && featureMeta
-            ? { backgroundColor: featureMeta.hex, boxShadow: `0 8px 24px -4px ${featureMeta.glow}` }
-            : undefined;
-
-          const handleClick = (e) => {
-            if (isDemoLockedNotes) {
-              e.preventDefault();
-              if (onOpenDriveNotesDemoModal) {
-                onOpenDriveNotesDemoModal();
-              }
-              return;
-            }
-            if (isGuestLocked) {
-              e.preventDefault();
-              openAuthModal(tab.id, tab.href);
-              return;
-            }
-          };
-
-          return (
-            <a
-              key={tab.id}
-              href={tab.href}
-              onClick={handleClick}
-              style={activeStyle}
-              className={`nav-tab-item flex items-center space-x-2 px-3.5 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ease-in-out relative whitespace-nowrap active:scale-95 ${
-                isActive
-                  ? 'bg-theme-accent text-white shadow-glow-accent font-semibold'
-                  : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
-              } ${isLocked ? 'cursor-pointer hover:border-amber-500/40' : ''}`}
-            >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-theme-muted'}`} />
-              <span>{tab.name}</span>
-
-              {/* Padlock Icon Visual Cue for Locked Drive Notes in Demo Mode */}
-              {isDemoLockedNotes && (
-                <span 
-                  title="Drive Notes disabled in demo mode"
-                  className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold ml-0.5"
-                >
-                  <Lock className="w-2.5 h-2.5" />
-                  <span className="text-[8px] uppercase tracking-wider">Locked</span>
-                </span>
-              )}
-
-              {/* Padlock Icon Visual Cue for Locked Tabs in Guest Mode */}
-              {!isDemo && isGuestLocked && (
-                <span 
-                  title="Sign in with Google required"
-                  className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold ml-0.5"
-                >
-                  <Lock className="w-2.5 h-2.5" />
-                  <span className="hidden xl:inline text-[8px] uppercase tracking-wider">Locked</span>
-                </span>
-              )}
-
-              {/* Status Counters */}
-              {!isLocked && tab.id === 'routine' && pendingRoutineSlots > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
-                  isActive ? 'bg-white text-indigo-700' : 'bg-theme-accent text-white'
-                }`}>
-                  {pendingRoutineSlots}
-                </span>
-              )}
-
-              {!isLocked && tab.id === 'revision' && dueRevisionCount > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
-                  isActive ? 'bg-white text-emerald-700' : 'bg-emerald-500 text-white'
-                }`}>
-                  {dueRevisionCount}
-                </span>
-              )}
-
-              {!isLocked && tab.id === 'radar' && urgentCount > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers ${
-                  isActive ? 'bg-white text-rose-700' : 'bg-rose-500 text-white'
-                }`}>
-                  {urgentCount}
-                </span>
-              )}
-            </a>
-          );
-        })}
-      </nav>
-    </div>
-  );
+// Deprecated: Redundant Horizontal Top Navigation Bar has been removed across all pages
+// in favor of the exclusive left collapsible navigation rail (#app-sidebar).
+export function SharedNavBar() {
+  return null;
 }
 
 // Persistent Footer
@@ -668,7 +580,32 @@ export function AppLayout({ activeTabId, children }) {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [isDriveNotesDemoModalOpen, setIsDriveNotesDemoModalOpen] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
+    try {
+      const saved = localStorage.getItem('studyflow_sidebar_expanded');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { isAuthenticated, isDemo } = useAuth();
+
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsMobileSidebarOpen(prev => !prev);
+    } else {
+      setIsSidebarExpanded(prev => {
+        const next = !prev;
+        try {
+          localStorage.setItem('studyflow_sidebar_expanded', String(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+  };
 
   const isGuestLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
   const isDemoLockedNotes = isDemo && activeTabId === 'notes';
@@ -690,64 +627,83 @@ export function AppLayout({ activeTabId, children }) {
       data-active-feature={activeTabId || 'dashboard'}
     >
       
-      {/* Top Header */}
+      {/* Top Utility Header */}
       <SharedHeader 
         onOpenDriveModal={() => setIsDriveModalOpen(true)}
         onOpenLinksModal={() => setIsLinksModalOpen(true)}
         onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
+        onToggleSidebar={handleToggleSidebar}
+        isSidebarExpanded={isSidebarExpanded}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Navigation Tabs Bar */}
-        <SharedNavBar 
+      {/* Main Body with Left Collapsible Sidebar Navigation Rail and Main View */}
+      <div className="flex-1 flex w-full relative">
+        {/* Left Collapsible Sidebar Navigation Rail across all pages */}
+        <CollapsibleSidebar 
           activeTabId={activeTabId} 
+          isExpanded={isSidebarExpanded} 
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onToggle={handleToggleSidebar}
           onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
         />
 
-        {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
-        <div className="transition-all duration-300 animate-tab-enter">
-          {isDemoLockedNotes ? (
-            <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-theme-border/80 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-indigo-500/20 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-inner">
-                <Lock className="w-8 h-8" />
-              </div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">
-                <span>Demo Sandbox Restriction</span>
-              </div>
-              <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-theme-text tracking-tight mb-2">
-                Drive Notes Disabled in Demo Mode
-              </h2>
-              <p className="text-xs sm:text-sm text-theme-muted max-w-md mx-auto mb-6 leading-relaxed">
-                Saving files requires an authentic Google Account with personal Google Drive storage. Sign in with Google to upload and manage notes.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <button
-                  onClick={() => setIsDriveNotesDemoModalOpen(true)}
-                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs shadow-lg transition-all active:scale-95 cursor-pointer"
-                >
-                  Sign In with Google
-                </button>
-                <a
-                  href="/index.html"
-                  className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all text-center"
-                >
-                  Back to Dashboard
-                </a>
-              </div>
+        {/* Main Content Area - Desktop margin matches sidebar state with smooth transition */}
+        <div 
+          id="main-layout-wrapper"
+          className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ease-in-out ${
+            isSidebarExpanded ? 'md:ml-[250px]' : 'md:ml-16'
+          }`}
+        >
+          <main 
+            id="main-content" 
+            className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-8"
+          >
+            {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
+            <div className="transition-all duration-300 animate-tab-enter">
+              {isDemoLockedNotes ? (
+                <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-theme-border/80 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-indigo-500/20 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-inner">
+                    <Lock className="w-8 h-8" />
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">
+                    <span>Demo Sandbox Restriction</span>
+                  </div>
+                  <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-theme-text tracking-tight mb-2">
+                    Drive Notes Disabled in Demo Mode
+                  </h2>
+                  <p className="text-xs sm:text-sm text-theme-muted max-w-md mx-auto mb-6 leading-relaxed">
+                    Saving files requires an authentic Google Account with personal Google Drive storage. Sign in with Google to upload and manage notes.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      onClick={() => setIsDriveNotesDemoModalOpen(true)}
+                      className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs shadow-lg transition-all active:scale-95 cursor-pointer"
+                    >
+                      Sign In with Google
+                    </button>
+                    <a
+                      href="/index.html"
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all text-center"
+                    >
+                      Back to Dashboard
+                    </a>
+                  </div>
+                </div>
+              ) : isGuestLockedTab ? (
+                <LockedFeatureOverlay featureKey={activeTabId}>
+                  {children}
+                </LockedFeatureOverlay>
+              ) : (
+                children
+              )}
             </div>
-          ) : isGuestLockedTab ? (
-            <LockedFeatureOverlay featureKey={activeTabId}>
-              {children}
-            </LockedFeatureOverlay>
-          ) : (
-            children
-          )}
-        </div>
-      </main>
+          </main>
 
-      {/* Shared Footer */}
-      <SharedFooter />
+          {/* Persistent Shared Footer */}
+          <SharedFooter />
+        </div>
+      </div>
 
       {/* Google Drive Integration Modal */}
       <DriveModal

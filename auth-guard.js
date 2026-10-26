@@ -32,6 +32,23 @@ export const AUTH_KEYS = {
 
 
 /**
+ * Sanitizes user identity details before storing in persistent storage.
+ * Retains ONLY non-sensitive user identity flags (name, avatar/picture, sub, email, logged-in status).
+ * Strictly guarantees no OAuth access tokens or authorization secrets are persisted.
+ */
+export function sanitizeUserIdentity(userData) {
+  if (!userData || typeof userData !== 'object') return null;
+  return {
+    sub: String(userData.sub || ''),
+    name: String(userData.name || userData.given_name || 'Student'),
+    email: String(userData.email || ''),
+    picture: String(userData.picture || userData.avatar || ''),
+    isLoggedIn: true,
+    isDemo: !!userData.isDemo
+  };
+}
+
+/**
  * Cookie Management Helpers for Persistent Session
  */
 export function getSessionCookie() {
@@ -42,7 +59,7 @@ export function getSessionCookie() {
     const decoded = decodeURIComponent(match[1]);
     const parsed = JSON.parse(decoded);
     if (parsed && (parsed.email || parsed.name || parsed.sub)) {
-      return parsed;
+      return sanitizeUserIdentity(parsed);
     }
     return null;
   } catch (e) {
@@ -53,13 +70,15 @@ export function getSessionCookie() {
 export function setSessionCookie(userData) {
   if (typeof document === 'undefined') return;
   try {
-    const jsonStr = typeof userData === 'string' ? userData : JSON.stringify(userData);
+    const sanitized = sanitizeUserIdentity(userData);
+    if (!sanitized) return;
+    const jsonStr = JSON.stringify(sanitized);
     const encoded = encodeURIComponent(jsonStr);
     const isSecureContext = window.location.protocol === 'https:' || 
       window.location.hostname === 'localhost' || 
       window.location.hostname === '127.0.0.1';
 
-    // 1-Year Persistent Session Cookie
+    // 1-Year Persistent Session Cookie (non-sensitive flags only)
     const cookieString = `study_session=${encoded}; max-age=31536000; path=/; SameSite=Lax${isSecureContext ? '; Secure' : ''}`;
     document.cookie = cookieString;
 
@@ -288,7 +307,26 @@ export function isAuthenticated() {
 }
 
 /**
- * Checks if the Google OAuth access token is present and not expired (1-hour lifespan).
+ * Retrieves the currently active Google Drive OAuth access token from sessionStorage or memory.
+ * Never retrieves from long-lived localStorage or cookies.
+ */
+export function getStoredDriveToken() {
+  if (typeof window === 'undefined') return null;
+  try {
+    // Purge any legacy token from localStorage to guarantee storage compliance
+    if (localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN) || localStorage.getItem(AUTH_KEYS.DRIVE_TOKEN)) {
+      localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+      localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
+      localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+    }
+    return sessionStorage.getItem(AUTH_KEYS.ACCESS_TOKEN) || sessionStorage.getItem(AUTH_KEYS.DRIVE_TOKEN) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Checks if the Google OAuth access token is present in sessionStorage and not expired (1-hour lifespan).
  * NOTE: When this returns false, the user remains logged in! Only Google Drive API sync
  * requires refreshing this access token.
  */
@@ -296,8 +334,15 @@ export function isTokenValid() {
   if (typeof window === 'undefined') return false;
   if (isDemoUser()) return false;
   try {
-    const token = localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
-    const expiryStr = localStorage.getItem(AUTH_KEYS.TOKEN_EXPIRY);
+    // Purge any legacy token from localStorage
+    if (localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN) || localStorage.getItem(AUTH_KEYS.DRIVE_TOKEN)) {
+      localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+      localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
+      localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+    }
+
+    const token = sessionStorage.getItem(AUTH_KEYS.ACCESS_TOKEN) || sessionStorage.getItem(AUTH_KEYS.DRIVE_TOKEN);
+    const expiryStr = sessionStorage.getItem(AUTH_KEYS.TOKEN_EXPIRY);
     if (!token) return false;
     if (expiryStr) {
       const expiry = Number(expiryStr);
@@ -313,7 +358,8 @@ export function isTokenValid() {
 
 /**
  * Saves a student's user profile and persistent session.
- * Writes persistent session cookie and updates LocalStorage.
+ * - Stores ONLY non-sensitive user identity flags (name, avatar, logged-in status) in persistent storage.
+ * - Stores OAuth access tokens strictly in sessionStorage or private memory, NOT in long-lived localStorage or unencrypted client cookies.
  */
 export function saveUserSession(userData, token = null, expiresInSec = 3600) {
   if (typeof window === 'undefined') return;
@@ -323,25 +369,36 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
       clearDemoSession();
     }
 
-    // 1. Write persistent 1-year session cookie
-    setSessionCookie(userData);
+    // Sanitize user data to retain only non-sensitive identity flags
+    const sanitized = sanitizeUserIdentity(userData);
 
-    // 2. Save user profile details in localStorage
-    localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(userData));
-    localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(userData));
-    if (userData.sub) {
-      localStorage.setItem(AUTH_KEYS.USER_SUB, userData.sub);
+    if (sanitized) {
+      // 1. Write non-sensitive user identity flags to persistent 1-year session cookie
+      setSessionCookie(sanitized);
+
+      // 2. Save only non-sensitive user identity flags in persistent localStorage
+      localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(sanitized));
+      localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(sanitized));
+      if (sanitized.sub) {
+        localStorage.setItem(AUTH_KEYS.USER_SUB, sanitized.sub);
+      }
     }
 
-    // 3. Save OAuth token details if provided
+    // 3. Guarantee removal of any long-lived or legacy access tokens from persistent localStorage
+    localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+    localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
+    localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+    localStorage.removeItem(AUTH_KEYS.DRIVE_USER);
+
+    // 4. Save OAuth access token strictly in sessionStorage (short-lived session memory)
     if (token) {
-      localStorage.setItem(AUTH_KEYS.ACCESS_TOKEN, token);
       const expiry = Date.now() + (Number(expiresInSec) || 3600) * 1000;
-      localStorage.setItem(AUTH_KEYS.TOKEN_EXPIRY, String(expiry));
-      localStorage.setItem(AUTH_KEYS.DRIVE_TOKEN, token);
+      sessionStorage.setItem(AUTH_KEYS.ACCESS_TOKEN, token);
       sessionStorage.setItem(AUTH_KEYS.DRIVE_TOKEN, token);
-      localStorage.setItem(AUTH_KEYS.DRIVE_USER, JSON.stringify(userData));
-      sessionStorage.setItem(AUTH_KEYS.DRIVE_USER, JSON.stringify(userData));
+      sessionStorage.setItem(AUTH_KEYS.TOKEN_EXPIRY, String(expiry));
+      if (sanitized) {
+        sessionStorage.setItem(AUTH_KEYS.DRIVE_USER, JSON.stringify(sanitized));
+      }
     }
   } catch (e) {
     console.error('Error saving user session:', e);
@@ -411,6 +468,7 @@ export function clearAuthTokens() {
   if (typeof window === 'undefined') return;
   try {
     deleteSessionCookie();
+    // Clear localStorage non-token flags and purge any legacy token records
     localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
     localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
     localStorage.removeItem(AUTH_KEYS.USER_PROFILE);
@@ -418,6 +476,10 @@ export function clearAuthTokens() {
     localStorage.removeItem(AUTH_KEYS.USER_SUB);
     localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
     localStorage.removeItem(AUTH_KEYS.DRIVE_USER);
+
+    // Clear sessionStorage tokens
+    sessionStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+    sessionStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_USER);
   } catch (e) {
@@ -445,7 +507,9 @@ export function logout(onComplete) {
     return;
   }
 
-  const token = localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
+  const token = sessionStorage.getItem(AUTH_KEYS.ACCESS_TOKEN) || 
+                sessionStorage.getItem(AUTH_KEYS.DRIVE_TOKEN) || 
+                localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
 
   const finalize = () => {
     clearAuthTokens();
@@ -500,7 +564,12 @@ export function logout(onComplete) {
   finalize();
 }
 
-// Synchronize session between cookie and localStorage if available
+// Guarantee no legacy OAuth tokens reside in persistent localStorage and synchronize session
 if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+    localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
+    localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+  } catch {}
   getUserProfile();
 }

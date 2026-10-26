@@ -1,6 +1,8 @@
 // Google Drive Direct Client-Side API v3 Service
 // Zero-Backend implementation using Google Identity Services (GIS)
 
+import { validateFileBinarySignature } from '../utils/security.js';
+
 export const FOLDER_NAME = 'MyStudyTracker_Data';
 export const DATA_FILE_NAME = 'study_data.json';
 export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
@@ -52,6 +54,68 @@ export function requestDriveAccessToken() {
     throw new Error('Google Token Client not initialized. Please configure your Client ID first.');
   }
   tokenClientInstance.requestAccessToken({ prompt: 'consent' });
+}
+
+/**
+ * Silently requests or refreshes Google OAuth access token in the background.
+ * Uses GIS `tokenClient.requestAccessToken({ prompt: '' })` without user prompt,
+ * storing the token strictly in sessionStorage to prevent premature logouts.
+ *
+ * @param {string} clientId
+ * @returns {Promise<string>} Fresh access token
+ */
+export async function requestSilentDriveToken(clientId = DEFAULT_GOOGLE_CLIENT_ID) {
+  if (typeof window === 'undefined') {
+    throw new Error('Silent token request requires a browser window environment.');
+  }
+
+  // Ensure GIS is available
+  if (!window.google?.accounts?.oauth2) {
+    throw new Error('Google Identity Services SDK not loaded yet.');
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const activeClientId = clientId || DEFAULT_GOOGLE_CLIENT_ID;
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: activeClientId,
+        scope: DEFAULT_GOOGLE_SCOPES,
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            const token = tokenResponse.access_token;
+            const expiresIn = Number(tokenResponse.expires_in) || 3600;
+            const expiry = Date.now() + expiresIn * 1000;
+
+            // Store strictly in sessionStorage
+            sessionStorage.setItem('studyflow_drive_token', token);
+            sessionStorage.setItem('google_access_token', token);
+            sessionStorage.setItem('google_token_expiry', String(expiry));
+
+            // Strictly purge any legacy tokens from persistent localStorage
+            localStorage.removeItem('google_access_token');
+            localStorage.removeItem('studyflow_drive_token');
+            localStorage.removeItem('google_token_expiry');
+
+            resolve(token);
+          } else {
+            const err = new Error(tokenResponse?.error_description || tokenResponse?.error || 'Silent token refresh failed.');
+            err.code = 'DRIVE_TOKEN_EXPIRED';
+            reject(err);
+          }
+        },
+        error_callback: (err) => {
+          const error = new Error(err?.message || 'Silent token renewal request was rejected.');
+          error.code = 'DRIVE_TOKEN_EXPIRED';
+          reject(error);
+        }
+      });
+
+      // Execute background token refresh with no prompt
+      client.requestAccessToken({ prompt: '' });
+    } catch (e) {
+      reject(e);
+    }
+  });
 }
 
 /**
@@ -198,16 +262,19 @@ export async function loadStudyDataFromDrive(accessToken, folderId) {
 }
 
 export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB limit
-export const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.docx'];
+export const ALLOWED_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.docx', '.txt'];
 export const BLOCKED_EXECUTABLE_EXTENSIONS = [
   '.exe', '.bat', '.sh', '.cmd', '.js', '.mjs', '.cjs', '.vbs', '.ps1',
-  '.com', '.scr', '.msi', '.jar', '.apk', '.bin', '.app', '.dmg', '.php', '.py'
+  '.com', '.scr', '.msi', '.jar', '.apk', '.bin', '.app', '.dmg', '.php',
+  '.py', '.dll', '.so', '.dylib', '.cgi', '.pl'
 ];
 
 /**
- * Validates uploaded file size and type against security policies
+ * Validates uploaded file size, declared extension, and binary magic-byte signatures.
+ * Disallows all SVG, HTML, and executable binary uploads.
+ * Rejects files if binary headers do not match declared extensions.
  */
-export function validateUploadedFile(file) {
+export async function validateUploadedFile(file) {
   if (!file) {
     throw new Error('No file selected.');
   }
@@ -218,25 +285,42 @@ export function validateUploadedFile(file) {
     throw new Error(`File size (${sizeMb} MB) exceeds the maximum allowed limit of 25MB.`);
   }
 
-  // 2. Reject executable file extensions explicitly
-  const lowerName = file.name.toLowerCase();
-  const isExecutable = BLOCKED_EXECUTABLE_EXTENSIONS.some(ext => lowerName.endsWith(ext));
-  if (isExecutable) {
-    throw new Error('Executable and script files (.exe, .bat, .sh, .cmd, .js) are strictly rejected for security.');
+  const lowerName = (file.name || '').toLowerCase();
+
+  // 2. Disallow SVG and HTML explicitly
+  if (
+    lowerName.endsWith('.svg') ||
+    lowerName.endsWith('.html') ||
+    lowerName.endsWith('.htm') ||
+    lowerName.endsWith('.xhtml') ||
+    file.type === 'image/svg+xml' ||
+    file.type.includes('html')
+  ) {
+    throw new Error('Upload rejected: SVG and HTML files are strictly disallowed for security.');
   }
 
-  // 3. Restrict accepted file types to PDF, images, TXT, and DOCX
+  // 3. Reject executable file extensions explicitly
+  const isExecutable = BLOCKED_EXECUTABLE_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+  if (isExecutable) {
+    throw new Error('Upload rejected: Executable and script files are strictly prohibited.');
+  }
+
+  // 4. Restrict accepted file types to PDF, Images (PNG, JPG), TXT, and DOCX
   const isAllowedExt = ALLOWED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
   const isAllowedMime =
     file.type === 'application/pdf' ||
-    file.type.startsWith('image/') ||
+    file.type === 'image/png' ||
+    file.type === 'image/jpeg' ||
     file.type === 'text/plain' ||
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     file.type === 'application/msword';
 
   if (!isAllowedExt && !isAllowedMime) {
-    throw new Error('Invalid file type. Only PDF, Images (PNG, JPG, WebP, SVG), TXT, and DOCX documents are permitted.');
+    throw new Error('Invalid file type. Only PDF documents, Images (PNG, JPG), TXT, and DOCX files are permitted.');
   }
+
+  // 5. Binary magic-byte header validation (FileReader + Uint8Array)
+  await validateFileBinarySignature(file);
 
   return true;
 }
@@ -245,8 +329,8 @@ export function validateUploadedFile(file) {
  * Uploads a PDF or Image file directly to Google Drive using Drive v3 multipart upload API
  */
 export async function uploadFileToDriveFolder(accessToken, folderId, file) {
-  // Validate file size and type before starting upload
-  validateUploadedFile(file);
+  // Validate file size, type, and binary magic-byte signatures
+  await validateUploadedFile(file);
 
   const boundary = '-------StudyTrackerDriveUpload' + Date.now();
   const delimiter = `\r\n--${boundary}\r\n`;
@@ -285,8 +369,10 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
 
   if (response.status === 401) {
     try {
-      localStorage.removeItem('google_access_token');
       sessionStorage.removeItem('studyflow_drive_token');
+      sessionStorage.removeItem('google_access_token');
+      localStorage.removeItem('google_access_token');
+      localStorage.removeItem('studyflow_drive_token');
     } catch {}
     const err = new Error('Google Drive authorization expired (401). Please renew access.');
     err.code = 'DRIVE_TOKEN_EXPIRED';
@@ -312,16 +398,31 @@ export async function uploadFileToDriveFolder(accessToken, folderId, file) {
 }
 
 /**
- * Direct client-side upload helper that automatically fetches stored token and folder
+ * Direct client-side upload helper with silent background token refresh.
+ * Fetches stored token strictly from sessionStorage. If expired or authorization is required,
+ * triggers silent background token refresh without logging out the user.
  */
 export async function uploadDirectToDrive(file) {
-  const token = localStorage.getItem('google_access_token') || sessionStorage.getItem('studyflow_drive_token');
-  const expiry = localStorage.getItem('google_token_expiry');
+  // Purge any legacy token from localStorage to guarantee compliance
+  try {
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('studyflow_drive_token');
+    localStorage.removeItem('google_token_expiry');
+  } catch {}
 
-  if (!token || (expiry && Date.now() > Number(expiry))) {
-    const err = new Error('Google Drive authorization expired. Please renew access.');
-    err.code = 'DRIVE_TOKEN_EXPIRED';
-    throw err;
+  let token = sessionStorage.getItem('studyflow_drive_token') || sessionStorage.getItem('google_access_token');
+  const expiry = sessionStorage.getItem('google_token_expiry');
+  const isExpired = !token || (expiry && Date.now() > Number(expiry));
+
+  // If token is missing or expired, attempt silent background refresh
+  if (isExpired) {
+    try {
+      token = await requestSilentDriveToken();
+    } catch (silentErr) {
+      const err = new Error('Google Drive authorization required. Please authorize Google Drive.');
+      err.code = 'DRIVE_TOKEN_EXPIRED';
+      throw err;
+    }
   }
 
   let folderId = localStorage.getItem('studyflow_drive_folder_id');
@@ -336,5 +437,18 @@ export async function uploadDirectToDrive(file) {
     }
   }
 
-  return await uploadFileToDriveFolder(token, folderId, file);
+  // Attempt upload; if 401 occurs, attempt silent background refresh and retry once
+  try {
+    return await uploadFileToDriveFolder(token, folderId, file);
+  } catch (uploadErr) {
+    if (uploadErr?.code === 'DRIVE_TOKEN_EXPIRED' || uploadErr?.message?.includes('401')) {
+      try {
+        const refreshedToken = await requestSilentDriveToken();
+        return await uploadFileToDriveFolder(refreshedToken, folderId, file);
+      } catch (refreshErr) {
+        throw uploadErr;
+      }
+    }
+    throw uploadErr;
+  }
 }

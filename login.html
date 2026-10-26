@@ -13,7 +13,8 @@
     <!-- Immediate auth check: redirect to index.html if persistent genuine session exists -->
     <script>
       try {
-        const isExpired = window.location.search.includes('expired=true');
+        const params = new URLSearchParams(window.location.search);
+        const isExpired = params.get('expired') === 'true';
         const isDemo = sessionStorage.getItem('is_demo_user') === 'true' || localStorage.getItem('is_demo_user') === 'true';
         const demoEnd = Number(sessionStorage.getItem('demo_session_end') || localStorage.getItem('demo_session_end') || 0);
 

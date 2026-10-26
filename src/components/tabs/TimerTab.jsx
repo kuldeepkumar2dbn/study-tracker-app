@@ -37,18 +37,68 @@ export default function TimerTab() {
 
   const timerRef = useRef(null);
 
-  // Countdown effect
+  // Restore active timer state from localStorage on mount
+  useEffect(() => {
+    try {
+      const running = localStorage.getItem('is_timer_running') === 'true';
+      const endTimeStr = localStorage.getItem('focus_timer_end');
+      const savedSecondsLeft = Number(localStorage.getItem('focus_seconds_left'));
+      const savedTotal = Number(localStorage.getItem('focus_timer_total_seconds'));
+      const savedSubject = localStorage.getItem('focus_timer_subject');
+
+      if (savedSubject && subjects.some(s => s.name === savedSubject)) {
+        setSelectedSubject(savedSubject);
+      }
+
+      if (savedTotal) {
+        setTotalSeconds(savedTotal);
+        const matchedPreset = PRESETS.find(p => p.durationSec === savedTotal);
+        if (matchedPreset) setActivePreset(matchedPreset);
+      }
+
+      if (running && endTimeStr) {
+        const remaining = Math.max(0, Math.ceil((Number(endTimeStr) - Date.now()) / 1000));
+        if (remaining > 0) {
+          setTimeLeft(remaining);
+          setIsRunning(true);
+        } else {
+          setTimeLeft(0);
+          setIsRunning(false);
+          handleSessionComplete();
+        }
+      } else if (savedSecondsLeft && savedSecondsLeft > 0) {
+        setTimeLeft(savedSecondsLeft);
+      }
+    } catch (e) {
+      console.warn('Error syncing timer state from storage:', e);
+    }
+  }, []);
+
+  // Countdown effect synchronized with timestamp end in localStorage
   useEffect(() => {
     if (isRunning) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
+        const endTimeStr = localStorage.getItem('focus_timer_end');
+        if (endTimeStr) {
+          const diffSec = Math.max(0, Math.ceil((Number(endTimeStr) - Date.now()) / 1000));
+          setTimeLeft(diffSec);
+          localStorage.setItem('focus_seconds_left', String(diffSec));
+          if (diffSec <= 0) {
             clearInterval(timerRef.current);
             handleSessionComplete();
-            return 0;
           }
-          return prev - 1;
-        });
+        } else {
+          setTimeLeft((prev) => {
+            if (prev <= 1) {
+              clearInterval(timerRef.current);
+              handleSessionComplete();
+              return 0;
+            }
+            const next = prev - 1;
+            localStorage.setItem('focus_seconds_left', String(next));
+            return next;
+          });
+        }
       }, 1000);
     } else {
       clearInterval(timerRef.current);
@@ -61,6 +111,12 @@ export default function TimerTab() {
     setIsRunning(false);
     soundEngine.stop();
     setAmbientSound('none');
+
+    // Update persistent timer storage
+    localStorage.setItem('is_timer_running', 'false');
+    localStorage.removeItem('focus_timer_end');
+    localStorage.setItem('focus_seconds_left', String(totalSeconds));
+    window.dispatchEvent(new Event('studyflow-timer-sync'));
 
     // Chime
     soundEngine.playCompletionChime();
@@ -101,19 +157,44 @@ export default function TimerTab() {
     setActivePreset(preset);
     setTotalSeconds(preset.durationSec);
     setTimeLeft(preset.durationSec);
+    soundEngine.stop();
+    localStorage.setItem('is_timer_running', 'false');
+    localStorage.setItem('focus_seconds_left', String(preset.durationSec));
+    localStorage.setItem('focus_timer_total_seconds', String(preset.durationSec));
+    localStorage.removeItem('focus_timer_end');
+    window.dispatchEvent(new Event('studyflow-timer-sync'));
   };
 
   const handleTogglePlay = () => {
-    if (!isRunning && ambientSound !== 'none') {
-      soundEngine.playMode(ambientSound);
+    const nextRunning = !isRunning;
+    if (nextRunning) {
+      if (ambientSound !== 'none') {
+        soundEngine.playMode(ambientSound);
+      }
+      const endTime = Date.now() + timeLeft * 1000;
+      localStorage.setItem('is_timer_running', 'true');
+      localStorage.setItem('focus_timer_end', String(endTime));
+      localStorage.setItem('focus_seconds_left', String(timeLeft));
+      localStorage.setItem('focus_timer_total_seconds', String(totalSeconds));
+      localStorage.setItem('focus_timer_subject', selectedSubject);
+    } else {
+      soundEngine.stop();
+      localStorage.setItem('is_timer_running', 'false');
+      localStorage.setItem('focus_seconds_left', String(timeLeft));
+      localStorage.removeItem('focus_timer_end');
     }
-    setIsRunning(!isRunning);
+    setIsRunning(nextRunning);
+    window.dispatchEvent(new Event('studyflow-timer-sync'));
   };
 
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeft(totalSeconds);
     soundEngine.stop();
+    localStorage.setItem('is_timer_running', 'false');
+    localStorage.setItem('focus_seconds_left', String(totalSeconds));
+    localStorage.removeItem('focus_timer_end');
+    window.dispatchEvent(new Event('studyflow-timer-sync'));
   };
 
   const handleAmbientChange = (mode) => {
@@ -278,8 +359,14 @@ export default function TimerTab() {
             <select
               value={selectedSubject}
               onChange={(e) => {
-                setSelectedSubject(e.target.value);
+                const val = e.target.value;
+                setSelectedSubject(val);
                 setSelectedChapterId('');
+                try {
+                  localStorage.setItem('focus_timer_subject', val);
+                } catch {
+                  // ignore
+                }
               }}
               className="w-full px-3 py-2 rounded-xl bg-theme-surface border border-theme-border text-theme-text font-medium focus:outline-none focus:border-theme-accent"
             >

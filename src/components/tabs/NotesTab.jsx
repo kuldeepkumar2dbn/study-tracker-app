@@ -26,10 +26,12 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { sanitizeUrl } from '../../utils/security';
+import { sanitizeUrl, validateFileBinarySignature, getSafeHash } from '../../utils/security';
 import AnimatedHeadline from '../AnimatedHeadline';
 import RollingNumber from '../RollingNumber';
 import { celebrateTaskCompletion } from '../../utils/confetti';
+
+const FOLDERS = ['All', 'Starred', 'Algorithms', 'Mathematics', 'AI & ML', 'General'];
 
 export default function NotesTab({ onOpenDriveModal }) {
   const { renewDriveToken } = useAuth();
@@ -47,7 +49,10 @@ export default function NotesTab({ onOpenDriveModal }) {
   } = useData();
 
   const [selectedNoteId, setSelectedNoteId] = useState(notes[0]?.id || null);
-  const [activeFolder, setActiveFolder] = useState('All');
+  const [activeFolder, setActiveFolder] = useState(() => {
+    const hash = getSafeHash(FOLDERS);
+    return hash || 'All';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -71,7 +76,7 @@ export default function NotesTab({ onOpenDriveModal }) {
   const [newTags, setNewTags] = useState('Summary, CheatSheet');
   const [newContent, setNewContent] = useState('# New Study Note\n\n- Key concepts:\n- Important definitions:\n- Practice problems:');
 
-  const folders = ['All', 'Starred', 'Algorithms', 'Mathematics', 'AI & ML', 'General'];
+  const folders = FOLDERS;
 
   const filteredNotes = notes.filter(n => {
     const matchesFolder = 
@@ -102,25 +107,36 @@ export default function NotesTab({ onOpenDriveModal }) {
 
     const lowerName = file.name.toLowerCase();
 
-    // 2. Reject executable file extensions explicitly
-    const EXECUTABLE_EXTS = ['.exe', '.bat', '.sh', '.cmd', '.js', '.mjs', '.cjs', '.vbs', '.ps1', '.com', '.scr', '.msi', '.jar', '.apk', '.bin'];
+    // 2. Reject SVG and HTML explicitly
+    if (
+      lowerName.endsWith('.svg') ||
+      lowerName.endsWith('.html') ||
+      lowerName.endsWith('.htm') ||
+      lowerName.endsWith('.xhtml') ||
+      file.type === 'image/svg+xml' ||
+      file.type.includes('html')
+    ) {
+      setUploadError('Security alert: SVG and HTML files are strictly disallowed for security.');
+      return;
+    }
+
+    // 3. Reject executable file extensions explicitly
+    const EXECUTABLE_EXTS = [
+      '.exe', '.bat', '.sh', '.cmd', '.js', '.mjs', '.cjs', '.vbs', '.ps1',
+      '.com', '.scr', '.msi', '.jar', '.apk', '.bin', '.app', '.dmg', '.php',
+      '.py', '.dll', '.so', '.dylib', '.cgi', '.pl'
+    ];
     if (EXECUTABLE_EXTS.some(ext => lowerName.endsWith(ext))) {
       setUploadError('Security alert: Executable files (.exe, .bat, .sh, .cmd, .js) are strictly rejected.');
       return;
     }
 
-    // 3. Restrict accepted file types to PDF, Images, TXT, and DOCX
-    const ALLOWED_EXTS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.txt', '.docx'];
-    const isAllowedExt = ALLOWED_EXTS.some(ext => lowerName.endsWith(ext));
-    const isAllowedMime =
-      file.type === 'application/pdf' ||
-      file.type.startsWith('image/') ||
-      file.type === 'text/plain' ||
-      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      file.type === 'application/msword';
-
-    if (!isAllowedExt && !isAllowedMime) {
-      setUploadError('Invalid file type. Only PDF documents, Images, TXT, and DOCX files are permitted.');
+    // 4. Magic-byte binary header validation (FileReader + Uint8Array)
+    try {
+      await validateFileBinarySignature(file);
+    } catch (sigErr) {
+      setUploadError(sigErr.message || 'File inspection failed: Invalid file header signature.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 

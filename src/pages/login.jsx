@@ -22,20 +22,20 @@ import {
   clearDemoSession 
 } from '../../auth-guard';
 import { DEFAULT_GOOGLE_CLIENT_ID, DEFAULT_GOOGLE_SCOPES } from '../services/googleDrive';
+import { getSafeQueryParam } from '../utils/security';
 
 function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [statusText, setStatusText] = useState('');
   const [showExpiredToast, setShowExpiredToast] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.location.search.includes('expired=true');
+    return getSafeQueryParam('expired', ['true', 'false']) === 'true';
   });
 
   // Auto-redirect to dashboard if already authenticated with active genuine session
   useEffect(() => {
     try {
-      const isExpired = window.location.search.includes('expired=true');
+      const isExpired = getSafeQueryParam('expired', ['true', 'false']) === 'true';
       if (isExpired) {
         clearDemoSession();
         return;
