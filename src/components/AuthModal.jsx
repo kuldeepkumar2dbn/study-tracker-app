@@ -261,14 +261,8 @@ export default function AuthModal() {
         <button
           type="button"
           onClick={() => {
-            loginAsDemoStudent();
             closeAuthModal();
-            const targetUrl = authModalState.redirectOnSuccess || feature.defaultUrl;
-            if (targetUrl && !window.location.pathname.endsWith(targetUrl)) {
-              window.location.href = targetUrl;
-            } else {
-              window.location.reload();
-            }
+            loginAsDemoStudent();
           }}
           className="w-full mt-2.5 py-3 px-4 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
         >

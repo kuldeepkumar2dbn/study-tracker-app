@@ -11,17 +11,25 @@ import {
   FOLDER_NAME
 } from '../services/googleDrive';
 import { extractYouTubeId } from '../utils/youtube';
-import { getUserStorageKey, logout, getActiveUserId } from '../../auth-guard';
+import { getUserStorageKey, logout, getActiveUserId, isDemoUser } from '../../auth-guard';
 
 const DataContext = createContext();
 
 const STORAGE_KEY_PREFIX = 'studyflow_data_';
 
 /**
- * Scoped LocalStorage helpers namespaced by user.sub
+ * Scoped LocalStorage helpers namespaced by user.sub or demo sandbox
  */
 function readScoped(key, fallback) {
   try {
+    if (isDemoUser()) {
+      const demoKey = `demo_tracker_data_${key}`;
+      const saved = sessionStorage.getItem(demoKey) || localStorage.getItem(demoKey);
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+      return fallback;
+    }
     const scopedKey = getUserStorageKey(key);
     const saved = localStorage.getItem(scopedKey);
     if (saved !== null) {
@@ -43,6 +51,13 @@ function readScoped(key, fallback) {
 
 function writeScoped(key, val) {
   try {
+    if (isDemoUser()) {
+      const demoKey = `demo_tracker_data_${key}`;
+      const serialized = typeof val === 'string' ? val : JSON.stringify(val);
+      sessionStorage.setItem(demoKey, serialized);
+      localStorage.setItem(demoKey, serialized);
+      return;
+    }
     const scopedKey = getUserStorageKey(key);
     localStorage.setItem(scopedKey, typeof val === 'string' ? val : JSON.stringify(val));
   } catch (e) {
@@ -448,6 +463,9 @@ export function DataProvider({ children }) {
 
   // Skills - Persisted under studyflow_${userId}_skills and readScoped fallback
   const [skills, setSkills] = useState(() => {
+    if (isDemoUser()) {
+      return readScoped('skills', initialSkills);
+    }
     try {
       const userId = getActiveUserId();
       const customKey = `studyflow_${userId}_skills`;
@@ -596,12 +614,14 @@ export function DataProvider({ children }) {
       writeScoped('routine_slots', routineSlots);
       writeScoped('weekly_goals', weeklyGoals);
       // Persist skills to both studyflow_${userId}_skills and writeScoped
-      try {
-        const userId = getActiveUserId();
-        const customKey = `studyflow_${userId}_skills`;
-        localStorage.setItem(customKey, JSON.stringify(skills));
-      } catch (e) {
-        console.error('Failed writing studyflow_${userId}_skills:', e);
+      if (!isDemoUser()) {
+        try {
+          const userId = getActiveUserId();
+          const customKey = `studyflow_${userId}_skills`;
+          localStorage.setItem(customKey, JSON.stringify(skills));
+        } catch (e) {
+          console.error('Failed writing studyflow_${userId}_skills:', e);
+        }
       }
       writeScoped('skills', skills);
       writeScoped('streak', streakData);

@@ -5,7 +5,11 @@ import {
   isTokenValid, 
   saveUserSession, 
   logout, 
-  AUTH_KEYS 
+  AUTH_KEYS,
+  isDemoUser,
+  initDemoSession,
+  getDemoRemainingSeconds,
+  clearDemoSession
 } from '../../auth-guard';
 import { DEFAULT_GOOGLE_CLIENT_ID, DEFAULT_GOOGLE_SCOPES } from '../services/googleDrive';
 
@@ -201,19 +205,13 @@ export function AuthProvider({ children }) {
   }, [refreshAuthState]);
 
   /**
-   * Fast Demo Student Login for Localhost & Offline Exploration
+   * Fast Demo Student Login: Initializes 7-minute isolated sandbox session
    */
-  const loginAsDemoStudent = useCallback((name = 'Alex Rivera', email = 'alex.rivera@student.edu') => {
-    const demoUser = {
-      sub: 'demo_student_42',
-      name,
-      email,
-      picture: ''
-    };
-    saveUserSession(demoUser);
-    refreshAuthState();
-    return demoUser;
-  }, [refreshAuthState]);
+  const loginAsDemoStudent = useCallback(() => {
+    initDemoSession();
+  }, []);
+
+  const isDemo = isDemoUser();
 
   return (
     <AuthContext.Provider
@@ -221,6 +219,7 @@ export function AuthProvider({ children }) {
         userProfile,
         isAuthenticated,
         isTokenExpired,
+        isDemo,
         authModalState,
         openAuthModal,
         closeAuthModal,
@@ -245,10 +244,12 @@ export function useAuth() {
       userProfile: profile,
       isAuthenticated: !!profile,
       isTokenExpired: !isTokenValid(),
+      isDemo: isDemoUser(),
       authModalState: { isOpen: false, featureKey: 'general', redirectOnSuccess: null },
       openAuthModal: () => {},
       closeAuthModal: () => {},
       loginWithGoogle: async () => {},
+      loginAsDemoStudent: () => initDemoSession(),
       renewDriveToken: async () => {},
       signOut: () => logout(),
       refreshAuthState: () => {}

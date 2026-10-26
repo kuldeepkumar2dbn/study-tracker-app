@@ -28,10 +28,12 @@ import Logo from './Logo';
 import DriveModal from './DriveModal';
 import AuthModal from './AuthModal';
 import LockedFeatureOverlay from './LockedFeatureOverlay';
+import DriveNotesDemoModal from './DriveNotesDemoModal';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { DataProvider, useData } from '../context/DataContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { sanitizeUrl } from '../utils/security';
+import { isDemoUser, getDemoRemainingSeconds, clearDemoSession } from '../../auth-guard';
 
 export const STORAGE_KEY_PREFIX = 'studyflow_data_';
 
@@ -51,16 +53,35 @@ export const NAV_TABS = [
 export const LOCKED_TAB_IDS = ['syllabus', 'revision', 'radar', 'skills', 'notes'];
 
 // Persistent Shared Top Header
-export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
+export function SharedHeader({ onOpenDriveModal, onOpenLinksModal, onOpenDriveNotesDemoModal }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
   const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks } = useData();
-  const { isAuthenticated, userProfile, signOut, openAuthModal } = useAuth();
+  const { isAuthenticated, userProfile, signOut, openAuthModal, isDemo } = useAuth();
   
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [demoRemainingSec, setDemoRemainingSec] = useState(() => getDemoRemainingSeconds());
   
   const themeDropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
+
+  // Live 1-second interval for 7-minute demo session countdown
+  useEffect(() => {
+    if (!isDemo) return;
+
+    const tick = () => {
+      const remaining = getDemoRemainingSeconds();
+      setDemoRemainingSec(remaining);
+      if (remaining <= 0) {
+        clearDemoSession();
+        window.location.replace('/login.html?expired=true');
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [isDemo]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -80,6 +101,10 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
     month: 'short',
     day: 'numeric'
   }).format(new Date());
+
+  const demoMins = Math.floor(demoRemainingSec / 60);
+  const demoSecs = demoRemainingSec % 60;
+  const formattedDemoTimer = `${String(demoMins).padStart(2, '0')}:${String(demoSecs).padStart(2, '0')}`;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200">
@@ -118,6 +143,20 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
             </span>
           </div>
 
+          {/* Live 7-Minute Demo Sandbox Countdown Pill */}
+          {isDemo && (
+            <div 
+              id="demo-timer-pill"
+              title="7-minute isolated demo sandbox session. Resets automatically on expiration."
+              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/20 border border-amber-500/40 text-amber-400 hover:border-amber-400/60 shadow-sm cursor-default select-none animate-pulse-soft"
+            >
+              <span className="text-xs sm:text-sm">⏱️</span>
+              <span className="font-mono-numbers font-bold text-xs sm:text-sm tracking-wide text-amber-300 dark:text-amber-200">
+                Demo: {formattedDemoTimer}
+              </span>
+            </div>
+          )}
+
           {/* Quick Links Hub Modal Launcher */}
           <button
             onClick={onOpenLinksModal}
@@ -134,7 +173,7 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
           </button>
 
           {/* Google Drive Status & "Drive Synced" Badge */}
-          {isAuthenticated ? (
+          {isAuthenticated && !isDemo ? (
             <div className="flex items-center gap-1.5">
               <div
                 onClick={onOpenDriveModal}
@@ -158,12 +197,18 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
             </div>
           ) : (
             <div
-              onClick={() => openAuthModal('general')}
-              title="Sign in with Google to enable Drive cloud synchronization"
+              onClick={() => {
+                if (isDemo) {
+                  if (onOpenDriveNotesDemoModal) onOpenDriveNotesDemoModal();
+                } else {
+                  openAuthModal('general');
+                }
+              }}
+              title={isDemo ? "Drive Notes disabled in demo mode" : "Sign in with Google to enable Drive cloud synchronization"}
               className="hidden sm:flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-theme-border/60 bg-theme-surface/60 text-theme-muted hover:text-theme-text text-xs font-medium shadow-sm cursor-pointer transition-all"
             >
               <Cloud className="w-4 h-4 text-theme-muted" />
-              <span className="text-[11px]">Drive Sync</span>
+              <span className="text-[11px]">{isDemo ? 'Drive Locked' : 'Drive Sync'}</span>
             </div>
           )}
 
@@ -218,10 +263,14 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
                       </div>
                     </div>
 
-                    {/* Persistent Session Indicator */}
-                    <div className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-medium mb-2 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span>Persistent Session Active (1 Year)</span>
+                    {/* Session Indicator */}
+                    <div className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-medium mb-2 flex items-center gap-1.5 ${
+                      isDemo 
+                        ? 'bg-amber-500/10 border-amber-500/25 text-amber-400' 
+                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isDemo ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 animate-pulse'}`}></span>
+                      <span>{isDemo ? 'Demo Sandbox (7 Min Limit)' : 'Persistent Session Active (1 Year)'}</span>
                     </div>
 
                     {/* Sign Out Option */}
@@ -233,7 +282,7 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-colors"
                     >
                       <LogOut className="w-4 h-4 text-rose-400" />
-                      <span>Sign Out</span>
+                      <span>{isDemo ? 'End Demo Preview' : 'Sign Out'}</span>
                     </button>
                   </div>
                 )}
@@ -242,11 +291,11 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
               {/* Quick Sign Out Action Button */}
               <button
                 onClick={() => signOut()}
-                title="Sign Out of Study Tracker and Revoke Google Session"
+                title={isDemo ? "End Demo Session" : "Sign Out of Study Tracker and Revoke Google Session"}
                 className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-rose-500/10 border border-theme-border hover:border-rose-500/30 text-xs font-semibold text-theme-muted hover:text-rose-400 transition-all duration-200 active:scale-95 shadow-sm"
               >
                 <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span className="hidden sm:inline">Sign Out</span>
+                <span className="hidden sm:inline">{isDemo ? 'Exit Demo' : 'Sign Out'}</span>
               </button>
             </div>
           ) : (
@@ -347,9 +396,9 @@ export function SharedHeader({ onOpenDriveModal, onOpenLinksModal }) {
 }
 
 // Top Tab Navigation Bar linking to dedicated HTML files
-export function SharedNavBar({ activeTabId }) {
+export function SharedNavBar({ activeTabId, onOpenDriveNotesDemoModal }) {
   const { exams, getTodayRevisionQueue, routineSlots } = useData();
-  const { isAuthenticated, openAuthModal } = useAuth();
+  const { isAuthenticated, openAuthModal, isDemo } = useAuth();
 
   const urgentCount = (exams || []).filter(e => {
     if (e.isCompleted) return false;
@@ -366,12 +415,22 @@ export function SharedNavBar({ activeTabId }) {
         {NAV_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = tab.id === activeTabId;
-          const isLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(tab.id);
+          const isDemoLockedNotes = isDemo && tab.id === 'notes';
+          const isGuestLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(tab.id);
+          const isLocked = isDemoLockedNotes || isGuestLocked;
 
           const handleClick = (e) => {
-            if (isLocked) {
+            if (isDemoLockedNotes) {
+              e.preventDefault();
+              if (onOpenDriveNotesDemoModal) {
+                onOpenDriveNotesDemoModal();
+              }
+              return;
+            }
+            if (isGuestLocked) {
               e.preventDefault();
               openAuthModal(tab.id, tab.href);
+              return;
             }
           };
 
@@ -389,11 +448,22 @@ export function SharedNavBar({ activeTabId }) {
               <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-theme-muted'}`} />
               <span>{tab.name}</span>
 
+              {/* Padlock Icon Visual Cue for Locked Drive Notes in Demo Mode */}
+              {isDemoLockedNotes && (
+                <span 
+                  title="Drive Notes disabled in demo mode"
+                  className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold ml-0.5"
+                >
+                  <Lock className="w-2.5 h-2.5" />
+                  <span className="text-[8px] uppercase tracking-wider">Locked</span>
+                </span>
+              )}
+
               {/* Padlock Icon Visual Cue for Locked Tabs in Guest Mode */}
-              {isLocked && (
+              {!isDemo && isGuestLocked && (
                 <span 
                   title="Sign in with Google required"
-                  className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold"
+                  className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold ml-0.5"
                 >
                   <Lock className="w-2.5 h-2.5" />
                   <span className="hidden xl:inline text-[8px] uppercase tracking-wider">Locked</span>
@@ -588,9 +658,17 @@ export function QuickLinksModal({ isOpen, onClose }) {
 export function AppLayout({ activeTabId, children }) {
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const [isDriveNotesDemoModalOpen, setIsDriveNotesDemoModalOpen] = useState(false);
+  const { isAuthenticated, isDemo } = useAuth();
 
-  const isLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
+  const isGuestLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
+  const isDemoLockedNotes = isDemo && activeTabId === 'notes';
+
+  useEffect(() => {
+    if (isDemo && activeTabId === 'notes') {
+      setIsDriveNotesDemoModalOpen(true);
+    }
+  }, [isDemo, activeTabId]);
 
   return (
     <div className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200">
@@ -599,16 +677,49 @@ export function AppLayout({ activeTabId, children }) {
       <SharedHeader 
         onOpenDriveModal={() => setIsDriveModalOpen(true)}
         onOpenLinksModal={() => setIsLinksModalOpen(true)}
+        onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
       />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Navigation Tabs Bar */}
-        <SharedNavBar activeTabId={activeTabId} />
+        <SharedNavBar 
+          activeTabId={activeTabId} 
+          onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
+        />
 
         {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
         <div className="transition-all duration-300 animate-tab-enter">
-          {isLockedTab ? (
+          {isDemoLockedNotes ? (
+            <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-theme-border/80 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-indigo-500/20 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 shadow-inner">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">
+                <span>Demo Sandbox Restriction</span>
+              </div>
+              <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-theme-text tracking-tight mb-2">
+                Drive Notes Disabled in Demo Mode
+              </h2>
+              <p className="text-xs sm:text-sm text-theme-muted max-w-md mx-auto mb-6 leading-relaxed">
+                Saving files requires an authentic Google Account with personal Google Drive storage. Sign in with Google to upload and manage notes.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  onClick={() => setIsDriveNotesDemoModalOpen(true)}
+                  className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white hover:bg-zinc-100 text-zinc-900 font-semibold text-xs shadow-lg transition-all active:scale-95 cursor-pointer"
+                >
+                  Sign In with Google
+                </button>
+                <a
+                  href="/index.html"
+                  className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all text-center"
+                >
+                  Back to Dashboard
+                </a>
+              </div>
+            </div>
+          ) : isGuestLockedTab ? (
             <LockedFeatureOverlay featureKey={activeTabId}>
               {children}
             </LockedFeatureOverlay>
@@ -635,6 +746,12 @@ export function AppLayout({ activeTabId, children }) {
 
       {/* Sign In to Unlock Modal */}
       <AuthModal />
+
+      {/* Drive Notes Demo Disabled Modal */}
+      <DriveNotesDemoModal
+        isOpen={isDriveNotesDemoModalOpen}
+        onClose={() => setIsDriveNotesDemoModalOpen(false)}
+      />
 
     </div>
   );

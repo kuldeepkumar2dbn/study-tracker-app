@@ -9,21 +9,37 @@ import {
   CheckCircle2, 
   Sparkles,
   RefreshCw,
-  FolderLock
+  FolderLock,
+  Clock,
+  X
 } from 'lucide-react';
 import { LogoMark } from '../components/Logo';
 import { ThemeProvider } from '../context/ThemeContext';
-import { isAuthenticated, saveUserSession } from '../../auth-guard';
+import { 
+  isAuthenticated, 
+  saveUserSession, 
+  initDemoSession, 
+  clearDemoSession 
+} from '../../auth-guard';
 import { DEFAULT_GOOGLE_CLIENT_ID, DEFAULT_GOOGLE_SCOPES } from '../services/googleDrive';
 
 function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [statusText, setStatusText] = useState('');
+  const [showExpiredToast, setShowExpiredToast] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.search.includes('expired=true');
+  });
 
-  // Auto-redirect to dashboard if already authenticated with active session
+  // Auto-redirect to dashboard if already authenticated with active genuine session
   useEffect(() => {
     try {
+      const isExpired = window.location.search.includes('expired=true');
+      if (isExpired) {
+        clearDemoSession();
+        return;
+      }
       if (isAuthenticated()) {
         window.location.replace('/index.html');
       }
@@ -177,6 +193,36 @@ function LoginPage() {
             </div>
           </div>
 
+          {/* Friendly Expired Demo Toast / Banner */}
+          {showExpiredToast && (
+            <div className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 dark:text-amber-200 text-xs flex items-start gap-3 animate-fadeIn relative">
+              <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div className="flex-1 pr-4">
+                <h4 className="font-semibold text-xs text-amber-200 mb-0.5">7-Minute Demo Ended</h4>
+                <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                  Your 7-minute demo preview has ended. All temporary data was reset. Sign in with Google to save your permanent progress!
+                </p>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button
+                    onClick={() => initDemoSession()}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-semibold text-[11px] transition-colors cursor-pointer"
+                  >
+                    Start New Demo
+                  </button>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowExpiredToast(false)}
+                className="absolute top-3 right-3 text-amber-400/60 hover:text-amber-300 p-1 cursor-pointer"
+                aria-label="Dismiss banner"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Error Banner */}
           {errorMessage && (
             <div className="mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-start gap-2.5 animate-fadeIn">
@@ -227,11 +273,22 @@ function LoginPage() {
             </span>
           </button>
 
+          {/* Instant Demo Sign-In (Local Preview) Action Button */}
+          <button
+            id="demo-signin-btn"
+            type="button"
+            onClick={() => initDemoSession()}
+            className="w-full mt-3 py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-yellow-500/15 to-amber-500/15 hover:from-amber-500/25 hover:via-yellow-500/25 hover:to-amber-500/25 border border-amber-500/35 hover:border-amber-400/60 text-xs font-semibold text-amber-300 dark:text-amber-200 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <span>Instant Demo Sign-In (Local Preview)</span>
+          </button>
+
           {/* Guest Preview Mode Link */}
-          <div className="mt-4 text-center">
+          <div className="mt-3.5 text-center">
             <a
               href="/index.html"
-              className="inline-flex items-center gap-1.5 text-xs text-theme-accent hover:underline font-semibold"
+              className="inline-flex items-center gap-1.5 text-xs text-theme-muted hover:text-theme-text font-medium"
             >
               <span>Explore as Guest First</span>
               <ArrowRight className="w-3.5 h-3.5" />

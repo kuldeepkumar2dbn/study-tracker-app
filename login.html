@@ -10,13 +10,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/styles.css" />
-    <!-- Immediate auth check: redirect to index.html if persistent session exists -->
+    <!-- Immediate auth check: redirect to index.html if persistent genuine session exists -->
     <script>
       try {
-        const hasCookie = document.cookie.includes('study_session=');
-        const hasProfile = localStorage.getItem('user_profile') || localStorage.getItem('google_user_profile');
-        if (hasCookie || hasProfile) {
-          window.location.replace('/index.html');
+        const isExpired = window.location.search.includes('expired=true');
+        const isDemo = sessionStorage.getItem('is_demo_user') === 'true' || localStorage.getItem('is_demo_user') === 'true';
+        const demoEnd = Number(sessionStorage.getItem('demo_session_end') || localStorage.getItem('demo_session_end') || 0);
+
+        if (isExpired || (isDemo && Date.now() >= demoEnd)) {
+          // Purge expired demo session keys immediately
+          sessionStorage.removeItem('is_demo_user');
+          sessionStorage.removeItem('demo_session_end');
+          localStorage.removeItem('is_demo_user');
+          localStorage.removeItem('demo_session_end');
+          document.cookie = 'study_session=; max-age=0; path=/;';
+        } else {
+          const hasCookie = document.cookie.includes('study_session=');
+          const hasProfile = localStorage.getItem('user_profile') || localStorage.getItem('google_user_profile');
+          if (hasCookie || hasProfile) {
+            window.location.replace('/index.html');
+          }
         }
       } catch (e) {}
     </script>

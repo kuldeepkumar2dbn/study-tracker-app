@@ -10,6 +10,15 @@
  * - User-scoped LocalStorage keys (user.sub) to prevent cross-account data leakage
  */
 
+import { 
+  getFreshDemoTemplateData, 
+  DEMO_STORAGE_PREFIX, 
+  DEMO_KEYS, 
+  DEMO_SESSION_DURATION_MS 
+} from './src/utils/demoTemplate.js';
+
+export { DEMO_STORAGE_PREFIX, DEMO_KEYS, DEMO_SESSION_DURATION_MS };
+
 export const AUTH_KEYS = {
   ACCESS_TOKEN: 'google_access_token',
   TOKEN_EXPIRY: 'google_token_expiry',
@@ -20,6 +29,7 @@ export const AUTH_KEYS = {
   DRIVE_USER: 'studyflow_drive_user',
   SESSION_COOKIE: 'study_session'
 };
+
 
 /**
  * Cookie Management Helpers for Persistent Session
@@ -74,6 +84,150 @@ export function deleteSessionCookie() {
 }
 
 /**
+ * Checks whether an active, valid 7-minute demo sandbox session is running
+ */
+export function isDemoUser() {
+  if (typeof window === 'undefined') return false;
+  try {
+    const isDemo = sessionStorage.getItem(DEMO_KEYS.IS_DEMO) === 'true' || 
+                   localStorage.getItem(DEMO_KEYS.IS_DEMO) === 'true';
+    if (!isDemo) return false;
+
+    // Validate 7-minute session end time
+    const endStr = sessionStorage.getItem(DEMO_KEYS.END_TIME) || localStorage.getItem(DEMO_KEYS.END_TIME);
+    if (endStr) {
+      const end = Number(endStr);
+      if (!isNaN(end) && Date.now() >= end) {
+        clearDemoSession();
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns remaining seconds in the active 7-minute demo session (0 if expired or not in demo)
+ */
+export function getDemoRemainingSeconds() {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const isDemo = sessionStorage.getItem(DEMO_KEYS.IS_DEMO) === 'true' || 
+                   localStorage.getItem(DEMO_KEYS.IS_DEMO) === 'true';
+    if (!isDemo) return 0;
+
+    const endStr = sessionStorage.getItem(DEMO_KEYS.END_TIME) || localStorage.getItem(DEMO_KEYS.END_TIME);
+    if (!endStr) return 0;
+    const end = Number(endStr);
+    if (isNaN(end)) return 0;
+    const diff = end - Date.now();
+    return Math.max(0, Math.floor(diff / 1000));
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Completely clears all demo storage keys and session flags
+ */
+export function clearDemoSession() {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(DEMO_KEYS.IS_DEMO);
+    sessionStorage.removeItem(DEMO_KEYS.END_TIME);
+    localStorage.removeItem(DEMO_KEYS.IS_DEMO);
+    localStorage.removeItem(DEMO_KEYS.END_TIME);
+
+    // Completely wipe all demo keys from sessionStorage
+    const sessionKeysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && (k.startsWith('demo_') || k.startsWith('studyflow_demo_') || k.includes('demo_sandbox_user'))) {
+        sessionKeysToRemove.push(k);
+      }
+    }
+    sessionKeysToRemove.forEach(k => sessionStorage.removeItem(k));
+
+    // Completely wipe all demo keys from localStorage
+    const localKeysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('demo_') || k.startsWith('studyflow_demo_') || k.includes('demo_sandbox_user'))) {
+        localKeysToRemove.push(k);
+      }
+    }
+    localKeysToRemove.forEach(k => localStorage.removeItem(k));
+
+    // Clear demo profile if it was the active profile
+    const raw = localStorage.getItem(AUTH_KEYS.USER_PROFILE) || sessionStorage.getItem(AUTH_KEYS.USER_PROFILE);
+    if (raw) {
+      try {
+        const p = JSON.parse(raw);
+        if (p.isDemo || p.sub === 'demo_sandbox_user') {
+          deleteSessionCookie();
+          localStorage.removeItem(AUTH_KEYS.USER_PROFILE);
+          localStorage.removeItem(AUTH_KEYS.GOOGLE_USER_PROFILE);
+          localStorage.removeItem(AUTH_KEYS.USER_SUB);
+          sessionStorage.removeItem(AUTH_KEYS.USER_PROFILE);
+          sessionStorage.removeItem(AUTH_KEYS.GOOGLE_USER_PROFILE);
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.error('Error clearing demo session:', e);
+  }
+}
+
+/**
+ * Initializes a brand new 7-minute isolated demo sandbox session
+ * Wipes prior demo data, initializes fresh templates, and navigates to index.html
+ */
+export function initDemoSession() {
+  if (typeof window === 'undefined') return;
+  try {
+    // 1. Completely wipe previous demo data
+    clearDemoSession();
+
+    // 2. Set demo flags & 7-minute expiration
+    const sessionEnd = Date.now() + DEMO_SESSION_DURATION_MS;
+    sessionStorage.setItem(DEMO_KEYS.IS_DEMO, 'true');
+    localStorage.setItem(DEMO_KEYS.IS_DEMO, 'true');
+    sessionStorage.setItem(DEMO_KEYS.END_TIME, String(sessionEnd));
+    localStorage.setItem(DEMO_KEYS.END_TIME, String(sessionEnd));
+
+    // 3. Set demo user profile
+    const demoUser = {
+      sub: 'demo_sandbox_user',
+      name: 'Demo Student',
+      email: 'demo@studyflow.local',
+      picture: '',
+      isDemo: true
+    };
+    sessionStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(demoUser));
+    localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(demoUser));
+    localStorage.setItem(AUTH_KEYS.GOOGLE_USER_PROFILE, JSON.stringify(demoUser));
+    localStorage.setItem(AUTH_KEYS.USER_SUB, demoUser.sub);
+    setSessionCookie(demoUser);
+
+    // 4. Populate fresh clean default template data into demo namespace
+    const templateData = getFreshDemoTemplateData();
+    Object.entries(templateData).forEach(([key, value]) => {
+      const demoKey = `demo_tracker_data_${key}`;
+      const serialized = JSON.stringify(value);
+      sessionStorage.setItem(demoKey, serialized);
+      localStorage.setItem(demoKey, serialized);
+    });
+
+    // 5. Redirect to index.html
+    window.location.replace('/index.html');
+  } catch (e) {
+    console.error('Error initializing demo session:', e);
+  }
+}
+
+/**
  * Retrieves the currently signed-in user's profile details.
  * Resolves from persistent session cookie first, falling back to LocalStorage.
  * Keeps both storage mechanisms synchronized.
@@ -81,9 +235,22 @@ export function deleteSessionCookie() {
 export function getUserProfile() {
   if (typeof window === 'undefined') return null;
   try {
+    if (isDemoUser()) {
+      return {
+        sub: 'demo_sandbox_user',
+        name: 'Demo Student',
+        email: 'demo@studyflow.local',
+        picture: '',
+        isDemo: true
+      };
+    }
+
     // 1. Check persistent cookie first
     const cookieUser = getSessionCookie();
     if (cookieUser && (cookieUser.email || cookieUser.name || cookieUser.sub)) {
+      if (cookieUser.isDemo && !isDemoUser()) {
+        return null;
+      }
       // Sync into localStorage if not already present
       if (!localStorage.getItem(AUTH_KEYS.USER_PROFILE)) {
         localStorage.setItem(AUTH_KEYS.USER_PROFILE, JSON.stringify(cookieUser));
@@ -98,6 +265,9 @@ export function getUserProfile() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && (parsed.email || parsed.name || parsed.sub)) {
+        if (parsed.isDemo && !isDemoUser()) {
+          return null;
+        }
         // Sync back into persistent cookie
         setSessionCookie(parsed);
         return parsed;
@@ -124,6 +294,7 @@ export function isAuthenticated() {
  */
 export function isTokenValid() {
   if (typeof window === 'undefined') return false;
+  if (isDemoUser()) return false;
   try {
     const token = localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
     const expiryStr = localStorage.getItem(AUTH_KEYS.TOKEN_EXPIRY);
@@ -147,6 +318,11 @@ export function isTokenValid() {
 export function saveUserSession(userData, token = null, expiresInSec = 3600) {
   if (typeof window === 'undefined') return;
   try {
+    // Clear demo flags if logging in with genuine Google account
+    if (!userData?.isDemo) {
+      clearDemoSession();
+    }
+
     // 1. Write persistent 1-year session cookie
     setSessionCookie(userData);
 
@@ -176,6 +352,7 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
  * Retrieves the current authenticated user's unique Google subject ID (sub)
  */
 export function getUserSub() {
+  if (isDemoUser()) return 'demo_sandbox_user';
   const profile = getUserProfile();
   return profile?.sub || '';
 }
@@ -185,6 +362,7 @@ export function getUserSub() {
  */
 export function getActiveUserId() {
   try {
+    if (isDemoUser()) return 'demo_sandbox_user';
     const profile = getUserProfile();
     if (profile?.sub) return profile.sub;
     if (profile?.id) return profile.id;
@@ -197,8 +375,12 @@ export function getActiveUserId() {
 
 /**
  * Returns namespaced LocalStorage key based on authenticated user's Google ID (user.sub)
+ * If demo user, strictly returns isolated demo namespace
  */
 export function getUserStorageKey(baseKey) {
+  if (isDemoUser()) {
+    return `demo_tracker_data_${baseKey}`;
+  }
   const sub = getUserSub();
   return sub ? `studyflow_data_${sub}_${baseKey}` : `studyflow_data_${baseKey}`;
 }
@@ -252,6 +434,16 @@ export function clearAuthTokens() {
  */
 export function logout(onComplete) {
   if (typeof window === 'undefined') return;
+
+  if (isDemoUser()) {
+    clearDemoSession();
+    if (typeof onComplete === 'function') {
+      onComplete();
+    } else {
+      window.location.replace('/index.html');
+    }
+    return;
+  }
 
   const token = localStorage.getItem(AUTH_KEYS.ACCESS_TOKEN);
 
