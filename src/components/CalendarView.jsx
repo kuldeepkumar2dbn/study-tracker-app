@@ -17,11 +17,29 @@ import {
 import { useData } from '../context/DataContext';
 import { sanitizeUrl } from '../utils/security';
 
+/**
+ * Timezone-Safe Local Date Formatter
+ * Formats a Date object or date string into YYYY-MM-DD in local system time,
+ * preventing UTC 1-day shift bugs in positive UTC timezones (e.g. IST UTC+5:30).
+ */
+export function getLocalDateString(date = new Date()) {
+  if (!date) return '';
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    return date.trim();
+  }
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function CalendarView() {
   const { exams, subjects, addExam, skills } = useData();
 
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateString(new Date()));
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // New item modal state
@@ -45,7 +63,7 @@ export default function CalendarView() {
   const daysInPrevMonth = new Date(year, month, 0).getDate();
 
   const monthName = currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = getLocalDateString(new Date());
 
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
@@ -58,14 +76,14 @@ export default function CalendarView() {
   const jumpToToday = () => {
     const today = new Date();
     setCurrentDate(today);
-    setSelectedDate(today.toISOString().split('T')[0]);
+    setSelectedDate(getLocalDateString(today));
   };
 
   // Compile all calendar events
   // 1. Exams & Assignments
   const deadlineEvents = exams.map(e => ({
     id: e.id,
-    dateStr: e.date.split('T')[0],
+    dateStr: getLocalDateString(e.date),
     timeStr: e.date.includes('T') ? e.date.split('T')[1].slice(0, 5) : '09:00',
     type: e.type || 'exam',
     title: e.title,
@@ -81,7 +99,7 @@ export default function CalendarView() {
   const revisionEvents = subjects.flatMap(sub => 
     sub.topics.filter(t => t.nextReviewDate).map(t => ({
       id: 'rev-' + t.id,
-      dateStr: t.nextReviewDate,
+      dateStr: getLocalDateString(t.nextReviewDate),
       type: 'revision',
       title: `Revision: ${t.title}`,
       subject: sub.name,
@@ -104,7 +122,7 @@ export default function CalendarView() {
   for (let i = firstDayOfMonth - 1; i >= 0; i--) {
     const dayNum = daysInPrevMonth - i;
     const prevDate = new Date(year, month - 1, dayNum);
-    const dateStr = prevDate.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(prevDate);
     calendarCells.push({
       dayNum,
       dateStr,
@@ -117,7 +135,7 @@ export default function CalendarView() {
   // Current month days
   for (let day = 1; day <= daysInMonth; day++) {
     const currentCellDate = new Date(year, month, day);
-    const dateStr = currentCellDate.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(currentCellDate);
     calendarCells.push({
       dayNum: day,
       dateStr,
@@ -131,7 +149,7 @@ export default function CalendarView() {
   const remainingCells = 42 - calendarCells.length;
   for (let day = 1; day <= remainingCells; day++) {
     const nextDate = new Date(year, month + 1, day);
-    const dateStr = nextDate.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(nextDate);
     calendarCells.push({
       dayNum: day,
       dateStr,
@@ -315,12 +333,20 @@ export default function CalendarView() {
                   Agenda Detail
                 </span>
                 <h3 className="font-display font-bold text-base text-theme-text font-mono-numbers">
-                  {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
+                  {(() => {
+                    if (!selectedDate) return 'Select a date';
+                    const parts = selectedDate.split('-').map(Number);
+                    if (parts.length === 3) {
+                      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                      return d.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      });
+                    }
+                    return selectedDate;
+                  })()}
                 </h3>
               </div>
 

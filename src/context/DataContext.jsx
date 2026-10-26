@@ -50,19 +50,31 @@ function writeScoped(key, val) {
   }
 }
 
-// Helper for dates
-const todayDateStr = () => new Date().toISOString().split('T')[0];
+// Timezone-Safe Local Date Formatter
+export function getLocalDateString(date = new Date()) {
+  if (!date) return '';
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    return date.trim();
+  }
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+const todayDateStr = () => getLocalDateString(new Date());
 const addDaysDateStr = (days) => {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return getLocalDateString(d);
 };
 
 const addDaysIso = (days, hour = 9) => {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
+  return `${getLocalDateString(d)}T${String(hour).padStart(2, '0')}:00:00`;
 };
 
 // Initial Mock Subjects with Sub-Topics, YouTube Resources, Status Tags & Drive Attachments

@@ -66,10 +66,28 @@ export function getDaysRemaining(targetIso) {
 }
 
 /**
+ * Timezone-Safe Local Date Formatter
+ * Formats a Date object or date string into YYYY-MM-DD in local system time,
+ * preventing UTC 1-day shift bugs in positive UTC timezones (e.g. IST UTC+5:30).
+ */
+export function getLocalDateString(date = new Date()) {
+  if (!date) return '';
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    return date.trim();
+  }
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Live Streak Calculation
  */
 export function calculateStreak(routineSlots = [], currentStreak = 0, lastActiveDate = '') {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString(new Date());
   const allCompleted = routineSlots.length > 0 && routineSlots.every(s => s.completed);
 
   if (lastActiveDate !== today && allCompleted) {
