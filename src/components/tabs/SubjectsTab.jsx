@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   BookOpen, 
   Plus, 
@@ -68,6 +68,29 @@ export default function SubjectsTab() {
 
   // Active YouTube video player modal state
   const [activeVideoModal, setActiveVideoModal] = useState(null); // { title, videoId }
+
+  // Check location hash for direct navigation (e.g. syllabus.html#sub_123)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = (window.location.hash || '').replace(/^#/, '');
+      if (hash) {
+        const found = subjects.find(s => s.id === hash);
+        if (found) {
+          setExpandedSubjectId(found.id);
+          setTimeout(() => {
+            const el = document.getElementById(found.id);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 150);
+        }
+      }
+    };
+
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [subjects]);
 
   // New subject modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -185,12 +208,12 @@ export default function SubjectsTab() {
       if (t.subtopics && t.subtopics.length > 0) {
         t.subtopics.forEach(st => {
           totalItems += 1;
-          if (st.status === 'Mastered') earnedScore += 100;
+          if (st.status === 'Mastered' || st.completed) earnedScore += 100;
           else if (st.status === 'In Progress') earnedScore += 50;
         });
       } else {
         totalItems += 1;
-        if (t.status === 'Mastered') earnedScore += 100;
+        if (t.status === 'Mastered' || t.completed) earnedScore += 100;
         else if (t.status === 'In Progress') earnedScore += 50;
       }
     });
@@ -271,6 +294,7 @@ export default function SubjectsTab() {
           return (
             <div 
               key={sub.id}
+              id={sub.id}
               className="rounded-2xl glass-panel border border-theme-border transition-all overflow-hidden shadow-sm hover:border-theme-accent/40 card-glow-hover"
             >
               {/* Subject Bar Header */}
@@ -435,7 +459,7 @@ export default function SubjectsTab() {
                                     </h4>
                                     {subtopics.length > 0 && (
                                       <span className="text-[10px] px-1.5 py-0.2 rounded bg-theme-bg border border-theme-border text-theme-muted font-mono-numbers">
-                                        {subtopics.filter(st => st.status === 'Mastered').length}/{subtopics.length} subs
+                                        {subtopics.filter(st => st.status === 'Mastered' || st.completed).length}/{subtopics.length} subs
                                       </span>
                                     )}
                                   </div>
@@ -562,7 +586,7 @@ export default function SubjectsTab() {
                                           }}
                                           className="shrink-0"
                                         >
-                                          {st.status === 'Mastered' ? (
+                                          {st.status === 'Mastered' || st.completed ? (
                                             <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
                                           ) : st.status === 'In Progress' ? (
                                             <Circle className="w-4 h-4 text-amber-400 fill-amber-400/20" />
@@ -573,7 +597,7 @@ export default function SubjectsTab() {
                                         <InlineEdit
                                           value={st.title}
                                           onSave={(val) => updateTopicName(sub.id, topic.id, st.id, val)}
-                                          className={`truncate text-xs ${st.status === 'Mastered' ? 'line-through text-theme-muted' : 'text-theme-text'}`}
+                                          className={`truncate text-xs ${st.status === 'Mastered' || st.completed ? 'line-through text-theme-muted' : 'text-theme-text'}`}
                                           placeholder="Topic Title"
                                         />
                                       </div>

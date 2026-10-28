@@ -20,6 +20,7 @@ import {
   getOrCreateZeroStateData, 
   getUserDataStorageKey 
 } from '../../auth-guard';
+import { markSyllabusTopicCompletedInSubjects } from '../utils/routineSyllabusSync';
 
 const DataContext = createContext();
 
@@ -430,6 +431,9 @@ export function DataProvider({ children }) {
     if (isDemo) {
       return readScoped('subjects', initialSubjects);
     }
+    if (initialUserData && Array.isArray(initialUserData.subjects) && initialUserData.subjects.length > 0) {
+      return initialUserData.subjects;
+    }
     return readScoped('subjects', []);
   });
 
@@ -763,14 +767,15 @@ export function DataProvider({ children }) {
           routine: routineSlots || [],
           revisionQueue: existing.revisionQueue || [],
           exams: exams || [],
-          skills: skills || []
+          skills: skills || [],
+          subjects: subjects || []
         };
         localStorage.setItem(storageKey, JSON.stringify(updated));
       } catch (err) {
         console.error('Error syncing master user state:', err);
       }
     }
-  }, [exams, routineSlots, skills, streakData]);
+  }, [exams, routineSlots, skills, streakData, subjects]);
 
   // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
@@ -1410,13 +1415,30 @@ export function DataProvider({ children }) {
 
   // Daily Routine Slots Actions
   const addRoutineSlot = (slot) => {
-    setRoutineSlots(prev => [...prev, {
-      id: 'rt-' + Date.now(),
-      timeRange: slot.timeRange || '09:00 - 10:00',
-      title: slot.title.trim(),
+    const startTime = slot.startTime || (slot.timeRange ? slot.timeRange.split('-')[0].trim() : '08:00');
+    const endTime = slot.endTime || (slot.timeRange ? slot.timeRange.split('-')[1]?.trim() : '10:00');
+    const formattedRange = slot.timeRange || `${startTime} - ${endTime}`;
+
+    const newSlot = {
+      id: slot.id || ('block_' + Date.now()),
+      title: (slot.title || '').trim(),
+      startTime,
+      endTime,
+      timeRange: formattedRange,
       category: slot.category || 'Core Study',
-      completed: false
-    }]);
+      completed: Boolean(slot.completed),
+      syllabusLink: slot.syllabusLink || null
+    };
+
+    setRoutineSlots(prev => [...prev, newSlot]);
+    return newSlot;
+  };
+
+  const markSyllabusTopicCompleted = (subjectId, chapterId, topicId) => {
+    const res = markSyllabusTopicCompletedInSubjects(subjects, subjectId, chapterId, topicId, activeId);
+    setSubjects(res.updatedSubjects);
+    writeScoped('subjects', res.updatedSubjects);
+    return res;
   };
 
   const toggleRoutineSlot = (id) => {
@@ -1743,6 +1765,7 @@ export function DataProvider({ children }) {
         addRoutineSlot,
         toggleRoutineSlot,
         deleteRoutineSlot,
+        markSyllabusTopicCompleted,
         weeklyGoals,
         addWeeklyGoal,
         toggleWeeklyGoal,

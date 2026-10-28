@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   Flame, 
   Clock, 
@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import RollingNumber from '../RollingNumber';
-import RadialProgressRing from '../RadialProgressRing';
 import { celebrateTaskCompletion } from '../../utils/confetti';
+import AddRoutineModal from '../AddRoutineModal';
+import SyllabusRoutineChip from '../SyllabusRoutineChip';
+import SyllabusSyncToast from '../SyllabusSyncToast';
 
 export default function DashboardTab({ onNavigateTab }) {
   const { 
@@ -35,8 +37,13 @@ export default function DashboardTab({ onNavigateTab }) {
     completeRevision,
     dailyTargetMinutes,
     routineSlots,
-    toggleRoutineSlot
+    addRoutineSlot,
+    toggleRoutineSlot,
+    markSyllabusTopicCompleted
   } = useData();
+
+  const [isAddRoutineModalOpen, setIsAddRoutineModalOpen] = useState(false);
+  const [syllabusPrompt, setSyllabusPrompt] = useState(null);
 
   const safeSubjects = subjects || [];
   const safeExams = exams || [];
@@ -121,8 +128,27 @@ export default function DashboardTab({ onNavigateTab }) {
     const slot = safeRoutineSlots.find(s => s.id === slotId);
     if (slot && !slot.completed) {
       celebrateTaskCompletion();
+
+      // If linked to syllabus, show micro-prompt
+      if (slot.syllabusLink && slot.syllabusLink.topicName) {
+        setSyllabusPrompt({
+          slotId: slot.id,
+          topicName: slot.syllabusLink.topicName,
+          subjectId: slot.syllabusLink.subjectId,
+          chapterId: slot.syllabusLink.chapterId,
+          topicId: slot.syllabusLink.topicId
+        });
+      }
     }
     if (toggleRoutineSlot) toggleRoutineSlot(slotId);
+  };
+
+  const handleMarkDoneSyllabus = (promptData) => {
+    if (markSyllabusTopicCompleted && promptData.subjectId) {
+      markSyllabusTopicCompleted(promptData.subjectId, promptData.chapterId, promptData.topicId);
+      celebrateTaskCompletion();
+    }
+    setSyllabusPrompt(null);
   };
 
   const handleCompleteRevision = (subjectId, itemId) => {
@@ -332,9 +358,20 @@ export default function DashboardTab({ onNavigateTab }) {
                 <Clock className="w-4 h-4 text-theme-accent" />
                 <h2 className="font-display font-bold text-base text-theme-text">Today's Time-Blocked Routine</h2>
               </div>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-theme-surface border border-theme-border text-theme-muted font-mono-numbers">
-                {completedRoutineSlots}/{safeRoutineSlots.length} Completed
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-theme-surface border border-theme-border text-theme-muted font-mono-numbers">
+                  {completedRoutineSlots}/{safeRoutineSlots.length} Completed
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsAddRoutineModalOpen(true)}
+                  className="p-1 px-2 rounded-lg bg-theme-accent/10 hover:bg-theme-accent/20 text-theme-accent border border-theme-accent/20 text-xs font-semibold flex items-center gap-1 transition-colors"
+                  title="Add routine block"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Add</span>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
@@ -361,6 +398,9 @@ export default function DashboardTab({ onNavigateTab }) {
                       <span className="text-[10px] text-theme-muted font-mono-numbers block">
                         {slot.timeRange}
                       </span>
+                      {slot.syllabusLink && (
+                        <SyllabusRoutineChip syllabusLink={slot.syllabusLink} subjects={safeSubjects} />
+                      )}
                     </div>
                   </div>
 
@@ -374,13 +414,15 @@ export default function DashboardTab({ onNavigateTab }) {
                 <div className="py-8 text-center text-xs text-theme-muted rounded-xl border border-dashed border-theme-border/60 p-4">
                   <Clock className="w-8 h-8 mx-auto mb-2 text-theme-border opacity-50" />
                   <p className="font-medium text-theme-text">No time blocks scheduled today. Click '+ Add Block' to plan your day.</p>
-                  <button
-                    onClick={() => onNavigateTab('routine')}
-                    className="mt-3 px-3 py-1.5 rounded-xl bg-theme-accent text-white font-semibold text-xs inline-flex items-center gap-1 shadow-sm hover:bg-theme-accentHover transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Block</span>
-                  </button>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setIsAddRoutineModalOpen(true)}
+                      className="px-3 py-1.5 rounded-xl bg-theme-accent text-white font-semibold text-xs inline-flex items-center gap-1 shadow-sm hover:bg-theme-accentHover transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Block</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -585,6 +627,21 @@ export default function DashboardTab({ onNavigateTab }) {
         </div>
 
       </div>
+
+      {/* Syllabus Sync Micro-Prompt Toast */}
+      <SyllabusSyncToast
+        promptData={syllabusPrompt}
+        onMarkDone={handleMarkDoneSyllabus}
+        onOnlyRoutine={() => setSyllabusPrompt(null)}
+      />
+
+      {/* Add Slot Modal with Syllabus Topic Picker */}
+      <AddRoutineModal
+        isOpen={isAddRoutineModalOpen}
+        onClose={() => setIsAddRoutineModalOpen(false)}
+        onAddSlot={(newBlock) => addRoutineSlot(newBlock)}
+        subjects={safeSubjects}
+      />
 
     </div>
   );

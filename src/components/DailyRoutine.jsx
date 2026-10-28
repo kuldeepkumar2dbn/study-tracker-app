@@ -21,9 +21,13 @@ import InlineEdit from './InlineEdit';
 import RollingNumber from './RollingNumber';
 import AnimatedHeadline from './AnimatedHeadline';
 import { celebrateTaskCompletion, celebrateMajorMilestone } from '../utils/confetti';
+import AddRoutineModal from './AddRoutineModal';
+import SyllabusRoutineChip from './SyllabusRoutineChip';
+import SyllabusSyncToast from './SyllabusSyncToast';
 
 export default function DailyRoutine() {
   const { 
+    subjects,
     streakData, 
     dailyTargetMinutes, 
     setDailyTargetMinutes, 
@@ -33,14 +37,16 @@ export default function DailyRoutine() {
     addRoutineSlot, 
     toggleRoutineSlot, 
     deleteRoutineSlot, 
+    markSyllabusTopicCompleted,
     weeklyGoals, 
     addWeeklyGoal, 
     toggleWeeklyGoal, 
     deleteWeeklyGoal 
   } = useData();
 
-  // Form states for new routine slot
+  // Modal & syllabus prompt states
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
+  const [syllabusPrompt, setSyllabusPrompt] = useState(null);
   const [timeRange, setTimeRange] = useState('08:00 - 10:00');
   const [slotTitle, setSlotTitle] = useState('');
   const [slotCategory, setSlotCategory] = useState('Core Study');
@@ -80,8 +86,27 @@ export default function DailyRoutine() {
       } else {
         celebrateTaskCompletion();
       }
+
+      // If linked to a syllabus topic, prompt to mark syllabus done too
+      if (targetSlot.syllabusLink && targetSlot.syllabusLink.topicName) {
+        setSyllabusPrompt({
+          slotId: targetSlot.id,
+          topicName: targetSlot.syllabusLink.topicName,
+          subjectId: targetSlot.syllabusLink.subjectId,
+          chapterId: targetSlot.syllabusLink.chapterId,
+          topicId: targetSlot.syllabusLink.topicId
+        });
+      }
     }
     toggleRoutineSlot(id);
+  };
+
+  const handleMarkDoneSyllabus = (promptData) => {
+    if (markSyllabusTopicCompleted && promptData.subjectId) {
+      markSyllabusTopicCompleted(promptData.subjectId, promptData.chapterId, promptData.topicId);
+      celebrateTaskCompletion();
+    }
+    setSyllabusPrompt(null);
   };
 
   const handleToggleWeeklyGoal = (id) => {
@@ -378,6 +403,9 @@ export default function DailyRoutine() {
                     <span className="text-[11px] text-theme-muted font-mono-numbers block mt-0.5">
                       {slot.timeRange}
                     </span>
+                    {slot.syllabusLink && (
+                      <SyllabusRoutineChip syllabusLink={slot.syllabusLink} subjects={subjects} />
+                    )}
                   </div>
                 </div>
 
@@ -487,82 +515,20 @@ export default function DailyRoutine() {
 
       </div>
 
-      {/* Add Slot Modal */}
-      {isSlotModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div 
-            className="w-full max-w-md rounded-2xl glass-dropdown p-6 shadow-2xl border border-theme-border relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-theme-border">
-              <h3 className="font-display font-bold text-base text-theme-text">Add Routine Time-Block</h3>
-              <button 
-                onClick={() => setIsSlotModalOpen(false)}
-                className="text-theme-muted hover:text-theme-text"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* Syllabus Sync Micro-Prompt Toast */}
+      <SyllabusSyncToast
+        promptData={syllabusPrompt}
+        onMarkDone={handleMarkDoneSyllabus}
+        onOnlyRoutine={() => setSyllabusPrompt(null)}
+      />
 
-            <form onSubmit={handleAddSlot} className="mt-4 space-y-4 text-xs">
-              <div>
-                <label className="block text-theme-muted font-medium mb-1">Time Range</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 08:00 - 10:00 or 14:30 - 16:00"
-                  value={timeRange}
-                  onChange={(e) => setTimeRange(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:outline-none focus:border-theme-accent font-mono-numbers"
-                />
-              </div>
-
-              <div>
-                <label className="block text-theme-muted font-medium mb-1">Block Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Algorithms LeetCode Sprint"
-                  value={slotTitle}
-                  onChange={(e) => setSlotTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:outline-none focus:border-theme-accent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-theme-muted font-medium mb-1">Category</label>
-                <select
-                  value={slotCategory}
-                  onChange={(e) => setSlotCategory(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-theme-surface border border-theme-border text-theme-text focus:outline-none focus:border-theme-accent"
-                >
-                  <option value="Core Study">Core Study</option>
-                  <option value="Revision">Revision</option>
-                  <option value="Exercise/Break">Exercise/Break</option>
-                  <option value="Lab Project">Lab Project</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div className="pt-3 border-t border-theme-border flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSlotModalOpen(false)}
-                  className="px-3 py-2 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-theme-accent text-white font-semibold hover:bg-theme-accentHover shadow-sm"
-                >
-                  Save Time-Block
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Add Slot Modal with Syllabus Topic Picker */}
+      <AddRoutineModal
+        isOpen={isSlotModalOpen}
+        onClose={() => setIsSlotModalOpen(false)}
+        onAddSlot={(newBlock) => addRoutineSlot(newBlock)}
+        subjects={subjects}
+      />
 
     </div>
   );
