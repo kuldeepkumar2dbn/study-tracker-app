@@ -14,6 +14,7 @@ import {
   DRIVE_FOLDER_MAP_KEY,
   validateUploadedFile
 } from './src/services/googleDrive.js';
+import { patchUserData, saveNotes } from './storage-helper.js';
 
 export {
   getOrCreateSubjectFolder,
@@ -24,7 +25,9 @@ export {
   saveStoredDriveFolderMap,
   NOTES_PARENT_FOLDER_NAME,
   DRIVE_FOLDER_MAP_KEY,
-  validateUploadedFile
+  validateUploadedFile,
+  saveNotes,
+  patchUserData
 };
 
 export default {
@@ -36,5 +39,7 @@ export default {
   saveStoredDriveFolderMap,
   NOTES_PARENT_FOLDER_NAME,
   DRIVE_FOLDER_MAP_KEY,
-  validateUploadedFile
+  validateUploadedFile,
+  saveNotes,
+  patchUserData
 };

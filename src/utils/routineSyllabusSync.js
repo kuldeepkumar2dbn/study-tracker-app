@@ -4,6 +4,7 @@
  */
 
 import { getActiveUserId, getUserStorageKey, isDemoUser } from '../../auth-guard.js';
+import { patchUserData } from '../../storage-helper.js';
 
 /**
  * Calculates a subject's overall completion percentage based on its chapters and sub-topics.
@@ -207,16 +208,9 @@ export function markSyllabusTopicCompletedInSubjects(subjects = [], subjectId, c
       const scopedKey = getUserStorageKey('subjects');
       localStorage.setItem(scopedKey, JSON.stringify(updatedSubjects));
 
-      // 2. Master document studyflow_${userId}_data
+      // 2. Master document studyflow_${userId}_data (non-destructive patch)
       if (!isDemoUser()) {
-        const masterKey = `studyflow_${activeId}_data`;
-        const raw = localStorage.getItem(masterKey);
-        let masterDoc = {};
-        if (raw) {
-          try { masterDoc = JSON.parse(raw); } catch {}
-        }
-        masterDoc.subjects = updatedSubjects;
-        localStorage.setItem(masterKey, JSON.stringify(masterDoc));
+        patchUserData(activeId, { subjects: updatedSubjects });
       }
     }
   } catch (err) {

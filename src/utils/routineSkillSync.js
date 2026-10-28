@@ -4,6 +4,7 @@
  */
 
 import { getActiveUserId, getUserStorageKey, isDemoUser } from '../../auth-guard.js';
+import { patchUserData } from '../../storage-helper.js';
 import { calculateCourseProgress } from './youtubeCourseParser.js';
 
 /**
@@ -155,16 +156,9 @@ export function markSkillVideoCompletedInSkills(skills = [], skillId, videoId, u
       const customKey = `studyflow_${activeId}_skills`;
       localStorage.setItem(customKey, JSON.stringify(updatedSkills));
 
-      // 3. Master document studyflow_${userId}_data
+      // 3. Master document studyflow_${userId}_data (non-destructive patch)
       if (!isDemoUser()) {
-        const masterKey = `studyflow_${activeId}_data`;
-        const raw = localStorage.getItem(masterKey);
-        let masterDoc = {};
-        if (raw) {
-          try { masterDoc = JSON.parse(raw); } catch {}
-        }
-        masterDoc.skills = updatedSkills;
-        localStorage.setItem(masterKey, JSON.stringify(masterDoc));
+        patchUserData(activeId, { skills: updatedSkills });
       }
     }
   } catch (err) {

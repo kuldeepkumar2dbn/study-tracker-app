@@ -31,6 +31,7 @@ import {
   getSyncStatus as getGlobalSyncStatus,
   getLastSyncedTimestamp
 } from '../services/cloud-sync';
+import { patchUserData } from '../../storage-helper.js';
 
 const DataContext = createContext();
 
@@ -519,22 +520,40 @@ export function DataProvider({ children }) {
         ]
       });
     }
-    if (initialUserData) {
+    // Check if user data already exists in master document or initialUserData
+    let masterDoc = initialUserData;
+    if (!masterDoc && !isDemo && activeId && activeId !== 'guest') {
+      try {
+        const raw = localStorage.getItem(`studyflow_${activeId}_data`);
+        if (raw) masterDoc = JSON.parse(raw);
+      } catch {}
+    }
+
+    if (masterDoc) {
+      // If data exists, DO NOT re-initialize streak: 0 or todayLoggedHours: 0
+      // Only supply default zero values for fields that are strictly undefined
+      const resolvedStreak = masterDoc.streak !== undefined 
+        ? Number(masterDoc.streak) 
+        : (masterDoc.streakCount !== undefined ? Number(masterDoc.streakCount) : 0);
+      const resolvedHours = masterDoc.todayLoggedHours !== undefined 
+        ? Number(masterDoc.todayLoggedHours) 
+        : (masterDoc.todayHours !== undefined ? Number(masterDoc.todayHours) : 0.0);
+
       return {
-        streakCount: Number(initialUserData.streak) || 0,
-        lastActiveDate: initialUserData.lastActiveDate || null,
-        todayHours: Number(initialUserData.todayLoggedHours) || 0.0,
-        dailyTarget: Number(initialUserData.dailyTargetHours) || 4.0,
-        todayLogDate: initialUserData.todayLogDate || todayDateStr(),
-        weeklyVelocityHours: Number(initialUserData.weeklyVelocityHours) || 0.0,
-        weeklyLog: [
-          { day: 'Mon', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
-          { day: 'Tue', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
-          { day: 'Wed', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
-          { day: 'Thu', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
-          { day: 'Fri', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
-          { day: 'Sat', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 },
-          { day: 'Sun', hours: 0, target: Number(initialUserData.dailyTargetHours) || 4.0 }
+        streakCount: resolvedStreak,
+        lastActiveDate: masterDoc.lastActiveDate ?? null,
+        todayHours: resolvedHours,
+        dailyTarget: Number(masterDoc.dailyTargetHours || masterDoc.dailyTarget) || 4.0,
+        todayLogDate: masterDoc.todayLogDate || todayDateStr(),
+        weeklyVelocityHours: Number(masterDoc.weeklyVelocityHours) || 0.0,
+        weeklyLog: Array.isArray(masterDoc.weeklyLog) && masterDoc.weeklyLog.length === 7 ? masterDoc.weeklyLog : [
+          { day: 'Mon', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 },
+          { day: 'Tue', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 },
+          { day: 'Wed', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 },
+          { day: 'Thu', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 },
+          { day: 'Fri', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 },
+          { day: 'Sat', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 },
+          { day: 'Sun', hours: 0, target: Number(masterDoc.dailyTargetHours) || 4.0 }
         ]
       };
     }
@@ -623,12 +642,8 @@ export function DataProvider({ children }) {
       const activeUserId = getActiveUserId();
       if (!isDemoUser() && activeUserId && activeUserId !== 'guest') {
         try {
-          const masterKey = `studyflow_${activeUserId}_data`;
-          const raw = localStorage.getItem(masterKey);
-          const currentDoc = raw ? JSON.parse(raw) : {};
-          currentDoc.dailyActivity = updated;
-          currentDoc.updatedAt = new Date().toISOString();
-          localStorage.setItem(masterKey, JSON.stringify(currentDoc));
+          // Centralized patch controller writes to studyflow_${activeUserId}_data masterKey
+          patchUserData(activeUserId, { dailyActivity: updated });
         } catch (e) {
           console.error('Error saving dailyActivity to master document:', e);
         }
@@ -915,34 +930,23 @@ export function DataProvider({ children }) {
     const isDemo = isDemoUser();
     const activeId = getActiveUserId();
     if (!isDemo && activeId && activeId !== 'guest') {
-      const storageKey = `studyflow_${activeId}_data`;
       try {
-        let existing = {};
-        const raw = localStorage.getItem(storageKey);
-        if (raw) existing = JSON.parse(raw);
-
-        const updated = {
-          userId: activeId,
-          streak: streakData.streakCount ?? 0,
+        patchUserData(activeId, {
+          streak: streakData.streakCount !== undefined ? streakData.streakCount : undefined,
           lastActiveDate: streakData.lastActiveDate ?? null,
           dailyTargetHours: streakData.dailyTarget ?? 4.0,
-          todayLoggedHours: streakData.todayHours ?? 0.0,
+          todayLoggedHours: streakData.todayHours !== undefined ? streakData.todayHours : undefined,
           todayLogDate: streakData.todayLogDate || todayDateStr(),
           weeklyVelocityHours: streakData.weeklyVelocityHours ?? 0.0,
-          dailyActivity: dailyActivity || existing.dailyActivity || {},
+          dailyActivity: dailyActivity || {},
           routine: routineSlots || [],
-          revisionQueue: existing.revisionQueue || [],
           exams: exams || [],
           skills: skills || [],
           subjects: subjects || [],
           notes: notes || [],
           weeklyGoals: weeklyGoals || [],
-          importantLinks: importantLinks || [],
-          updatedAt: new Date().toISOString()
-        };
-
-        // Real-time debounced save to Google Drive (2000ms delay, immediate localStorage write)
-        debounceSaveToDrive(updated, 2000);
+          importantLinks: importantLinks || []
+        });
       } catch (err) {
         console.error('Error syncing master user state:', err);
       }

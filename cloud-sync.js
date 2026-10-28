@@ -438,6 +438,82 @@ export function dispatchSyncEvents(data) {
   window.dispatchEvent(new Event('studyflow-data-changed'));
   window.dispatchEvent(new Event('storage'));
 }
+ 
+/**
+ * SAFE CLOUD SYNC MERGING:
+ * When pulling studyflow_user_data.json from Google Drive during login or sync:
+ * - Compares timestamps (remote.updatedAt vs local.updatedAt).
+ * - Merges the two datasets key-by-key rather than clobbering local storage blindly.
+ * - Preserves whichever side has the higher streak.
+ * - Preserves the union of all dailyActivity dates (taking max minutes for any overlap).
+ * - Preserves non-empty section arrays (subjects, routine, skills, exams, notes, weeklyGoals).
+ *
+ * @param {Object} remoteData Remote dataset from Google Drive
+ * @param {Object} localData Local dataset from LocalStorage
+ * @returns {Object} Non-destructively merged dataset
+ */
+export function mergeCloudAndLocalData(remoteData = {}, localData = {}) {
+  const remoteTime = remoteData?.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
+  const localTime = localData?.updatedAt ? new Date(localData.updatedAt).getTime() : 0;
+  const isRemoteNewer = remoteTime >= localTime;
+
+  // Primary dataset is the newer one; secondary supplies missing / older records
+  const primary = isRemoteNewer ? (remoteData || {}) : (localData || {});
+  const secondary = isRemoteNewer ? (localData || {}) : (remoteData || {});
+
+  // 1. Daily Activity: UNION of all dates, taking max minutes studied for any matching date
+  const mergedDailyActivity = {};
+  const allDates = new Set([
+    ...Object.keys(localData?.dailyActivity || {}),
+    ...Object.keys(remoteData?.dailyActivity || {})
+  ]);
+  for (const date of allDates) {
+    const minLocal = Number(localData?.dailyActivity?.[date] || 0);
+    const minRemote = Number(remoteData?.dailyActivity?.[date] || 0);
+    mergedDailyActivity[date] = Math.max(minLocal, minRemote);
+  }
+
+  // 2. Streak: Preserves whichever side has the higher streak
+  const streakLocal = Number(localData?.streak ?? 0);
+  const streakRemote = Number(remoteData?.streak ?? 0);
+  const higherStreak = Math.max(streakLocal, streakRemote);
+
+  // 3. Today Logged Hours: If on same log date, preserve max; else use the newer date's logged hours
+  const localLogDate = localData?.todayLogDate;
+  const remoteLogDate = remoteData?.todayLogDate;
+  let todayLoggedHours = primary.todayLoggedHours !== undefined 
+    ? Number(primary.todayLoggedHours) 
+    : (secondary.todayLoggedHours !== undefined ? Number(secondary.todayLoggedHours) : 0.0);
+  if (localLogDate && remoteLogDate && localLogDate === remoteLogDate) {
+    todayLoggedHours = Math.max(Number(localData.todayLoggedHours || 0), Number(remoteData.todayLoggedHours || 0));
+  }
+
+  // 4. Arrays (subjects, routine, skills, exams, notes, weeklyGoals):
+  // Preserve from primary if non-empty, otherwise take secondary
+  const mergeArray = (key) => {
+    const pArr = Array.isArray(primary[key]) ? primary[key] : [];
+    const sArr = Array.isArray(secondary[key]) ? secondary[key] : [];
+    if (pArr.length > 0) return pArr;
+    return sArr;
+  };
+
+  const merged = {
+    ...secondary,
+    ...primary,
+    dailyActivity: mergedDailyActivity,
+    streak: higherStreak,
+    todayLoggedHours: todayLoggedHours,
+    subjects: mergeArray('subjects'),
+    routine: mergeArray('routine'),
+    skills: mergeArray('skills'),
+    exams: mergeArray('exams'),
+    notes: mergeArray('notes'),
+    weeklyGoals: mergeArray('weeklyGoals'),
+    updatedAt: new Date(Math.max(remoteTime, localTime, Date.now())).toISOString()
+  };
+
+  return merged;
+}
 
 /**
  * AUTO-HYDRATE FROM DRIVE BEFORE RENDERING (MULTI-DEVICE RESTORATION)
@@ -447,6 +523,7 @@ export function dispatchSyncEvents(data) {
  *    GET https://www.googleapis.com/drive/v3/files?q=name='studyflow_user_data.json' and trashed=false&fields=files(id, name, modifiedTime)
  * 2. If studyflow_user_data.json exists in Drive:
  *    - Download the file content: GET https://www.googleapis.com/drive/v3/files/${fileId}?alt=media
+ *    - Key-by-key non-destructive merge: preserves higher streak & union of dailyActivity dates
  *    - Parse JSON and write directly to studyflow_${userId}_data in localStorage.
  *    - Do NOT overwrite cloud data with an empty local zero-state.
  * 3. If file does NOT exist, only then initialize the zero-state.
@@ -495,6 +572,15 @@ export async function hydrateFromCloud(accessToken, userId) {
         const remoteTime = remoteData.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
         const localTime = localData && localData.updatedAt ? new Date(localData.updatedAt).getTime() : 0;
 
+        // Key-by-key safe merge: preserves higher streak & union of dailyActivity dates
+        const mergedData = mergeCloudAndLocalData(remoteData, localData);
+        mergedData.userId = userId;
+
+        // Populate local storage with merged state
+        localStorage.setItem(masterStorageKey, JSON.stringify(mergedData));
+        populateGranularStorage(userId, mergedData);
+        dispatchSyncEvents(mergedData);
+
         // Check if phone or local device has empty or unpopulated data
         const isLocalZeroOrEmpty = !localData || 
           (!localData.subjects?.length && (remoteData.subjects?.length > 0)) ||
@@ -506,27 +592,29 @@ export async function hydrateFromCloud(accessToken, userId) {
         const shouldHydrateRemote = isLocalZeroOrEmpty || remoteTime >= localTime || !localTime;
 
         if (shouldHydrateRemote) {
-          remoteData.userId = userId;
-          localStorage.setItem(masterStorageKey, JSON.stringify(remoteData));
-          populateGranularStorage(userId, remoteData);
-          dispatchSyncEvents(remoteData);
+          // If local had a higher streak or extra dailyActivity dates, push merged state back to Drive
+          const localHasExtra = (Number(localData?.streak || 0) > Number(remoteData.streak || 0)) ||
+            (localData?.dailyActivity && Object.keys(localData.dailyActivity).some(k => !remoteData.dailyActivity?.[k]));
+          if (localHasExtra) {
+            debounceSaveToDrive(mergedData, 100);
+          }
           setSyncStatus('synced', { syncedAt: remoteTime || Date.now() });
 
           return {
             hydrated: true,
             source: 'remote',
             fileId: existingFile.id,
-            data: remoteData
+            data: mergedData
           };
         } else {
-          // Local laptop data is genuinely newer: upload local data to cloud
-          debounceSaveToDrive(localData, 100);
+          // Local laptop data is genuinely newer: upload merged data to cloud
+          debounceSaveToDrive(mergedData, 100);
           setSyncStatus('synced', { syncedAt: Date.now() });
           return {
             hydrated: false,
             source: 'local_newer',
             fileId: existingFile.id,
-            data: localData
+            data: mergedData
           };
         }
       }
@@ -687,7 +775,18 @@ export async function forceBidirectionalSync(customStudyData = null, customUserI
         const remoteTime = remoteData.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
         const localTime = localData && localData.updatedAt ? new Date(localData.updatedAt).getTime() : 0;
 
-        // Check if phone or local device is missing data
+        // Key-by-key safe merge: preserves higher streak & union of dailyActivity dates
+        const mergedData = mergeCloudAndLocalData(remoteData, localData);
+        mergedData.userId = userId;
+
+        localStorage.setItem(masterStorageKey, JSON.stringify(mergedData));
+        populateGranularStorage(userId, mergedData);
+        dispatchSyncEvents(mergedData);
+
+        // Always update Drive with the merged data if local had changes or streak/dates were merged
+        await updateSyncFile(token, existingFile.id, mergedData);
+        setSyncStatus('synced', { syncedAt: Date.now() });
+
         const isLocalMissingData = !localData || 
           (!localData.subjects?.length && remoteData.subjects?.length) ||
           (!localData.routine?.length && remoteData.routine?.length) ||
@@ -695,24 +794,9 @@ export async function forceBidirectionalSync(customStudyData = null, customUserI
           (!localData.exams?.length && remoteData.exams?.length);
 
         if (isLocalMissingData || remoteTime >= localTime) {
-          // Cloud is newer or phone is missing data -> download cloud data
-          remoteData.userId = userId;
-          localStorage.setItem(masterStorageKey, JSON.stringify(remoteData));
-          populateGranularStorage(userId, remoteData);
-          dispatchSyncEvents(remoteData);
-          setSyncStatus('synced', { syncedAt: remoteTime || Date.now() });
-          return { success: true, action: 'downloaded', data: remoteData };
+          return { success: true, action: 'downloaded', data: mergedData };
         } else {
-          // Local laptop data is newer -> upload to Drive
-          const payload = {
-            ...localData,
-            userId,
-            updatedAt: new Date().toISOString()
-          };
-          localStorage.setItem(masterStorageKey, JSON.stringify(payload));
-          await updateSyncFile(token, existingFile.id, payload);
-          setSyncStatus('synced', { syncedAt: Date.now() });
-          return { success: true, action: 'uploaded', data: payload };
+          return { success: true, action: 'uploaded', data: mergedData };
         }
       }
     }

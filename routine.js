@@ -30,6 +30,8 @@ import {
   markSkillVideoCompletedInSkills
 } from './src/utils/routineSkillSync.js';
 
+import { patchUserData, saveRoutine } from './storage-helper.js';
+
 export {
   DailyRoutine,
   AddRoutineModal,
@@ -45,7 +47,9 @@ export {
   formatSkillChipLabel,
   getUnwatchedVideosForSkill,
   createSkillRoutineBlock,
-  markSkillVideoCompletedInSkills
+  markSkillVideoCompletedInSkills,
+  saveRoutine,
+  patchUserData
 };
 
 export default {
@@ -63,6 +67,8 @@ export default {
   formatSkillChipLabel,
   getUnwatchedVideosForSkill,
   createSkillRoutineBlock,
-  markSkillVideoCompletedInSkills
+  markSkillVideoCompletedInSkills,
+  saveRoutine,
+  patchUserData
 };
 

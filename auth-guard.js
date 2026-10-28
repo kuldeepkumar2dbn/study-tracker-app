@@ -552,7 +552,29 @@ export function getOrCreateZeroStateData(userId) {
     const today = getLocalDateString(new Date());
 
     if (!raw) {
-      const zeroState = createZeroStateData(userId);
+      // Check if granular scoped keys exist before creating fresh zero state
+      const existingStreakRaw = localStorage.getItem(`studyflow_${userId}_streak`);
+      const existingActivityRaw = localStorage.getItem(`studyflow_${userId}_daily_activity`);
+      const existingSubjectsRaw = localStorage.getItem(`studyflow_${userId}_subjects`);
+      let recovered = null;
+
+      if (existingStreakRaw || existingActivityRaw || existingSubjectsRaw) {
+        try {
+          const streakObj = existingStreakRaw ? JSON.parse(existingStreakRaw) : {};
+          const actObj = existingActivityRaw ? JSON.parse(existingActivityRaw) : {};
+          const subArr = existingSubjectsRaw ? JSON.parse(existingSubjectsRaw) : [];
+          recovered = {
+            ...createZeroStateData(userId),
+            streak: streakObj.streakCount ?? 0,
+            todayLoggedHours: streakObj.todayHours ?? 0.0,
+            lastActiveDate: streakObj.lastActiveDate ?? null,
+            dailyActivity: actObj || {},
+            subjects: subArr || []
+          };
+        } catch {}
+      }
+
+      const zeroState = recovered || createZeroStateData(userId);
       localStorage.setItem(storageKey, JSON.stringify(zeroState));
       return zeroState;
     }
@@ -565,10 +587,10 @@ export function getOrCreateZeroStateData(userId) {
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = getLocalDateString(yesterday);
 
-      // Check Streak: If they studied yesterday, keep/increment streak; if they missed yesterday, reset streak to 0.
-      if (data.lastActiveDate === yesterdayStr) {
-        // Studied yesterday, keep streak
-      } else {
+      // Check Streak: If they studied yesterday or today, keep streak; if they missed yesterday, reset streak to 0
+      if (data.lastActiveDate === yesterdayStr || data.lastActiveDate === today) {
+        // Studied yesterday or today, keep streak
+      } else if (data.lastActiveDate) {
         // Missed yesterday, reset streak to 0
         data.streak = 0;
       }
@@ -579,6 +601,11 @@ export function getOrCreateZeroStateData(userId) {
 
       localStorage.setItem(storageKey, JSON.stringify(data));
     }
+
+    // Only supply default zero values for fields that are strictly undefined
+    if (data.streak === undefined) data.streak = 0;
+    if (data.todayLoggedHours === undefined) data.todayLoggedHours = 0.0;
+    if (data.dailyActivity === undefined) data.dailyActivity = {};
 
     return data;
   } catch (err) {
