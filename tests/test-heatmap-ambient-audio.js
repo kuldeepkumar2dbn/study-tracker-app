@@ -130,8 +130,7 @@ global.window = {
 import { 
   formatHeatmapTooltip, 
   getActivityColorClass, 
-  calculateHeatmapMatrix,
-  generateSeedDailyActivity 
+  calculateHeatmapMatrix 
 } from '../src/utils/consistencyRadar.js';
 import { 
   AmbientAudioEngine, 
@@ -172,9 +171,9 @@ test('Heatmap: Tooltip format matches "[Day, Month Date]: X hours Y mins studied
   const tooltip45 = formatHeatmapTooltip('2026-10-26', 45);
   assert(tooltip45.includes(': 45 mins studied'), `Expected 45 mins studied, got: "${tooltip45}"`);
 
-  // Test 0 mins
+  // Test 0 mins -> empty square format
   const tooltip0 = formatHeatmapTooltip('2026-10-25', 0);
-  assert(tooltip0.includes(': 0 mins studied'), `Expected 0 mins studied, got: "${tooltip0}"`);
+  assert(tooltip0.includes(': No study activity logged'), `Expected "No study activity logged", got: "${tooltip0}"`);
 });
 
 test('Heatmap: Color scale matches exact required thresholds', () => {
@@ -226,13 +225,42 @@ test('Heatmap: calculateHeatmapMatrix creates 13 columns x 7 rows for Mon-Sun', 
   assert(matrix.currentStreak >= 3, `Expected at least 3 streak days, got ${matrix.currentStreak}`);
 });
 
-test('Heatmap: Seed activity generator populates 90 days matching streak', () => {
-  const seed = generateSeedDailyActivity(7, 2.5);
-  const keys = Object.keys(seed);
-  assert.strictEqual(keys.length, 90, `Seed activity must cover 90 days, got ${keys.length}`);
+test('Heatmap Zero-State: Enforces true zero-state with empty activity map', () => {
+  const emptyMatrix = calculateHeatmapMatrix({}, new Date('2026-10-28T12:00:00Z'));
+  assert.strictEqual(emptyMatrix.weeks.length, 13, 'Expected 13 columns/weeks');
+  assert.strictEqual(emptyMatrix.activeDaysCount, 0, 'Active days count must be 0 in zero state');
+  assert.strictEqual(emptyMatrix.totalMinutes, 0, 'Total minutes must be 0 in zero state');
+  assert.strictEqual(emptyMatrix.currentStreak, 0, 'Current streak must be 0 in zero state');
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  assert(seed[todayStr] >= 150, `Today should reflect study hours, got ${seed[todayStr]}`);
+  // Verify all cells in zero state are inactive slate-800/40 and have empty tooltip
+  for (const week of emptyMatrix.weeks) {
+    for (const cell of week) {
+      if (!cell.isFuture) {
+        assert.strictEqual(cell.minutes, 0, `Cell on ${cell.dateStr} must have 0 minutes`);
+        assert(cell.colorClass.includes('slate-800/40'), `Cell on ${cell.dateStr} must have slate-800/40 inactive style`);
+        assert(cell.tooltipText.includes(': No study activity logged'), `Cell tooltip must show "No study activity logged", got: "${cell.tooltipText}"`);
+      }
+    }
+  }
+});
+
+test('Heatmap Zero-State: Hydrates correctly and calculates active days and total hours when study session is logged', () => {
+  const activeActivity = {
+    '2026-10-28': 120, // 2 hours
+    '2026-10-27': 50   // 50 mins
+  };
+  const matrix = calculateHeatmapMatrix(activeActivity, new Date('2026-10-28T12:00:00Z'));
+  assert.strictEqual(matrix.activeDaysCount, 2, 'Must have 2 active days');
+  assert.strictEqual(matrix.totalMinutes, 170, 'Must have 170 total minutes');
+  assert.strictEqual(matrix.currentStreak, 2, 'Must have 2 days streak');
+
+  // Active Days count of keys with minutes > 0
+  const activeKeys = Object.keys(activeActivity).filter(k => activeActivity[k] > 0);
+  assert.strictEqual(activeKeys.length, 2);
+
+  // Total Study Hours: (170 / 60).toFixed(1) === '2.8'
+  const totalHours = (170 / 60).toFixed(1);
+  assert.strictEqual(totalHours, '2.8');
 });
 
 test('Heatmap: ConsistencyRadar component file exists and contains required UI elements', () => {
@@ -388,7 +416,7 @@ test('Root Exports: dashboard.js file structure and exports', () => {
   assert(content.includes('ConsistencyRadar'), 'dashboard.js exports ConsistencyRadar');
   assert(content.includes('formatHeatmapTooltip'), 'dashboard.js exports formatHeatmapTooltip');
   assert(content.includes('getActivityColorClass'), 'dashboard.js exports getActivityColorClass');
-  assert(content.includes('generateSeedDailyActivity'), 'dashboard.js exports generateSeedDailyActivity');
+  assert(!content.includes('generateSeedDailyActivity'), 'dashboard.js has removed mock generator generateSeedDailyActivity');
   assert(content.includes('DashboardTab'), 'dashboard.js exports DashboardTab');
 });
 

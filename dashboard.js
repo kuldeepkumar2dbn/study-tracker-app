@@ -7,7 +7,6 @@
  * - formatHeatmapTooltip formatter
  * - getActivityColorClass color classifier
  * - calculateHeatmapMatrix matrix calculator
- * - generateSeedDailyActivity seed generator
  * - DashboardTab component
  */
 
@@ -15,8 +14,7 @@ import ConsistencyRadar from './src/components/ConsistencyRadar.jsx';
 import { 
   formatHeatmapTooltip, 
   getActivityColorClass, 
-  calculateHeatmapMatrix,
-  generateSeedDailyActivity 
+  calculateHeatmapMatrix 
 } from './src/utils/consistencyRadar.js';
 import DashboardTab from './src/components/tabs/DashboardTab.jsx';
 
@@ -25,7 +23,6 @@ export {
   formatHeatmapTooltip,
   getActivityColorClass,
   calculateHeatmapMatrix,
-  generateSeedDailyActivity,
   DashboardTab
 };
 
@@ -34,6 +31,6 @@ export default {
   formatHeatmapTooltip,
   getActivityColorClass,
   calculateHeatmapMatrix,
-  generateSeedDailyActivity,
   DashboardTab
 };
+

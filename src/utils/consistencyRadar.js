@@ -3,15 +3,17 @@
  * StudyFlow Zero-Backend Architecture
  *
  * Implements:
- * 1. Tooltip formatting: "[Day, Month Date]: X hours Y mins studied"
+ * 1. Tooltip formatting:
+ *    - Empty square: "[Date]: No study activity logged"
+ *    - Active square: "[Day, Month Date]: X hours Y mins studied"
  * 2. Color classification for 5 intensity scales:
- *    - 0 mins: slate-800/40
+ *    - 0 mins: slate-800/40 (inactive square)
  *    - 1-45 mins: emerald-900/40
  *    - 46-90 mins: emerald-700/60
  *    - 91-180 mins: emerald-500
  *    - 180+ mins: emerald-400 (with glow accent)
  * 3. 90-Day matrix calculation (13 columns x 7 rows for Mon-Sun)
- * 4. Realistic seed activity generator for first-time / demo users
+ * 4. Strictly ZERO dummy/mock data; true zero-state hydration directly from userData.dailyActivity
  */
 
 export function formatHeatmapTooltip(dateStr, minutes = 0) {
@@ -24,7 +26,7 @@ export function formatHeatmapTooltip(dateStr, minutes = 0) {
   const dateLabel = `${dayName}, ${monthName} ${dateNum}`;
 
   if (!minutes || minutes <= 0) {
-    return `${dateLabel}: 0 mins studied`;
+    return `${dateLabel}: No study activity logged`;
   }
 
   const hours = Math.floor(minutes / 60);
@@ -61,8 +63,10 @@ export function getActivityColorClass(minutes = 0) {
 
 /**
  * Calculates 90-day matrix data (13 columns x 7 rows for Mon-Sun)
+ * Reads strictly from actual user data; zero synthetic seed values.
  */
 export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new Date()) {
+  const safeActivity = (dailyActivity && typeof dailyActivity === 'object') ? dailyActivity : {};
   const today = new Date(referenceDate);
   const todayDayOfWeek = (today.getDay() + 6) % 7; // Monday = 0, ..., Sunday = 6
   
@@ -100,7 +104,7 @@ export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new D
 
     const isFuture = cellDate.getTime() > today.getTime() + (24 * 60 * 60 * 1000 - 1);
     const isToday = cellDate.toDateString() === today.toDateString();
-    const minutes = isFuture ? 0 : (Number(dailyActivity[dateStr]) || 0);
+    const minutes = isFuture ? 0 : (Number(safeActivity[dateStr]) || 0);
 
     if (!isFuture && minutes > 0) {
       activeDaysCount++;
@@ -108,7 +112,9 @@ export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new D
     }
 
     const tooltipText = formatHeatmapTooltip(dateStr, minutes);
-    const colorClass = isFuture ? 'bg-theme-surface/20 border-theme-border/20 opacity-30 cursor-not-allowed' : getActivityColorClass(minutes);
+    const colorClass = isFuture 
+      ? 'bg-theme-surface/20 border-theme-border/20 opacity-30 cursor-not-allowed' 
+      : getActivityColorClass(minutes);
 
     currentWeek.push({
       dateStr,
@@ -136,7 +142,7 @@ export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new D
     const m = String(checkDate.getMonth() + 1).padStart(2, '0');
     const d = String(checkDate.getDate()).padStart(2, '0');
     const key = `${y}-${m}-${d}`;
-    const dayMins = Number(dailyActivity[key]) || 0;
+    const dayMins = Number(safeActivity[key]) || 0;
 
     if (i === 0 && dayMins === 0) {
       continue;
@@ -156,43 +162,4 @@ export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new D
     totalMinutes,
     monthLabels
   };
-}
-
-/**
- * Generates realistic seed activity history for demo/first-time users
- */
-export function generateSeedDailyActivity(streakCount = 3, todayHours = 1.5) {
-  const activity = {};
-  const today = new Date();
-  
-  const todayStr = today.toISOString().split('T')[0];
-  activity[todayStr] = Math.max(30, Math.round((todayHours || 1.5) * 60));
-
-  for (let i = 1; i < 90; i++) {
-    const d = new Date();
-    d.setDate(today.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const dayOfWeek = d.getDay();
-
-    if (i < streakCount) {
-      activity[dateStr] = [60, 95, 120, 150, 185][(i * 3) % 5];
-    } else {
-      const pseudoHash = (i * 37 + dayOfWeek * 13) % 100;
-      if (pseudoHash > 40) {
-        if (pseudoHash > 85) {
-          activity[dateStr] = 195 + (i % 45); // Level 4 (180+)
-        } else if (pseudoHash > 65) {
-          activity[dateStr] = 110 + (i % 50); // Level 3 (91-180)
-        } else if (pseudoHash > 50) {
-          activity[dateStr] = 55 + (i % 30);  // Level 2 (46-90)
-        } else {
-          activity[dateStr] = 25 + (i % 20);  // Level 1 (1-45)
-        }
-      } else {
-        activity[dateStr] = 0;
-      }
-    }
-  }
-
-  return activity;
 }

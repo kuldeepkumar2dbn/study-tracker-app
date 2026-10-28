@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Flame, Calendar, Activity, Zap, Info } from 'lucide-react';
 import RollingNumber from './RollingNumber';
 
@@ -15,37 +15,127 @@ import RollingNumber from './RollingNumber';
  *    - 46-90 mins: emerald-700/60
  *    - 91-180 mins: emerald-500
  *    - 180+ mins: emerald-400 (with glow accent)
- * 4. Hover Tooltip: "[Day, Month Date]: X hours Y mins studied"
+ * 4. Hover Tooltip:
+ *    - Inactive: "[Day, Month Date]: No study activity logged"
+ *    - Active: "[Day, Month Date]: X hours Y mins studied"
  * 5. Header summary: "Active Days: [X] / 90 | Current Streak: [Y] Days"
+ * 6. True Zero-State: Zero hardcoded mock numbers or dummy generator seeds.
+ * 7. Real-time update hook: Listens to focus timer & activity events to update today's square immediately.
  */
 
 import { 
   formatHeatmapTooltip, 
   getActivityColorClass, 
-  calculateHeatmapMatrix, 
-  generateSeedDailyActivity 
+  calculateHeatmapMatrix 
 } from '../utils/consistencyRadar.js';
 
 export {
   formatHeatmapTooltip,
   getActivityColorClass,
-  calculateHeatmapMatrix,
-  generateSeedDailyActivity
+  calculateHeatmapMatrix
 };
 
-export default function ConsistencyRadar({ dailyActivity = {}, streak = 0, className = '' }) {
+function getLiveUserData() {
+  if (typeof window === 'undefined') return { dailyActivity: {}, streak: 0 };
+  try {
+    const rawProfile = localStorage.getItem('study_user_profile');
+    const profile = rawProfile ? JSON.parse(rawProfile) : {};
+    const userId = profile.id || profile.email;
+    if (userId) {
+      const masterRaw = localStorage.getItem(`studyflow_${userId}_data`);
+      if (masterRaw) {
+        const parsed = JSON.parse(masterRaw);
+        return {
+          dailyActivity: (parsed.dailyActivity && typeof parsed.dailyActivity === 'object') ? parsed.dailyActivity : {},
+          streak: Number(parsed.streak) || Number(parsed.streakData?.streakCount) || 0
+        };
+      }
+    }
+    const guestRaw = localStorage.getItem('studyflow_guest_data');
+    if (guestRaw) {
+      const parsed = JSON.parse(guestRaw);
+      return {
+        dailyActivity: (parsed.dailyActivity && typeof parsed.dailyActivity === 'object') ? parsed.dailyActivity : {},
+        streak: Number(parsed.streak) || Number(parsed.streakData?.streakCount) || 0
+      };
+    }
+  } catch (e) {}
+  return { dailyActivity: {}, streak: 0 };
+}
+
+export default function ConsistencyRadar({ dailyActivity, streak, className = '' }) {
   const [hoveredCell, setHoveredCell] = useState(null);
+  const [tick, setTick] = useState(0);
+  const [liveEventActivity, setLiveEventActivity] = useState(null);
+
+  // Real-Time Update Hook: Re-render immediately on timer complete or activity log
+  useEffect(() => {
+    const handleActivityChange = (e) => {
+      if (e?.detail?.dailyActivity) {
+        setLiveEventActivity(e.detail.dailyActivity);
+      }
+      setTick((t) => t + 1);
+    };
+
+    window.addEventListener('studyflow-activity-updated', handleActivityChange);
+    window.addEventListener('studyflow-timer-sync', handleActivityChange);
+    window.addEventListener('studyflow-data-changed', handleActivityChange);
+    window.addEventListener('storage', handleActivityChange);
+
+    return () => {
+      window.removeEventListener('studyflow-activity-updated', handleActivityChange);
+      window.removeEventListener('studyflow-timer-sync', handleActivityChange);
+      window.removeEventListener('studyflow-data-changed', handleActivityChange);
+      window.removeEventListener('storage', handleActivityChange);
+    };
+  }, []);
+
+  const liveUser = useMemo(() => getLiveUserData(), [tick]);
+
+  // Daily Activity Map: Read from event, props, or userData.dailyActivity || {}
+  const effectiveActivity = useMemo(() => {
+    if (liveEventActivity) return liveEventActivity;
+    if (dailyActivity && typeof dailyActivity === 'object' && Object.keys(dailyActivity).length > 0) {
+      return dailyActivity;
+    }
+    if (liveUser.dailyActivity && Object.keys(liveUser.dailyActivity).length > 0) {
+      return liveUser.dailyActivity;
+    }
+    return (dailyActivity && typeof dailyActivity === 'object') ? dailyActivity : {};
+  }, [dailyActivity, liveEventActivity, liveUser]);
+
+  // Current Streak: Pull directly from the user's live userData.streak || 0
+  const liveStreak = useMemo(() => {
+    if (streak !== undefined && streak !== null && Number(streak) > 0) {
+      return Number(streak);
+    }
+    if (liveUser.streak !== undefined && liveUser.streak !== null) {
+      return Math.max(0, Number(liveUser.streak) || 0);
+    }
+    return Math.max(0, Number(streak) || 0);
+  }, [streak, liveUser]);
 
   // Build the 90 days grid (13 columns x 7 rows for Mon-Sun)
   const matrixData = useMemo(() => {
-    return calculateHeatmapMatrix(dailyActivity);
-  }, [dailyActivity]);
+    return calculateHeatmapMatrix(effectiveActivity);
+  }, [effectiveActivity]);
 
-  const { weeks, activeDaysCount, currentStreak, totalMinutes, monthLabels } = matrixData;
-  const effectiveStreak = Math.max(streak || 0, currentStreak);
+  const { weeks, monthLabels } = matrixData;
 
-  const totalHours = (totalMinutes / 60).toFixed(1);
-  const rowLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // Requirement 2:
+  // Total Active Days: Count of keys in dailyActivity where minutes > 0. If none exist, display 0 / 90.
+  const activeDaysCount = useMemo(() => {
+    const act = effectiveActivity || {};
+    return Object.keys(act).filter(key => (Number(act[key]) || 0) > 0).length;
+  }, [effectiveActivity]);
+
+  // Total Study Hours: Sum of all minutes in dailyActivity converted to hours ((totalMinutes / 60).toFixed(1)). If none exist, display 0.0h.
+  const totalMinutes = useMemo(() => {
+    const act = effectiveActivity || {};
+    return Object.values(act).reduce((sum, mins) => sum + (Number(mins) || 0), 0);
+  }, [effectiveActivity]);
+
+  const totalHoursFormatted = totalMinutes > 0 ? (totalMinutes / 60).toFixed(1) : '0.0';
 
   return (
     <div 
@@ -78,8 +168,9 @@ export default function ConsistencyRadar({ dailyActivity = {}, streak = 0, class
           </div>
         </div>
 
-        {/* Header Summary: Active Days: [X] / 90 | Current Streak: [Y] Days */}
+        {/* Header Summary: Active Days: [X] / 90 | Current Streak: [Y] Days | Total: [Z]h */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          {/* Active Days: [X] / 90 */}
           <div className="px-3 py-1.5 rounded-xl bg-theme-surface/80 border border-theme-border text-xs flex items-center gap-1.5 shadow-sm">
             <Calendar className="w-3.5 h-3.5 text-theme-accent" />
             <span className="text-theme-muted">Active Days:</span>
@@ -88,19 +179,21 @@ export default function ConsistencyRadar({ dailyActivity = {}, streak = 0, class
             </strong>
           </div>
 
+          {/* Current Streak: [Y] Days */}
           <div className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs flex items-center gap-1.5 shadow-sm">
             <Flame className="w-3.5 h-3.5 fill-amber-500 text-amber-500 animate-flame-flicker" />
             <span className="text-amber-500/90 font-medium">Current Streak:</span>
             <strong className="text-amber-400 font-mono-numbers">
-              <RollingNumber value={currentStreak} /> Days
+              <RollingNumber value={liveStreak} /> Days
             </strong>
           </div>
 
+          {/* Total Study Hours */}
           <div className="hidden md:flex px-3 py-1.5 rounded-xl bg-theme-surface/80 border border-theme-border text-xs items-center gap-1.5 shadow-sm">
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
             <span className="text-theme-muted">Total:</span>
             <strong className="text-emerald-400 font-mono-numbers">
-              <RollingNumber value={Number(totalHours)} decimals={1} suffix="h" />
+              <RollingNumber value={Number(totalHoursFormatted)} decimals={1} suffix="h" />
             </strong>
           </div>
         </div>
@@ -170,11 +263,11 @@ export default function ConsistencyRadar({ dailyActivity = {}, streak = 0, class
       {/* Bottom Footer: Dynamic Hover Tooltip Display + Color Scale Legend */}
       <div className="mt-4 pt-3 border-t border-theme-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         
-        {/* Dynamic Tooltip Bar */}
+        {/* Dynamic Tooltip Bar: [Date]: No study activity logged OR [Date]: X hours Y mins studied */}
         <div className="min-h-[22px] flex items-center text-xs text-theme-text font-medium">
           {hoveredCell ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-theme-surface border border-theme-accent/30 text-theme-text shadow-sm animate-fadeIn">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              <span className={`w-2 h-2 rounded-full ${hoveredCell.minutes > 0 ? 'bg-emerald-400' : 'bg-slate-500'}`} />
               <strong className="font-semibold">{hoveredCell.tooltipText}</strong>
               {hoveredCell.isToday && (
                 <span className="text-[10px] uppercase font-bold text-theme-accent px-1.5 py-0.2 rounded bg-theme-accent/15">
@@ -185,7 +278,7 @@ export default function ConsistencyRadar({ dailyActivity = {}, streak = 0, class
           ) : (
             <span className="text-theme-muted text-[11px] flex items-center gap-1.5">
               <Info className="w-3.5 h-3.5" />
-              Hover or tap any square to view exact daily study minutes
+              Hover or tap any square to inspect study session history
             </span>
           )}
         </div>

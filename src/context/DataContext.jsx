@@ -31,7 +31,6 @@ import {
   getSyncStatus as getGlobalSyncStatus,
   getLastSyncedTimestamp
 } from '../services/cloud-sync';
-import { generateSeedDailyActivity } from '../components/ConsistencyRadar';
 
 const DataContext = createContext();
 
@@ -585,11 +584,12 @@ export function DataProvider({ children }) {
 
   // Daily Activity Matrix (for Consistency Radar heatmap)
   // Data Source: studyflow_${userId}_data.dailyActivity (e.g. { "2026-10-28": 145, "2026-10-27": 90 })
+  // Enforces true zero-state: zero mock numbers or dummy generator seeds.
   const [dailyActivity, setDailyActivity] = useState(() => {
     if (isDemo) {
       const demoActivity = readScoped('daily_activity', null);
-      if (demoActivity && typeof demoActivity === 'object' && Object.keys(demoActivity).length > 0) return demoActivity;
-      return generateSeedDailyActivity(3, 1.5);
+      if (demoActivity && typeof demoActivity === 'object') return demoActivity;
+      return {};
     }
     if (initialUserData && initialUserData.dailyActivity && typeof initialUserData.dailyActivity === 'object') {
       return initialUserData.dailyActivity;
@@ -599,14 +599,14 @@ export function DataProvider({ children }) {
       const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.dailyActivity && typeof parsed.dailyActivity === 'object' && Object.keys(parsed.dailyActivity).length > 0) {
+        if (parsed.dailyActivity && typeof parsed.dailyActivity === 'object') {
           return parsed.dailyActivity;
         }
       }
     } catch {}
     const scoped = readScoped('daily_activity', null);
-    if (scoped && typeof scoped === 'object' && Object.keys(scoped).length > 0) return scoped;
-    return generateSeedDailyActivity(0, 0);
+    if (scoped && typeof scoped === 'object') return scoped;
+    return {};
   });
 
   const recordDailyActivity = (minutes, dateStr = todayDateStr()) => {
@@ -634,6 +634,18 @@ export function DataProvider({ children }) {
         }
       }
       writeScoped('daily_activity', updated);
+
+      // Real-time update event hook for ConsistencyRadar and any listening views
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('studyflow-activity-updated', {
+            detail: { date: dateStr, minutes: currentVal + mins, dailyActivity: updated }
+          }));
+        }
+      } catch (err) {
+        console.warn('Error dispatching studyflow-activity-updated:', err);
+      }
+
       return updated;
     });
   };
