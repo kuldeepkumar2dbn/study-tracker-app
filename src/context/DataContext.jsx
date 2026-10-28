@@ -31,6 +31,7 @@ import {
   getSyncStatus as getGlobalSyncStatus,
   getLastSyncedTimestamp
 } from '../services/cloud-sync';
+import { generateSeedDailyActivity } from '../components/ConsistencyRadar';
 
 const DataContext = createContext();
 
@@ -582,6 +583,61 @@ export function DataProvider({ children }) {
     return readScoped('timer_history', []);
   });
 
+  // Daily Activity Matrix (for Consistency Radar heatmap)
+  // Data Source: studyflow_${userId}_data.dailyActivity (e.g. { "2026-10-28": 145, "2026-10-27": 90 })
+  const [dailyActivity, setDailyActivity] = useState(() => {
+    if (isDemo) {
+      const demoActivity = readScoped('daily_activity', null);
+      if (demoActivity && typeof demoActivity === 'object' && Object.keys(demoActivity).length > 0) return demoActivity;
+      return generateSeedDailyActivity(3, 1.5);
+    }
+    if (initialUserData && initialUserData.dailyActivity && typeof initialUserData.dailyActivity === 'object') {
+      return initialUserData.dailyActivity;
+    }
+    try {
+      const key = `studyflow_${activeId}_data`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.dailyActivity && typeof parsed.dailyActivity === 'object' && Object.keys(parsed.dailyActivity).length > 0) {
+          return parsed.dailyActivity;
+        }
+      }
+    } catch {}
+    const scoped = readScoped('daily_activity', null);
+    if (scoped && typeof scoped === 'object' && Object.keys(scoped).length > 0) return scoped;
+    return generateSeedDailyActivity(0, 0);
+  });
+
+  const recordDailyActivity = (minutes, dateStr = todayDateStr()) => {
+    const mins = Number(minutes) || 0;
+    if (mins <= 0) return;
+
+    setDailyActivity(prev => {
+      const currentVal = Number(prev[dateStr]) || 0;
+      const updated = {
+        ...prev,
+        [dateStr]: currentVal + mins
+      };
+
+      const activeUserId = getActiveUserId();
+      if (!isDemoUser() && activeUserId && activeUserId !== 'guest') {
+        try {
+          const masterKey = `studyflow_${activeUserId}_data`;
+          const raw = localStorage.getItem(masterKey);
+          const currentDoc = raw ? JSON.parse(raw) : {};
+          currentDoc.dailyActivity = updated;
+          currentDoc.updatedAt = new Date().toISOString();
+          localStorage.setItem(masterKey, JSON.stringify(currentDoc));
+        } catch (e) {
+          console.error('Error saving dailyActivity to master document:', e);
+        }
+      }
+      writeScoped('daily_activity', updated);
+      return updated;
+    });
+  };
+
   // State: Important Links & Resources
   const [importantLinks, setImportantLinks] = useState(() => {
     return readScoped('important_links', initialImportantLinks);
@@ -717,6 +773,9 @@ export function DataProvider({ children }) {
       }
       if (Array.isArray(remoteData.notes)) {
         setNotes(remoteData.notes);
+      }
+      if (remoteData.dailyActivity && typeof remoteData.dailyActivity === 'object') {
+        setDailyActivity(remoteData.dailyActivity);
       }
       if (remoteData.streak !== undefined || remoteData.todayLoggedHours !== undefined) {
         setStreakData(prev => ({
@@ -858,6 +917,7 @@ export function DataProvider({ children }) {
           todayLoggedHours: streakData.todayHours ?? 0.0,
           todayLogDate: streakData.todayLogDate || todayDateStr(),
           weeklyVelocityHours: streakData.weeklyVelocityHours ?? 0.0,
+          dailyActivity: dailyActivity || existing.dailyActivity || {},
           routine: routineSlots || [],
           revisionQueue: existing.revisionQueue || [],
           exams: exams || [],
@@ -875,7 +935,7 @@ export function DataProvider({ children }) {
         console.error('Error syncing master user state:', err);
       }
     }
-  }, [exams, routineSlots, skills, streakData, subjects, notes, weeklyGoals, importantLinks]);
+  }, [exams, routineSlots, skills, streakData, subjects, notes, weeklyGoals, importantLinks, dailyActivity]);
 
   // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
@@ -884,6 +944,7 @@ export function DataProvider({ children }) {
       writeScoped('exams', exams);
       writeScoped('routine_slots', routineSlots);
       writeScoped('weekly_goals', weeklyGoals);
+      writeScoped('daily_activity', dailyActivity);
       // Persist skills to both studyflow_${userId}_skills and writeScoped
       if (!isDemoUser()) {
         try {
@@ -1019,6 +1080,7 @@ export function DataProvider({ children }) {
         todayLoggedHours: streakData?.todayHours ?? 0.0,
         todayLogDate: streakData?.todayLogDate || todayDateStr(),
         weeklyVelocityHours: streakData?.weeklyVelocityHours ?? 0.0,
+        dailyActivity: dailyActivity || {},
         routine: routineSlots || [],
         exams: exams || [],
         skills: skills || [],
@@ -1169,10 +1231,16 @@ export function DataProvider({ children }) {
     ));
   };
 
-  const logStudyHours = (additionalHours, subjectId = null) => {
+  const logStudyHours = (additionalHours, subjectId = null, exactMinutes = null) => {
     const hrs = Math.round(Number(additionalHours) * 10) / 10;
     if (hrs <= 0) return;
     const today = todayDateStr();
+    const minutesToRecord = exactMinutes !== null && exactMinutes !== undefined 
+      ? Number(exactMinutes) 
+      : Math.round(hrs * 60);
+
+    // Track daily focus minutes in studyflow_${userId}_data.dailyActivity
+    recordDailyActivity(minutesToRecord, today);
 
     setStreakData(prev => {
       const newTodayHours = Math.round(((prev?.todayHours || 0) + hrs) * 10) / 10;
@@ -1847,8 +1915,8 @@ export function DataProvider({ children }) {
     const hours = Math.round((Number(session.durationMin || 0) / 60) * 10) / 10;
     const currentSubjectObj = subjects.find(s => s.name === session.subject || s.id === session.subjectId);
 
-    // Dynamically increase todayLoggedHours, streak, and weeklyVelocityHours
-    logStudyHours(hours, currentSubjectObj?.id);
+    // Dynamically increase todayLoggedHours, streak, weeklyVelocityHours, and record daily focus minutes
+    logStudyHours(hours, currentSubjectObj?.id, session.durationMin);
 
     if (session.subjectId && session.chapterId) {
       logChapterStudyMinutes(session.subjectId, session.chapterId, session.durationMin);
@@ -1923,6 +1991,8 @@ export function DataProvider({ children }) {
         restoreSkillMilestone,
         logSkillHours,
         streakData,
+        dailyActivity,
+        recordDailyActivity,
         timerHistory,
         addTimerSession,
         importantLinks,

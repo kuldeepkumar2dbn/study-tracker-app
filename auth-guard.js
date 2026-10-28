@@ -517,6 +517,7 @@ export function createZeroStateData(userId) {
     todayLoggedHours: 0.0,
     todayLogDate: today,
     weeklyVelocityHours: 0.0,
+    dailyActivity: {},
     routine: [],
     revisionQueue: [],
     exams: [],

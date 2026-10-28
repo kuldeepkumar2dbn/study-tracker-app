@@ -14,6 +14,8 @@ import {
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
 import { soundEngine } from '../../utils/audio';
+import { ambientAudioEngine } from '../../utils/ambientAudio';
+import AmbientAudioControls from '../AmbientAudioControls';
 import AnimatedHeadline from '../AnimatedHeadline';
 import RollingNumber from '../RollingNumber';
 
@@ -109,8 +111,8 @@ export default function TimerTab() {
 
   const handleSessionComplete = () => {
     setIsRunning(false);
-    soundEngine.stop();
-    setAmbientSound('none');
+    // Gently fade out ambient sound over 2 seconds on completion
+    ambientAudioEngine.fadeOut(2.0);
 
     // Update persistent timer storage
     localStorage.setItem('is_timer_running', 'false');
@@ -119,7 +121,7 @@ export default function TimerTab() {
     window.dispatchEvent(new Event('studyflow-timer-sync'));
 
     // Chime
-    soundEngine.playCompletionChime();
+    ambientAudioEngine.playCompletionChime();
 
     // Confetti celebration
     try {
@@ -157,7 +159,7 @@ export default function TimerTab() {
     setActivePreset(preset);
     setTotalSeconds(preset.durationSec);
     setTimeLeft(preset.durationSec);
-    soundEngine.stop();
+    ambientAudioEngine.fadeOut(2.0);
     localStorage.setItem('is_timer_running', 'false');
     localStorage.setItem('focus_seconds_left', String(preset.durationSec));
     localStorage.setItem('focus_timer_total_seconds', String(preset.durationSec));
@@ -168,8 +170,8 @@ export default function TimerTab() {
   const handleTogglePlay = () => {
     const nextRunning = !isRunning;
     if (nextRunning) {
-      if (ambientSound !== 'none') {
-        soundEngine.playMode(ambientSound);
+      if (ambientAudioEngine.getMode() !== 'off' && ambientAudioEngine.getMode() !== 'none') {
+        ambientAudioEngine.setMode(ambientAudioEngine.getMode(), { fadeIn: true, duration: 1.0 });
       }
       const endTime = Date.now() + timeLeft * 1000;
       localStorage.setItem('is_timer_running', 'true');
@@ -178,7 +180,8 @@ export default function TimerTab() {
       localStorage.setItem('focus_timer_total_seconds', String(totalSeconds));
       localStorage.setItem('focus_timer_subject', selectedSubject);
     } else {
-      soundEngine.stop();
+      // Gently fade out sound over 2 seconds when pausing
+      ambientAudioEngine.fadeOut(2.0);
       localStorage.setItem('is_timer_running', 'false');
       localStorage.setItem('focus_seconds_left', String(timeLeft));
       localStorage.removeItem('focus_timer_end');
@@ -190,20 +193,11 @@ export default function TimerTab() {
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeft(totalSeconds);
-    soundEngine.stop();
+    ambientAudioEngine.fadeOut(2.0);
     localStorage.setItem('is_timer_running', 'false');
     localStorage.setItem('focus_seconds_left', String(totalSeconds));
     localStorage.removeItem('focus_timer_end');
     window.dispatchEvent(new Event('studyflow-timer-sync'));
-  };
-
-  const handleAmbientChange = (mode) => {
-    setAmbientSound(mode);
-    if (mode === 'none') {
-      soundEngine.stop();
-    } else {
-      soundEngine.playMode(mode);
-    }
   };
 
   const formatTime = (secs) => {
@@ -407,40 +401,9 @@ export default function TimerTab() {
             );
           })()}
 
-          {/* Ambient Sound Synthesizer */}
-          <div>
-            <label className="block text-theme-muted font-medium mb-1.5 flex items-center justify-between">
-              <span className="flex items-center gap-1">
-                <Headphones className="w-3.5 h-3.5 text-theme-accent" />
-                Ambient White Noise
-              </span>
-              {ambientSound !== 'none' && (
-                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                  Active
-                </span>
-              )}
-            </label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {[
-                { id: 'none', label: 'Off' },
-                { id: 'pink', label: 'Rain' },
-                { id: 'brown', label: 'Rumble' },
-                { id: 'white', label: 'White' }
-              ].map(opt => (
-                <button
-                  key={opt.id}
-                  onClick={() => handleAmbientChange(opt.id)}
-                  className={`py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
-                    ambientSound === opt.id
-                      ? 'bg-theme-accent text-white'
-                      : 'bg-theme-surface text-theme-muted hover:text-theme-text border border-theme-border'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+          {/* Native Web Audio Ambient Sound Controls */}
+          <div className="sm:col-span-2">
+            <AmbientAudioControls />
           </div>
         </div>
 

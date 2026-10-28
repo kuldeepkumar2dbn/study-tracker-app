@@ -28,6 +28,8 @@ import InlineEdit from '../InlineEdit';
 import ChapterReportCard from '../ChapterReportCard';
 import AnimatedHeadline from '../AnimatedHeadline';
 import RollingNumber from '../RollingNumber';
+import AmbientAudioControls from '../AmbientAudioControls';
+import { ambientAudioEngine } from '../../utils/ambientAudio';
 import { celebrateTaskCompletion } from '../../utils/confetti';
 
 const YoutubeIcon = ({ className = "w-4 h-4 text-rose-500" }) => (
@@ -855,7 +857,10 @@ export default function SubjectsTab() {
                 </h3>
               </div>
               <button 
-                onClick={() => setActiveVideoModal(null)}
+                onClick={() => {
+                  setActiveVideoModal(null);
+                  ambientAudioEngine.fadeOut(2.0);
+                }}
                 className="text-theme-muted hover:text-theme-text p-1"
               >
                 <X className="w-5 h-5" />
@@ -871,6 +876,11 @@ export default function SubjectsTab() {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
+            </div>
+
+            {/* Native Web Audio Ambient Focus Soundscape in Video Modal */}
+            <div className="mt-4">
+              <AmbientAudioControls compact={true} />
             </div>
           </div>
         </div>

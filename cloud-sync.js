@@ -408,6 +408,9 @@ export function populateGranularStorage(userId, data) {
     if (Array.isArray(data.notes)) {
       localStorage.setItem(`studyflow_${userId}_notes`, JSON.stringify(data.notes));
     }
+    if (data.dailyActivity && typeof data.dailyActivity === 'object') {
+      localStorage.setItem(`studyflow_${userId}_daily_activity`, JSON.stringify(data.dailyActivity));
+    }
     if (data.streak !== undefined || data.todayLoggedHours !== undefined) {
       const streakObj = {
         streakCount: Number(data.streak) || 0,

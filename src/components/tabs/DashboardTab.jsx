@@ -27,6 +27,7 @@ import SyllabusRoutineChip from '../SyllabusRoutineChip';
 import SyllabusSyncToast from '../SyllabusSyncToast';
 import SkillRoutineChip from '../SkillRoutineChip';
 import SkillSyncToast from '../SkillSyncToast';
+import ConsistencyRadar from '../ConsistencyRadar';
 
 export default function DashboardTab({ onNavigateTab }) {
   const { 
@@ -34,6 +35,7 @@ export default function DashboardTab({ onNavigateTab }) {
     exams, 
     skills, 
     streakData, 
+    dailyActivity,
     updateSubjectHours, 
     logStudyHours,
     getTodayRevisionQueue,
@@ -372,6 +374,12 @@ export default function DashboardTab({ onNavigateTab }) {
           </p>
         </div>
       </div>
+
+      {/* Consistency Radar: 90-Day GitHub-Style Study Activity Heatmap */}
+      <ConsistencyRadar 
+        dailyActivity={dailyActivity} 
+        streak={safeStreakData.streakCount} 
+      />
 
       {/* Middle Grid: Routine Time-Blocks Checklist + Today's Revision Queue */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
