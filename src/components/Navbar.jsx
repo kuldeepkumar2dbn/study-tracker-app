@@ -16,7 +16,7 @@ import Logo from './Logo';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { logout } from '../../auth-guard';
-import { formatRelativeSyncTime, getLastSyncedTimestamp } from '../services/cloud-sync';
+import { formatRelativeSyncTime, getLastSyncedTimestamp, verifyOrRequestDriveToken } from '../services/cloud-sync';
 
 export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
@@ -143,8 +143,23 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
                   <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
                 </div>
-                <span className="hidden sm:inline font-semibold">Drive Synced</span>
+                <span className="hidden sm:inline font-semibold">Synced</span>
               </div>
+            ) : syncStatus === 'needs_auth' ? (
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.google?.accounts?.oauth2) {
+                    verifyOrRequestDriveToken({ promptUserIfConsentNeeded: true }).then(t => {
+                      if (t && syncNowToDrive) syncNowToDrive();
+                    });
+                  }
+                }}
+                title="Google Drive permissions needed on this device. Click to authorize."
+                className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 text-xs font-semibold shadow-sm cursor-pointer transition-all select-none animate-pulse-soft"
+              >
+                <Cloud className="w-4 h-4 text-amber-400" />
+                <span className="font-semibold text-xs">Click to Authorize Drive</span>
+              </button>
             ) : (
               <div
                 onClick={onOpenDriveModal}
@@ -156,12 +171,16 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
               </div>
             )}
 
+            {/* Explicit "Sync Cloud Data" Button in Header */}
             <button
+              id="header-sync-now-btn"
               onClick={syncNowToDrive}
-              title="Sync now to personal Google Drive"
-              className="top-action-link p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-muted hover:text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95"
+              title="Explicit Bidirectional Cloud Sync: uploads laptop data if newer, or downloads cloud data if phone is missing data"
+              className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border hover:border-theme-accent/40 text-xs font-semibold text-theme-text hover:text-theme-accent transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              <span className="text-xs">☁️</span>
+              <span className="font-semibold">Sync Now</span>
+              <RefreshCw className={`w-3 h-3 ${syncStatus === 'syncing' ? 'animate-spin text-theme-accent' : 'text-theme-muted'}`} />
             </button>
           </div>
 

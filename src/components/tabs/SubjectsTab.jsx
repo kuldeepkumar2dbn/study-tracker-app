@@ -22,6 +22,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { getActiveUserId } from '../../../auth-guard';
 import { getYouTubeThumbnail, getYouTubeEmbedUrl } from '../../utils/youtube';
 import InlineEdit from '../InlineEdit';
 import ChapterReportCard from '../ChapterReportCard';
@@ -58,9 +59,35 @@ export default function SubjectsTab() {
     removeSubjectAttachment 
   } = useData();
 
+  const activeUserId = (() => {
+    try {
+      return getActiveUserId ? getActiveUserId() : (localStorage.getItem('study_user_sub') || 'guest');
+    } catch {
+      return 'guest';
+    }
+  })();
+
+  // Defensive fallback data access preventing undefined runtime crashes
+  const userData = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(`studyflow_${activeUserId}_data`) || "{}");
+    } catch {
+      return {};
+    }
+  })();
+
+  const rawUserDataSubjects = Array.isArray(userData?.subjects) ? userData.subjects : [];
+
+  // Prioritize context subjects if populated; fallback to localStorage userData.subjects or safe empty array
+  const rawSubjects = (Array.isArray(subjects) && subjects.length > 0)
+    ? subjects
+    : (rawUserDataSubjects.length > 0 ? rawUserDataSubjects : (Array.isArray(subjects) ? subjects : []));
+
+  const safeSubjects = Array.isArray(rawSubjects) ? rawSubjects : [];
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [expandedSubjectId, setExpandedSubjectId] = useState(subjects[0]?.id || null);
+  const [expandedSubjectId, setExpandedSubjectId] = useState(() => (safeSubjects && safeSubjects[0] ? safeSubjects[0].id : null));
   const [reportCardData, setReportCardData] = useState(null); // { subject, chapter }
 
   // Expanded subtopics accordion map
@@ -73,8 +100,8 @@ export default function SubjectsTab() {
   useEffect(() => {
     const handleHash = () => {
       const hash = (window.location.hash || '').replace(/^#/, '');
-      if (hash) {
-        const found = subjects.find(s => s.id === hash);
+      if (hash && safeSubjects.length > 0) {
+        const found = safeSubjects.find(s => s && s.id === hash);
         if (found) {
           setExpandedSubjectId(found.id);
           setTimeout(() => {
@@ -90,7 +117,7 @@ export default function SubjectsTab() {
     handleHash();
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
-  }, [subjects]);
+  }, [safeSubjects]);
 
   // New subject modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -117,13 +144,17 @@ export default function SubjectsTab() {
   const [uploadingSubjectId, setUploadingSubjectId] = useState(null);
   const fileInputRefs = useRef({});
 
-  const categories = ['All', ...new Set(subjects.map(s => s.category || 'General'))];
+  const categories = ['All', ...new Set(safeSubjects.map(s => s?.category || 'General'))];
 
-  const filteredSubjects = subjects.filter(sub => {
+  const filteredSubjects = safeSubjects.filter(sub => {
+    if (!sub) return false;
     const matchesCategory = selectedCategory === 'All' || sub.category === selectedCategory;
-    const matchesSearch = sub.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (sub.code && sub.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      sub.topics.some(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    const subName = sub.name || '';
+    const subCode = sub.code || '';
+    const topics = Array.isArray(sub.topics) ? sub.topics : [];
+    const matchesSearch = subName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      subCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      topics.some(t => (t?.title || '').toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
@@ -199,14 +230,17 @@ export default function SubjectsTab() {
 
   // Recalculates chapter and subject completion % based on completed sub-topics
   const calculateSubjectPercentage = (topics) => {
-    if (!topics || topics.length === 0) return 0;
+    if (!Array.isArray(topics) || topics.length === 0) return 0;
     
     let totalItems = 0;
     let earnedScore = 0;
 
     topics.forEach(t => {
-      if (t.subtopics && t.subtopics.length > 0) {
-        t.subtopics.forEach(st => {
+      if (!t) return;
+      const subtopics = Array.isArray(t.subtopics) ? t.subtopics : [];
+      if (subtopics.length > 0) {
+        subtopics.forEach(st => {
+          if (!st) return;
           totalItems += 1;
           if (st.status === 'Mastered' || st.completed) earnedScore += 100;
           else if (st.status === 'In Progress') earnedScore += 50;
@@ -223,8 +257,14 @@ export default function SubjectsTab() {
 
   const getDaysUntilExam = (dateStr) => {
     if (!dateStr) return null;
-    const diff = new Date(dateStr) - new Date();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    try {
+      const examDate = new Date(dateStr);
+      if (isNaN(examDate.getTime())) return null;
+      const diff = examDate - new Date();
+      return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    } catch {
+      return null;
+    }
   };
 
   return (
@@ -284,12 +324,40 @@ export default function SubjectsTab() {
         </div>
       </div>
 
-      {/* Subjects Cards List */}
-      <div className="space-y-5">
-        {filteredSubjects.map((sub) => {
-          const completionPct = calculateSubjectPercentage(sub.topics);
-          const isExpanded = expandedSubjectId === sub.id;
-          const daysToExam = getDaysUntilExam(sub.examDate);
+      {/* Subjects Cards List OR Empty State */}
+      {safeSubjects.length === 0 ? (
+        <div 
+          id="syllabus-empty-state"
+          className="rounded-3xl glass-panel border border-theme-border p-8 sm:p-12 text-center max-w-xl mx-auto my-8 animate-fadeIn"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500/20 via-blue-500/20 to-indigo-500/20 border border-cyan-500/30 flex items-center justify-center mx-auto mb-4 text-cyan-400 shadow-inner">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <h3 className="font-display font-bold text-xl text-theme-text mb-2">
+            No subjects added yet
+          </h3>
+          <p className="text-xs sm:text-sm text-theme-muted max-w-sm mx-auto mb-6 leading-relaxed">
+            No subjects added yet. Tap '+ Add Subject' to create your first syllabus roadmap.
+          </p>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="btn-primary-action inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-theme-accent hover:bg-theme-accentHover text-white font-semibold text-xs shadow-glow-accent transition-all cursor-pointer active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Add Subject</span>
+          </button>
+        </div>
+      ) : filteredSubjects.length === 0 ? (
+        <div className="rounded-2xl glass-panel border border-theme-border p-8 text-center text-xs text-theme-muted">
+          No courses match your search or filter criteria.
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {filteredSubjects.map((sub) => {
+            const topics = Array.isArray(sub?.topics) ? sub.topics : [];
+            const completionPct = calculateSubjectPercentage(topics);
+            const isExpanded = expandedSubjectId === sub.id;
+            const daysToExam = getDaysUntilExam(sub.examDate);
 
           return (
             <div 
@@ -421,12 +489,12 @@ export default function SubjectsTab() {
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold uppercase tracking-wider text-theme-muted flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5 text-theme-accent" />
-                        Chapters & Sub-Topics Architecture ({sub.topics.length})
+                        Chapters & Sub-Topics Architecture ({topics.length})
                       </span>
                     </div>
 
                     <div className="space-y-3">
-                      {sub.topics.map((topic) => {
+                      {topics.map((topic) => {
                         const isSubExpanded = !!expandedTopics[topic.id];
                         const subtopics = topic.subtopics || [];
                         const ytLinks = topic.youtubeLinks || [];
@@ -770,6 +838,7 @@ export default function SubjectsTab() {
           );
         })}
       </div>
+    )}
 
       {/* In-App YouTube "Watch Lecture" Modal */}
       {activeVideoModal && (
@@ -1014,3 +1083,7 @@ export default function SubjectsTab() {
     </div>
   );
 }
+
+export const SyllabusView = SubjectsTab;
+export { SubjectsTab };
+

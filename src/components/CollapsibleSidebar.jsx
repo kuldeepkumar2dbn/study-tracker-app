@@ -237,6 +237,19 @@ export default function CollapsibleSidebar({
 
   // Counts for status badges
   const pendingRoutineCount = (routineSlots || []).filter(s => !s.completed).length;
+  // Body overflow locking and auto-reset for mobile drawer
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileOpen]);
+
   const dueRevisionCount = typeof getTodayRevisionQueue === 'function' ? getTodayRevisionQueue().length : 0;
   const urgentExamsCount = (exams || []).filter(e => {
     if (e.isCompleted) return false;
@@ -255,14 +268,20 @@ export default function CollapsibleSidebar({
 
   return (
     <>
-      {/* Mobile Drawer Backdrop Overlay (< 768px) */}
-      {isMobileOpen && (
-        <div 
-          onClick={onCloseMobile}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-fadeIn"
-          aria-hidden="true"
-        />
-      )}
+      {/* Mobile Drawer Backdrop Overlay (< 768px) with pointer-events protection */}
+      <div 
+        id="sidebar-backdrop"
+        onClick={() => {
+          if (onCloseMobile) onCloseMobile();
+          if (typeof document !== 'undefined') document.body.style.overflow = '';
+        }}
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-all duration-300 ${
+          isMobileOpen 
+            ? 'opacity-100 pointer-events-auto' 
+            : 'opacity-0 pointer-events-none'
+        }`}
+        aria-hidden={!isMobileOpen}
+      />
 
       {/* Main Single Primary Navigation Rail */}
       <aside 
@@ -284,7 +303,10 @@ export default function CollapsibleSidebar({
               Navigation Rail
             </span>
             <button
-              onClick={onCloseMobile}
+              onClick={() => {
+                if (onCloseMobile) onCloseMobile();
+                if (typeof document !== 'undefined') document.body.style.overflow = '';
+              }}
               title="Close Drawer"
               className="p-1.5 rounded-lg text-theme-muted hover:text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
               aria-label="Close navigation drawer"
@@ -345,6 +367,9 @@ export default function CollapsibleSidebar({
             const handleClick = (e) => {
               if (isMobileOpen && onCloseMobile) {
                 onCloseMobile();
+              }
+              if (typeof document !== 'undefined') {
+                document.body.style.overflow = '';
               }
               if (isDemoLockedNotes) {
                 e.preventDefault();
@@ -512,6 +537,7 @@ export default function CollapsibleSidebar({
             style={{ display: hasAdminAccess ? 'flex' : 'none' }}
             onClick={() => {
               if (isMobileOpen && onCloseMobile) onCloseMobile();
+              if (typeof document !== 'undefined') document.body.style.overflow = '';
             }}
             className={`group relative flex items-center h-10 px-3 rounded-xl transition-all duration-200 cursor-pointer ${
               activeTabId === 'admin'

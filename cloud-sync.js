@@ -5,18 +5,24 @@
  * Implements:
  * 1. Background sync between LocalStorage and Google Drive (drive.file scope)
  * 2. Sync file identifier: studyflow_user_data.json
- * 3. Login & Data Hydration (Multi-Device Restoration)
- *    - Case A: File exists -> download, compare remoteData.updatedAt with localData.updatedAt, hydrate if newer
- *    - Case B: File does not exist -> create zero-state payload on Drive and save fileId
- * 4. Real-time debounced cloud save (debounceSaveToDrive with 2000ms delay):
- *    - Saves immediately to localStorage with ISO updatedAt timestamp
- *    - Updates Drive file via PATCH with uploadType=media
- *    - Silently handles 401 token expiration via GIS requestAccessToken({ prompt: '' }) and retries once
- * 5. UI Header status badges: "Syncing...", "Drive Synced" (with relative time), and "Offline - Saved locally"
- * 6. Isolated Demo mode & Guest preview protection
+ * 3. Mobile Google Drive Token Verification & Auto-Reauthorization:
+ *    - Verifies Google OAuth access_token with drive.file scope on mobile login and page loads
+ *    - Calls tokenClient.requestAccessToken({ prompt: '' }) silently, or prompts user if consent is needed
+ * 4. Auto-Hydrate from Drive Before Rendering:
+ *    - Queries GET https://www.googleapis.com/drive/v3/files?q=name='studyflow_user_data.json' and trashed=false&fields=files(id, name, modifiedTime)
+ *    - Downloads GET https://www.googleapis.com/drive/v3/files/${fileId}?alt=media
+ *    - Writes directly to studyflow_${userId}_data in localStorage without overwriting cloud data with an empty local zero-state
+ *    - Initializes zero-state only if cloud file does not exist
+ * 5. Explicit "Sync Cloud Data" / "☁️ Sync Now" bidirectional synchronization:
+ *    - Uploads local laptop data if newer, or downloads cloud data if phone is missing data
+ * 6. UI Header status badges: "Syncing...", "Synced" / "Drive Synced", "Click to Authorize Drive", and "Offline - Saved locally"
  */
 
-import { requestSilentDriveToken, DEFAULT_GOOGLE_CLIENT_ID } from './src/services/googleDrive.js';
+import { 
+  requestSilentDriveToken, 
+  DEFAULT_GOOGLE_CLIENT_ID, 
+  DEFAULT_GOOGLE_SCOPES 
+} from './src/services/googleDrive.js';
 import { 
   getOrCreateZeroStateData, 
   createZeroStateData, 
@@ -32,10 +38,9 @@ export const SYNC_STATUS_KEY = 'studyflow_cloud_sync_status';
 
 // In-memory sync state
 let activeFileId = null;
-let currentSyncStatus = 'offline'; // 'offline' | 'syncing' | 'synced' | 'unsaved' | 'error'
+let currentSyncStatus = 'offline'; // 'offline' | 'syncing' | 'synced' | 'needs_auth' | 'error'
 let lastSyncedTimestamp = null;
 let debounceTimer = null;
-let tokenClientInstance = null;
 
 /**
  * Format relative sync time for UI tooltips:
@@ -71,6 +76,96 @@ export function getActiveAccessToken() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Checks whether an active access token exists and is not expired
+ */
+export function isAccessTokenValid(token) {
+  if (!token) return false;
+  if (typeof window === 'undefined') return true;
+  try {
+    const expiry = sessionStorage.getItem('google_token_expiry');
+    if (expiry && Date.now() >= Number(expiry)) {
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Mobile Google Drive Token Verification & Auto-Reauthorization:
+ * - Checks whether a valid Google OAuth access_token exists with drive.file scope.
+ * - If missing or expired:
+ *   Calls tokenClient.requestAccessToken({ prompt: '' }) silently, or prompts user if consent is needed.
+ */
+export async function verifyOrRequestDriveToken({ promptUserIfConsentNeeded = false, clientId = DEFAULT_GOOGLE_CLIENT_ID } = {}) {
+  let token = getActiveAccessToken();
+  const valid = isAccessTokenValid(token);
+
+  if (token && valid) {
+    return token;
+  }
+
+  // Missing or expired token on mobile: Attempt silent reauthorization first
+  if (typeof window !== 'undefined' && window.google?.accounts?.oauth2) {
+    try {
+      token = await requestSilentDriveToken(clientId);
+      if (token) {
+        setSyncStatus('synced');
+        return token;
+      }
+    } catch (silentErr) {
+      console.warn('Silent Drive token reauthorization failed on mobile:', silentErr);
+    }
+
+    // If silent renewal fails and user interaction is permitted (or needed for consent)
+    if (promptUserIfConsentNeeded) {
+      return new Promise((resolve) => {
+        try {
+          const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId || DEFAULT_GOOGLE_CLIENT_ID,
+            scope: DEFAULT_GOOGLE_SCOPES,
+            callback: (tokenResponse) => {
+              if (tokenResponse && tokenResponse.access_token) {
+                const freshToken = tokenResponse.access_token;
+                const expiresIn = Number(tokenResponse.expires_in) || 3600;
+                const expiry = Date.now() + expiresIn * 1000;
+
+                sessionStorage.setItem('studyflow_drive_token', freshToken);
+                sessionStorage.setItem('google_access_token', freshToken);
+                sessionStorage.setItem('google_token_expiry', String(expiry));
+
+                setSyncStatus('synced');
+                resolve(freshToken);
+              } else {
+                setSyncStatus('needs_auth');
+                resolve(null);
+              }
+            },
+            error_callback: () => {
+              setSyncStatus('needs_auth');
+              resolve(null);
+            }
+          });
+
+          client.requestAccessToken({ prompt: 'consent' });
+        } catch (e) {
+          console.warn('Interactive Drive authorization failed:', e);
+          setSyncStatus('needs_auth');
+          resolve(null);
+        }
+      });
+    } else {
+      setSyncStatus('needs_auth');
+      return null;
+    }
+  }
+
+  setSyncStatus('needs_auth');
+  return null;
 }
 
 /**
@@ -114,12 +209,12 @@ export function getLastSyncedTimestamp() {
 
 /**
  * Queries Google Drive API v3 for studyflow_user_data.json:
- * GET https://www.googleapis.com/drive/v3/files?q=name='studyflow_user_data.json' and trashed=false&fields=files(id, modifiedTime)
+ * GET https://www.googleapis.com/drive/v3/files?q=name='studyflow_user_data.json' and trashed=false&fields=files(id, name, modifiedTime)
  */
 export async function findSyncFile(accessToken) {
   if (!accessToken) return null;
   const query = encodeURIComponent(`name='${SYNC_FILE_NAME}' and trashed=false`);
-  const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,modifiedTime,name,parents)`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,parents)`;
 
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` }
@@ -284,30 +379,94 @@ export async function handleSilentTokenRefresh() {
     return await requestSilentDriveToken(DEFAULT_GOOGLE_CLIENT_ID);
   } catch (err) {
     console.warn('Silent Drive token refresh failed:', err);
-    setSyncStatus('offline', { reason: 'token_expired' });
+    setSyncStatus('needs_auth', { reason: 'token_expired' });
     return null;
   }
 }
 
 /**
- * LOGIN & DATA HYDRATION (MULTI-DEVICE RESTORATION)
+ * Populates granular scoped storage keys so any component reading them directly is in sync
+ */
+export function populateGranularStorage(userId, data) {
+  if (!userId || !data || typeof localStorage === 'undefined') return;
+  try {
+    if (Array.isArray(data.routine)) {
+      localStorage.setItem(`studyflow_${userId}_routine_slots`, JSON.stringify(data.routine));
+    }
+    if (Array.isArray(data.exams)) {
+      localStorage.setItem(`studyflow_${userId}_exams`, JSON.stringify(data.exams));
+    }
+    if (Array.isArray(data.skills)) {
+      localStorage.setItem(`studyflow_${userId}_skills`, JSON.stringify(data.skills));
+    }
+    if (Array.isArray(data.subjects)) {
+      localStorage.setItem(`studyflow_${userId}_subjects`, JSON.stringify(data.subjects));
+    }
+    if (Array.isArray(data.weeklyGoals)) {
+      localStorage.setItem(`studyflow_${userId}_weekly_goals`, JSON.stringify(data.weeklyGoals));
+    }
+    if (Array.isArray(data.notes)) {
+      localStorage.setItem(`studyflow_${userId}_notes`, JSON.stringify(data.notes));
+    }
+    if (data.streak !== undefined || data.todayLoggedHours !== undefined) {
+      const streakObj = {
+        streakCount: Number(data.streak) || 0,
+        lastActiveDate: data.lastActiveDate || null,
+        todayHours: Number(data.todayLoggedHours) || 0.0,
+        dailyTarget: Number(data.dailyTargetHours) || 4.0,
+        todayLogDate: data.todayLogDate || new Date().toISOString().split('T')[0],
+        weeklyVelocityHours: Number(data.weeklyVelocityHours) || 0.0
+      };
+      localStorage.setItem(`studyflow_${userId}_streak`, JSON.stringify(streakObj));
+    }
+  } catch (e) {
+    console.warn('Error populating granular storage keys from cloud:', e);
+  }
+}
+
+/**
+ * Dispatches sync events to notify UI across all tabs
+ */
+export function dispatchSyncEvents(data) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('studyflow-cloud-sync', {
+    detail: { action: 'hydrated', source: 'cloud', data }
+  }));
+  window.dispatchEvent(new Event('studyflow-data-changed'));
+  window.dispatchEvent(new Event('storage'));
+}
+
+/**
+ * AUTO-HYDRATE FROM DRIVE BEFORE RENDERING (MULTI-DEVICE RESTORATION)
  *
- * When a user logs in via Google Identity Services and an access token is acquired:
- * - Query Google Drive API v3 for studyflow_user_data.json
- * - CASE A: File exists -> download, compare remoteData.updatedAt with localData.updatedAt,
- *   hydrate localStorage if remote is newer or local is empty, trigger UI refresh.
- * - CASE B: File does not exist -> initialize clean zero-state, create file on Drive, store fileId.
+ * When any page loads or upon Google sign-in:
+ * 1. Query Google Drive API:
+ *    GET https://www.googleapis.com/drive/v3/files?q=name='studyflow_user_data.json' and trashed=false&fields=files(id, name, modifiedTime)
+ * 2. If studyflow_user_data.json exists in Drive:
+ *    - Download the file content: GET https://www.googleapis.com/drive/v3/files/${fileId}?alt=media
+ *    - Parse JSON and write directly to studyflow_${userId}_data in localStorage.
+ *    - Do NOT overwrite cloud data with an empty local zero-state.
+ * 3. If file does NOT exist, only then initialize the zero-state.
  *
  * @param {string} accessToken Active Google Drive OAuth token
  * @param {string} userId Unique Google user subject ID (user.sub)
  * @returns {Promise<Object>} Hydration result
  */
 export async function hydrateFromCloud(accessToken, userId) {
-  if (!accessToken || !userId || userId === 'guest') {
+  if (!userId || userId === 'guest') {
     return { hydrated: false, reason: 'unauthenticated' };
   }
   if (isDemoUser() || userId === 'demo_sandbox_user') {
     return { hydrated: false, reason: 'demo_user' };
+  }
+
+  let token = accessToken || getActiveAccessToken();
+  if (!token) {
+    token = await verifyOrRequestDriveToken();
+  }
+  if (!token) {
+    setSyncStatus('needs_auth');
+    return { hydrated: false, reason: 'needs_auth' };
   }
 
   const masterStorageKey = `studyflow_${userId}_data`;
@@ -315,13 +474,13 @@ export async function hydrateFromCloud(accessToken, userId) {
 
   try {
     // 1. Query Google Drive API v3
-    const existingFile = await findSyncFile(accessToken);
+    const existingFile = await findSyncFile(token);
 
     if (existingFile && existingFile.id) {
       // ==========================================
       // CASE A: File Exists in Google Drive
       // ==========================================
-      const remoteData = await downloadSyncFile(accessToken, existingFile.id);
+      const remoteData = await downloadSyncFile(token, existingFile.id);
 
       if (remoteData && typeof remoteData === 'object') {
         let localData = null;
@@ -333,53 +492,23 @@ export async function hydrateFromCloud(accessToken, userId) {
         const remoteTime = remoteData.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
         const localTime = localData && localData.updatedAt ? new Date(localData.updatedAt).getTime() : 0;
 
-        // If remote data is newer or local is empty, populate localStorage with remoteData
-        const isRemoteNewer = !localData || !localTime || remoteTime >= localTime;
+        // Check if phone or local device has empty or unpopulated data
+        const isLocalZeroOrEmpty = !localData || 
+          (!localData.subjects?.length && (remoteData.subjects?.length > 0)) ||
+          (!localData.routine?.length && (remoteData.routine?.length > 0)) ||
+          (!localData.skills?.length && (remoteData.skills?.length > 0)) ||
+          (!localData.exams?.length && (remoteData.exams?.length > 0));
 
-        if (isRemoteNewer) {
-          // Normalize user identity
+        // Do NOT overwrite cloud data with an empty local zero-state.
+        const shouldHydrateRemote = isLocalZeroOrEmpty || remoteTime >= localTime || !localTime;
+
+        if (shouldHydrateRemote) {
           remoteData.userId = userId;
           localStorage.setItem(masterStorageKey, JSON.stringify(remoteData));
-
-          // Also populate granular scoped storage keys so any component reading them directly is in sync
-          try {
-            if (Array.isArray(remoteData.routine)) {
-              localStorage.setItem(`studyflow_${userId}_routine_slots`, JSON.stringify(remoteData.routine));
-            }
-            if (Array.isArray(remoteData.exams)) {
-              localStorage.setItem(`studyflow_${userId}_exams`, JSON.stringify(remoteData.exams));
-            }
-            if (Array.isArray(remoteData.skills)) {
-              localStorage.setItem(`studyflow_${userId}_skills`, JSON.stringify(remoteData.skills));
-            }
-            if (Array.isArray(remoteData.subjects)) {
-              localStorage.setItem(`studyflow_${userId}_subjects`, JSON.stringify(remoteData.subjects));
-            }
-            if (remoteData.streak !== undefined) {
-              const streakObj = {
-                streakCount: Number(remoteData.streak) || 0,
-                lastActiveDate: remoteData.lastActiveDate || null,
-                todayHours: Number(remoteData.todayLoggedHours) || 0.0,
-                dailyTarget: Number(remoteData.dailyTargetHours) || 4.0,
-                todayLogDate: remoteData.todayLogDate || new Date().toISOString().split('T')[0],
-                weeklyVelocityHours: Number(remoteData.weeklyVelocityHours) || 0.0
-              };
-              localStorage.setItem(`studyflow_${userId}_streak`, JSON.stringify(streakObj));
-            }
-          } catch (e) {
-            console.warn('Error populating granular keys from cloud:', e);
-          }
-
-          // Trigger UI refresh across all active cards (Streak, Daily Target, Routine, Exams, Syllabus)
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('studyflow-cloud-sync', {
-              detail: { action: 'hydrated', source: 'cloud', data: remoteData }
-            }));
-            window.dispatchEvent(new Event('studyflow-data-changed'));
-            window.dispatchEvent(new Event('storage'));
-          }
-
+          populateGranularStorage(userId, remoteData);
+          dispatchSyncEvents(remoteData);
           setSyncStatus('synced', { syncedAt: remoteTime || Date.now() });
+
           return {
             hydrated: true,
             source: 'remote',
@@ -387,7 +516,7 @@ export async function hydrateFromCloud(accessToken, userId) {
             data: remoteData
           };
         } else {
-          // Local is newer: upload local data to cloud
+          // Local laptop data is genuinely newer: upload local data to cloud
           debounceSaveToDrive(localData, 100);
           setSyncStatus('synced', { syncedAt: Date.now() });
           return {
@@ -402,11 +531,15 @@ export async function hydrateFromCloud(accessToken, userId) {
 
     // ==========================================
     // CASE B: File Does Not Exist in Google Drive
+    // Only then initialize the zero-state
     // ==========================================
     let zeroState = getOrCreateZeroStateData(userId) || createZeroStateData(userId);
+    zeroState.userId = userId;
     zeroState.updatedAt = new Date().toISOString();
+    localStorage.setItem(masterStorageKey, JSON.stringify(zeroState));
+    populateGranularStorage(userId, zeroState);
 
-    const createdFile = await createSyncFile(accessToken, zeroState);
+    const createdFile = await createSyncFile(token, zeroState);
     setSyncStatus('synced', { syncedAt: Date.now() });
 
     return {
@@ -417,7 +550,11 @@ export async function hydrateFromCloud(accessToken, userId) {
     };
   } catch (err) {
     console.error('Cloud hydration error:', err);
-    setSyncStatus('offline', { error: err.message });
+    if (err.message === 'UNAUTHORIZED_DRIVE_TOKEN') {
+      setSyncStatus('needs_auth');
+    } else {
+      setSyncStatus('offline', { error: err.message });
+    }
     return { hydrated: false, error: err.message };
   }
 }
@@ -428,10 +565,6 @@ export async function hydrateFromCloud(accessToken, userId) {
  * - Attaches ISO updatedAt timestamp
  * - Debounces network call to Google Drive (default 2000ms)
  * - Updates existing Drive file via PATCH with uploadType=media
- * - Handles 401 token expiration silently and retries once
- *
- * @param {Object} studyData Master data document to persist
- * @param {number} delay Debounce delay in ms (default 2000)
  */
 export function debounceSaveToDrive(studyData, delay = 2000) {
   if (isDemoUser()) return;
@@ -441,7 +574,7 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
   const storageKey = `studyflow_${activeUserId}_data`;
   const nowIso = new Date().toISOString();
 
-  // 1. Save immediately to LocalStorage for ZERO UI LAG
+  // 1. Save immediately to LocalStorage for zero UI lag
   const payload = {
     ...studyData,
     userId: activeUserId,
@@ -454,7 +587,6 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
     console.error('Immediate localStorage write error:', e);
   }
 
-  // Set transient UI state
   setSyncStatus('syncing');
 
   // 2. Debounce the Google Drive network request
@@ -463,9 +595,12 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
   }
 
   debounceTimer = setTimeout(async () => {
-    const token = getActiveAccessToken();
+    let token = getActiveAccessToken();
     if (!token) {
-      setSyncStatus('offline', { reason: 'no_token' });
+      token = await verifyOrRequestDriveToken();
+    }
+    if (!token) {
+      setSyncStatus('needs_auth', { reason: 'no_token' });
       return;
     }
 
@@ -476,7 +611,6 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
       }
 
       if (!fileId) {
-        // Query Drive to find existing file or create it
         const file = await findSyncFile(token);
         if (file && file.id) {
           fileId = file.id;
@@ -486,54 +620,124 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
         }
       }
 
-      // Update existing file on Drive
       await updateSyncFile(token, fileId, payload);
       setSyncStatus('synced', { syncedAt: Date.now() });
     } catch (err) {
       console.error('Debounced save to Drive failed:', err);
-      // Amber warning "Offline - Saved locally"
-      setSyncStatus('offline', { error: err.message });
+      if (err.message === 'UNAUTHORIZED_DRIVE_TOKEN') {
+        setSyncStatus('needs_auth');
+      } else {
+        setSyncStatus('offline', { error: err.message });
+      }
     }
   }, delay);
 }
 
 /**
- * Standalone manual sync trigger
+ * EXPLICIT BIDIRECTIONAL "SYNC CLOUD DATA" (☁️ Sync Now)
+ *
+ * Forces bidirectional sync between local and Google Drive:
+ * - Reads cloud file modifiedTime and local data updatedAt.
+ * - Uploads local laptop data if newer.
+ * - Downloads cloud data if phone or local device is missing data.
+ * - Updates the "Drive Synced" badge to "Syncing...", "Synced", or "Click to Authorize Drive".
+ *
+ * @param {Object} customStudyData Optional override data
+ * @returns {Promise<Object>} Sync result
  */
-export async function syncNow(studyData) {
-  if (isDemoUser()) return;
-  const token = getActiveAccessToken();
-  const userId = getActiveUserId();
-  if (!token || !userId || userId === 'guest') {
+export async function forceBidirectionalSync(customStudyData = null, customUserId = null) {
+  if (isDemoUser()) return { success: false, reason: 'demo_user' };
+  const userId = customUserId || getActiveUserId();
+  if (!userId || userId === 'guest') {
     setSyncStatus('offline', { reason: 'unauthenticated' });
-    return;
+    return { success: false, reason: 'unauthenticated' };
   }
 
   setSyncStatus('syncing');
+
+  // Verify token or trigger interactive prompt if authorization is missing
+  let token = getActiveAccessToken();
+  if (!token || !isAccessTokenValid(token)) {
+    token = await verifyOrRequestDriveToken({ promptUserIfConsentNeeded: true });
+  }
+
+  if (!token) {
+    setSyncStatus('needs_auth');
+    return { success: false, reason: 'needs_auth' };
+  }
+
+  const masterStorageKey = `studyflow_${userId}_data`;
+  let localData = customStudyData;
+  if (!localData && typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(masterStorageKey);
+      if (raw) localData = JSON.parse(raw);
+    } catch {}
+  }
+
   try {
-    let fileId = activeFileId || localStorage.getItem(SYNC_STORAGE_FILE_ID_KEY);
-    if (!fileId) {
-      const file = await findSyncFile(token);
-      if (file && file.id) {
-        fileId = file.id;
-      } else {
-        const created = await createSyncFile(token, studyData);
-        fileId = created.id;
+    const existingFile = await findSyncFile(token);
+
+    if (existingFile && existingFile.id) {
+      const remoteData = await downloadSyncFile(token, existingFile.id);
+      if (remoteData && typeof remoteData === 'object') {
+        const remoteTime = remoteData.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
+        const localTime = localData && localData.updatedAt ? new Date(localData.updatedAt).getTime() : 0;
+
+        // Check if phone or local device is missing data
+        const isLocalMissingData = !localData || 
+          (!localData.subjects?.length && remoteData.subjects?.length) ||
+          (!localData.routine?.length && remoteData.routine?.length) ||
+          (!localData.skills?.length && remoteData.skills?.length) ||
+          (!localData.exams?.length && remoteData.exams?.length);
+
+        if (isLocalMissingData || remoteTime >= localTime) {
+          // Cloud is newer or phone is missing data -> download cloud data
+          remoteData.userId = userId;
+          localStorage.setItem(masterStorageKey, JSON.stringify(remoteData));
+          populateGranularStorage(userId, remoteData);
+          dispatchSyncEvents(remoteData);
+          setSyncStatus('synced', { syncedAt: remoteTime || Date.now() });
+          return { success: true, action: 'downloaded', data: remoteData };
+        } else {
+          // Local laptop data is newer -> upload to Drive
+          const payload = {
+            ...localData,
+            userId,
+            updatedAt: new Date().toISOString()
+          };
+          localStorage.setItem(masterStorageKey, JSON.stringify(payload));
+          await updateSyncFile(token, existingFile.id, payload);
+          setSyncStatus('synced', { syncedAt: Date.now() });
+          return { success: true, action: 'uploaded', data: payload };
+        }
       }
     }
 
-    const payload = {
-      ...studyData,
-      userId,
-      updatedAt: new Date().toISOString()
-    };
-
-    await updateSyncFile(token, fileId, payload);
+    // Cloud file doesn't exist yet -> upload local data or initialize zero-state
+    const payload = localData || getOrCreateZeroStateData(userId) || createZeroStateData(userId);
+    payload.userId = userId;
+    payload.updatedAt = new Date().toISOString();
+    localStorage.setItem(masterStorageKey, JSON.stringify(payload));
+    const created = await createSyncFile(token, payload);
     setSyncStatus('synced', { syncedAt: Date.now() });
+    return { success: true, action: 'created', fileId: created.id, data: payload };
   } catch (err) {
-    console.error('Manual Drive sync failed:', err);
-    setSyncStatus('offline', { error: err.message });
+    console.error('Bidirectional sync error:', err);
+    if (err.message === 'UNAUTHORIZED_DRIVE_TOKEN') {
+      setSyncStatus('needs_auth');
+    } else {
+      setSyncStatus('offline', { error: err.message });
+    }
+    return { success: false, error: err.message };
   }
+}
+
+/**
+ * Standalone manual sync trigger (alias for forceBidirectionalSync)
+ */
+export async function syncNow(studyData) {
+  return forceBidirectionalSync(studyData);
 }
 
 export const cloudSyncEngine = {
@@ -545,10 +749,14 @@ export const cloudSyncEngine = {
   hydrateFromCloud,
   debounceSaveToDrive,
   syncNow,
+  forceBidirectionalSync,
+  verifyOrRequestDriveToken,
   setSyncStatus,
   getSyncStatus,
   getLastSyncedTimestamp,
-  formatRelativeSyncTime
+  formatRelativeSyncTime,
+  populateGranularStorage,
+  dispatchSyncEvents
 };
 
 export default cloudSyncEngine;

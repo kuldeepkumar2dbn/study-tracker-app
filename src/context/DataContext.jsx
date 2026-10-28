@@ -26,6 +26,8 @@ import {
   hydrateFromCloud, 
   debounceSaveToDrive, 
   syncNow as cloudSyncNow,
+  forceBidirectionalSync,
+  verifyOrRequestDriveToken,
   getSyncStatus as getGlobalSyncStatus,
   getLastSyncedTimestamp
 } from '../services/cloud-sync';
@@ -671,11 +673,24 @@ export function DataProvider({ children }) {
   useEffect(() => {
     const isDemo = isDemoUser();
     const activeId = getActiveUserId();
-    const token = sessionStorage.getItem('studyflow_drive_token') || sessionStorage.getItem('google_access_token');
-    if (!isDemo && activeId && activeId !== 'guest' && token) {
-      hydrateFromCloud(token, activeId).catch(err => {
-        console.warn('Background cloud hydration error:', err);
-      });
+    if (!isDemo && activeId && activeId !== 'guest') {
+      const token = sessionStorage.getItem('studyflow_drive_token') || sessionStorage.getItem('google_access_token');
+      if (token) {
+        hydrateFromCloud(token, activeId).catch(err => {
+          console.warn('Background cloud hydration error:', err);
+        });
+      } else {
+        // Mobile / multi-device verification: verify or request silent token
+        verifyOrRequestDriveToken().then(freshToken => {
+          if (freshToken) {
+            hydrateFromCloud(freshToken, activeId).catch(err => {
+              console.warn('Background cloud hydration error:', err);
+            });
+          }
+        }).catch(err => {
+          console.warn('Silent token check on mount error:', err);
+        });
+      }
     }
   }, []);
 
@@ -991,6 +1006,37 @@ export function DataProvider({ children }) {
     logout();
   };
 
+  // Explicit Bidirectional Cloud Sync ("☁️ Sync Now")
+  const syncNowToDrive = async () => {
+    try {
+      setSyncStatus('syncing');
+      const activeId = getActiveUserId();
+      const currentPayload = {
+        userId: activeId,
+        streak: streakData?.streakCount ?? 0,
+        lastActiveDate: streakData?.lastActiveDate ?? null,
+        dailyTargetHours: streakData?.dailyTarget ?? 4.0,
+        todayLoggedHours: streakData?.todayHours ?? 0.0,
+        todayLogDate: streakData?.todayLogDate || todayDateStr(),
+        weeklyVelocityHours: streakData?.weeklyVelocityHours ?? 0.0,
+        routine: routineSlots || [],
+        exams: exams || [],
+        skills: skills || [],
+        subjects: subjects || [],
+        notes: notes || [],
+        weeklyGoals: weeklyGoals || [],
+        importantLinks: importantLinks || [],
+        updatedAt: new Date().toISOString()
+      };
+      const res = await forceBidirectionalSync(currentPayload);
+      return res;
+    } catch (e) {
+      console.error('Explicit sync error:', e);
+      setSyncStatus('offline');
+      return { success: false, error: e.message };
+    }
+  };
+
   // Notes CRUD Handlers
   const addNote = (newNote) => {
     const note = {
@@ -1037,50 +1083,6 @@ export function DataProvider({ children }) {
 
   const syncDrive = () => {
     syncNowToDrive();
-  };
-
-  const syncNowToDrive = async () => {
-    const isDemo = isDemoUser();
-    const activeId = getActiveUserId();
-    if (isDemo || !activeId || activeId === 'guest') {
-      setSyncStatus('offline');
-      return;
-    }
-
-    const masterPayload = {
-      userId: activeId,
-      streak: streakData.streakCount ?? 0,
-      lastActiveDate: streakData.lastActiveDate ?? null,
-      dailyTargetHours: streakData.dailyTarget ?? 4.0,
-      todayLoggedHours: streakData.todayHours ?? 0.0,
-      todayLogDate: streakData.todayLogDate || todayDateStr(),
-      weeklyVelocityHours: streakData.weeklyVelocityHours ?? 0.0,
-      routine: routineSlots || [],
-      exams: exams || [],
-      skills: skills || [],
-      subjects: subjects || [],
-      notes: notes || [],
-      weeklyGoals: weeklyGoals || [],
-      importantLinks: importantLinks || [],
-      updatedAt: new Date().toISOString()
-    };
-
-    setSyncStatus('syncing');
-    try {
-      await cloudSyncNow(masterPayload);
-      if (driveAccessToken && driveFolderId) {
-        try {
-          await saveStudyDataToDrive(driveAccessToken, driveFolderId, masterPayload);
-        } catch (e) {
-          console.warn('Backup to legacy folder note:', e);
-        }
-      }
-      setSyncStatus('synced');
-      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    } catch (err) {
-      console.error('Sync failed:', err);
-      setSyncStatus('offline');
-    }
   };
 
   // Upload PDF / Image Attachment for Subject
@@ -1949,6 +1951,7 @@ export function DataProvider({ children }) {
         connectGoogleDrive,
         disconnectGoogleDrive,
         syncNowToDrive,
+        forceBidirectionalSync: syncNowToDrive,
         signOut
       }}
     >
