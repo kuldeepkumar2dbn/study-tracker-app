@@ -1,10 +1,29 @@
 import { resolve } from 'path';
+import fs from 'fs';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'serve-admin-config',
+      configureServer(server) {
+        server.middlewares.stack.unshift({
+          route: '',
+          handle(req, res, next) {
+            const cleanUrl = req.url ? req.url.split('?')[0] : '';
+            if (cleanUrl === '/admin-config.js') {
+              res.setHeader('Content-Type', 'application/javascript');
+              return res.end(fs.readFileSync(resolve(import.meta.dirname, 'public/admin-config.js'), 'utf-8'));
+            }
+            next();
+          }
+        });
+      }
+    }
+  ],
   build: {
     rollupOptions: {
       input: {

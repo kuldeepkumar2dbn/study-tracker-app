@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import RollingNumber from '../RollingNumber';
+import RadialProgressRing from '../RadialProgressRing';
 import { celebrateTaskCompletion } from '../../utils/confetti';
 import AddRoutineModal from '../AddRoutineModal';
 import SyllabusRoutineChip from '../SyllabusRoutineChip';
