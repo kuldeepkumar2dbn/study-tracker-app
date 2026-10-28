@@ -93,7 +93,8 @@ export function getIncompleteSubtopics(chapter) {
 }
 
 /**
- * Creates a routine block following the exact extended data model
+ * Creates a routine block following the extended data model
+ * supporting syllabusLink and skillLink
  */
 export function createRoutineBlock({
   id = null,
@@ -102,10 +103,13 @@ export function createRoutineBlock({
   endTime = '10:00',
   category = 'Core Study',
   completed = false,
-  syllabusLink = null
+  linkType = null,
+  syllabusLink = null,
+  skillLink = null
 }) {
   const blockId = id || ('block_' + Date.now());
   const formattedTimeRange = `${startTime} - ${endTime}`;
+  const resolvedLinkType = linkType || (skillLink ? 'skill' : (syllabusLink ? 'syllabus' : null));
 
   return {
     id: blockId,
@@ -115,6 +119,7 @@ export function createRoutineBlock({
     timeRange: formattedTimeRange,
     category: category || 'Core Study',
     completed: Boolean(completed),
+    linkType: resolvedLinkType,
     syllabusLink: syllabusLink ? {
       subjectId: syllabusLink.subjectId,
       subjectName: syllabusLink.subjectName,
@@ -122,6 +127,14 @@ export function createRoutineBlock({
       chapterName: syllabusLink.chapterName,
       topicId: syllabusLink.topicId,
       topicName: syllabusLink.topicName
+    } : null,
+    skillLink: skillLink ? {
+      skillId: skillLink.skillId,
+      skillTitle: skillLink.skillTitle,
+      level: Number(skillLink.level) || 1,
+      videoId: skillLink.videoId,
+      videoTitle: skillLink.videoTitle,
+      videoUrl: skillLink.videoUrl || (skillLink.videoId ? `https://www.youtube.com/watch?v=${skillLink.videoId}` : '')
     } : null
   };
 }

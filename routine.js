@@ -14,6 +14,8 @@ import DailyRoutine from './src/components/DailyRoutine.jsx';
 import AddRoutineModal from './src/components/AddRoutineModal.jsx';
 import SyllabusRoutineChip from './src/components/SyllabusRoutineChip.jsx';
 import SyllabusSyncToast from './src/components/SyllabusSyncToast.jsx';
+import SkillRoutineChip from './src/components/SkillRoutineChip.jsx';
+import SkillSyncToast from './src/components/SkillSyncToast.jsx';
 import {
   formatSyllabusChipLabel,
   getIncompleteSubtopics,
@@ -21,17 +23,29 @@ import {
   markSyllabusTopicCompletedInSubjects,
   calculateSubjectMastery
 } from './src/utils/routineSyllabusSync.js';
+import {
+  formatSkillChipLabel,
+  getUnwatchedVideosForSkill,
+  createSkillRoutineBlock,
+  markSkillVideoCompletedInSkills
+} from './src/utils/routineSkillSync.js';
 
 export {
   DailyRoutine,
   AddRoutineModal,
   SyllabusRoutineChip,
   SyllabusSyncToast,
+  SkillRoutineChip,
+  SkillSyncToast,
   formatSyllabusChipLabel,
   getIncompleteSubtopics,
   createRoutineBlock,
   markSyllabusTopicCompletedInSubjects,
-  calculateSubjectMastery
+  calculateSubjectMastery,
+  formatSkillChipLabel,
+  getUnwatchedVideosForSkill,
+  createSkillRoutineBlock,
+  markSkillVideoCompletedInSkills
 };
 
 export default {
@@ -39,9 +53,16 @@ export default {
   AddRoutineModal,
   SyllabusRoutineChip,
   SyllabusSyncToast,
+  SkillRoutineChip,
+  SkillSyncToast,
   formatSyllabusChipLabel,
   getIncompleteSubtopics,
   createRoutineBlock,
   markSyllabusTopicCompletedInSubjects,
-  calculateSubjectMastery
+  calculateSubjectMastery,
+  formatSkillChipLabel,
+  getUnwatchedVideosForSkill,
+  createSkillRoutineBlock,
+  markSkillVideoCompletedInSkills
 };
+

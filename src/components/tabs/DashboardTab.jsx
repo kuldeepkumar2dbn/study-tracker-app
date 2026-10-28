@@ -25,6 +25,8 @@ import { celebrateTaskCompletion } from '../../utils/confetti';
 import AddRoutineModal from '../AddRoutineModal';
 import SyllabusRoutineChip from '../SyllabusRoutineChip';
 import SyllabusSyncToast from '../SyllabusSyncToast';
+import SkillRoutineChip from '../SkillRoutineChip';
+import SkillSyncToast from '../SkillSyncToast';
 
 export default function DashboardTab({ onNavigateTab }) {
   const { 
@@ -40,11 +42,13 @@ export default function DashboardTab({ onNavigateTab }) {
     routineSlots,
     addRoutineSlot,
     toggleRoutineSlot,
-    markSyllabusTopicCompleted
+    markSyllabusTopicCompleted,
+    markSkillVideoCompleted
   } = useData();
 
   const [isAddRoutineModalOpen, setIsAddRoutineModalOpen] = useState(false);
   const [syllabusPrompt, setSyllabusPrompt] = useState(null);
+  const [skillPrompt, setSkillPrompt] = useState(null);
 
   const safeSubjects = subjects || [];
   const safeExams = exams || [];
@@ -130,8 +134,21 @@ export default function DashboardTab({ onNavigateTab }) {
     if (slot && !slot.completed) {
       celebrateTaskCompletion();
 
+      // If linked to a skill video, prompt to mark video watched
+      if (slot.linkType === 'skill' || slot.skillLink) {
+        const sLink = slot.skillLink;
+        if (sLink && (sLink.videoTitle || sLink.videoId)) {
+          setSkillPrompt({
+            slotId: slot.id,
+            skillId: sLink.skillId,
+            skillTitle: sLink.skillTitle,
+            videoId: sLink.videoId,
+            videoTitle: sLink.videoTitle
+          });
+        }
+      }
       // If linked to syllabus, show micro-prompt
-      if (slot.syllabusLink && slot.syllabusLink.topicName) {
+      else if (slot.syllabusLink && slot.syllabusLink.topicName) {
         setSyllabusPrompt({
           slotId: slot.id,
           topicName: slot.syllabusLink.topicName,
@@ -150,6 +167,14 @@ export default function DashboardTab({ onNavigateTab }) {
       celebrateTaskCompletion();
     }
     setSyllabusPrompt(null);
+  };
+
+  const handleMarkWatchedSkill = (promptData) => {
+    if (markSkillVideoCompleted && promptData.skillId && promptData.videoId) {
+      markSkillVideoCompleted(promptData.skillId, promptData.videoId);
+      celebrateTaskCompletion();
+    }
+    setSkillPrompt(null);
   };
 
   const handleCompleteRevision = (subjectId, itemId) => {
@@ -399,9 +424,11 @@ export default function DashboardTab({ onNavigateTab }) {
                       <span className="text-[10px] text-theme-muted font-mono-numbers block">
                         {slot.timeRange}
                       </span>
-                      {slot.syllabusLink && (
+                      {slot.linkType === 'skill' || slot.skillLink ? (
+                        <SkillRoutineChip skillLink={slot.skillLink} />
+                      ) : slot.syllabusLink ? (
                         <SyllabusRoutineChip syllabusLink={slot.syllabusLink} subjects={safeSubjects} />
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -636,12 +663,20 @@ export default function DashboardTab({ onNavigateTab }) {
         onOnlyRoutine={() => setSyllabusPrompt(null)}
       />
 
-      {/* Add Slot Modal with Syllabus Topic Picker */}
+      {/* Skill Sync Micro-Prompt Toast */}
+      <SkillSyncToast
+        promptData={skillPrompt}
+        onMarkWatched={handleMarkWatchedSkill}
+        onOnlyRoutine={() => setSkillPrompt(null)}
+      />
+
+      {/* Add Slot Modal with Syllabus & Skill Pickers */}
       <AddRoutineModal
         isOpen={isAddRoutineModalOpen}
         onClose={() => setIsAddRoutineModalOpen(false)}
         onAddSlot={(newBlock) => addRoutineSlot(newBlock)}
         subjects={safeSubjects}
+        skills={skills}
       />
 
     </div>

@@ -21,6 +21,7 @@ import {
   getUserDataStorageKey 
 } from '../../auth-guard';
 import { markSyllabusTopicCompletedInSubjects } from '../utils/routineSyllabusSync';
+import { markSkillVideoCompletedInSkills } from '../utils/routineSkillSync';
 import { 
   hydrateFromCloud, 
   debounceSaveToDrive, 
@@ -1540,6 +1541,13 @@ export function DataProvider({ children }) {
     return res;
   };
 
+  const markSkillVideoCompleted = (skillId, videoId) => {
+    const res = markSkillVideoCompletedInSkills(skills, skillId, videoId, activeId);
+    setSkills(res.updatedSkills);
+    writeScoped('skills', res.updatedSkills);
+    return res;
+  };
+
   const toggleRoutineSlot = (id) => {
     setRoutineSlots(prev => prev.map(s => {
       if (s.id !== id) return s;
@@ -1674,6 +1682,25 @@ export function DataProvider({ children }) {
             list.push(subtopic);
           }
           return { ...lec, subtopics: list };
+        });
+        return { ...lvl, lectures: updatedLectures };
+      });
+      const updatedSkill = { ...s, levels: updatedLevels };
+      updatedSkill.masteryPct = recalculateSkillProgress(updatedSkill);
+      return updatedSkill;
+    }));
+  };
+
+  const toggleLectureCompleted = (skillId, levelId, lectureId) => {
+    setSkills(prev => prev.map(s => {
+      if (s.id !== skillId) return s;
+      const updatedLevels = (s.levels || []).map(lvl => {
+        if (lvl.id !== levelId) return lvl;
+        const updatedLectures = (lvl.lectures || []).map(lec => {
+          if (lec.id !== lectureId && lec.videoId !== lectureId) return lec;
+          const nextCompleted = !lec.completed;
+          const updatedSubtopics = (lec.subtopics || []).map(st => ({ ...st, done: nextCompleted }));
+          return { ...lec, completed: nextCompleted, subtopics: updatedSubtopics };
         });
         return { ...lvl, lectures: updatedLectures };
       });
@@ -1865,6 +1892,7 @@ export function DataProvider({ children }) {
         toggleRoutineSlot,
         deleteRoutineSlot,
         markSyllabusTopicCompleted,
+        markSkillVideoCompleted,
         weeklyGoals,
         addWeeklyGoal,
         toggleWeeklyGoal,
@@ -1883,6 +1911,7 @@ export function DataProvider({ children }) {
         restoreSubtopic,
         deleteLecture,
         restoreLecture,
+        toggleLectureCompleted,
         deleteLevel,
         restoreLevel,
         updateSkillLevel,

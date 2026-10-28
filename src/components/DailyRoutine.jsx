@@ -24,10 +24,13 @@ import { celebrateTaskCompletion, celebrateMajorMilestone } from '../utils/confe
 import AddRoutineModal from './AddRoutineModal';
 import SyllabusRoutineChip from './SyllabusRoutineChip';
 import SyllabusSyncToast from './SyllabusSyncToast';
+import SkillRoutineChip from './SkillRoutineChip';
+import SkillSyncToast from './SkillSyncToast';
 
 export default function DailyRoutine() {
   const { 
     subjects,
+    skills,
     streakData, 
     dailyTargetMinutes, 
     setDailyTargetMinutes, 
@@ -38,15 +41,17 @@ export default function DailyRoutine() {
     toggleRoutineSlot, 
     deleteRoutineSlot, 
     markSyllabusTopicCompleted,
+    markSkillVideoCompleted,
     weeklyGoals, 
     addWeeklyGoal, 
     toggleWeeklyGoal, 
     deleteWeeklyGoal 
   } = useData();
 
-  // Modal & syllabus prompt states
+  // Modal, syllabus & skill prompt states
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
   const [syllabusPrompt, setSyllabusPrompt] = useState(null);
+  const [skillPrompt, setSkillPrompt] = useState(null);
   const [timeRange, setTimeRange] = useState('08:00 - 10:00');
   const [slotTitle, setSlotTitle] = useState('');
   const [slotCategory, setSlotCategory] = useState('Core Study');
@@ -87,8 +92,21 @@ export default function DailyRoutine() {
         celebrateTaskCompletion();
       }
 
+      // If linked to a skill video, prompt to mark video as watched in Skill Tracker
+      if (targetSlot.linkType === 'skill' || targetSlot.skillLink) {
+        const sLink = targetSlot.skillLink;
+        if (sLink && (sLink.videoTitle || sLink.videoId)) {
+          setSkillPrompt({
+            slotId: targetSlot.id,
+            skillId: sLink.skillId,
+            skillTitle: sLink.skillTitle,
+            videoId: sLink.videoId,
+            videoTitle: sLink.videoTitle
+          });
+        }
+      }
       // If linked to a syllabus topic, prompt to mark syllabus done too
-      if (targetSlot.syllabusLink && targetSlot.syllabusLink.topicName) {
+      else if (targetSlot.syllabusLink && targetSlot.syllabusLink.topicName) {
         setSyllabusPrompt({
           slotId: targetSlot.id,
           topicName: targetSlot.syllabusLink.topicName,
@@ -107,6 +125,14 @@ export default function DailyRoutine() {
       celebrateTaskCompletion();
     }
     setSyllabusPrompt(null);
+  };
+
+  const handleMarkWatchedSkill = (promptData) => {
+    if (markSkillVideoCompleted && promptData.skillId && promptData.videoId) {
+      markSkillVideoCompleted(promptData.skillId, promptData.videoId);
+      celebrateTaskCompletion();
+    }
+    setSkillPrompt(null);
   };
 
   const handleToggleWeeklyGoal = (id) => {
@@ -403,9 +429,11 @@ export default function DailyRoutine() {
                     <span className="text-[11px] text-theme-muted font-mono-numbers block mt-0.5">
                       {slot.timeRange}
                     </span>
-                    {slot.syllabusLink && (
+                    {slot.linkType === 'skill' || slot.skillLink ? (
+                      <SkillRoutineChip skillLink={slot.skillLink} />
+                    ) : slot.syllabusLink ? (
                       <SyllabusRoutineChip syllabusLink={slot.syllabusLink} subjects={subjects} />
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -522,12 +550,20 @@ export default function DailyRoutine() {
         onOnlyRoutine={() => setSyllabusPrompt(null)}
       />
 
-      {/* Add Slot Modal with Syllabus Topic Picker */}
+      {/* Skill Sync Micro-Prompt Toast */}
+      <SkillSyncToast
+        promptData={skillPrompt}
+        onMarkWatched={handleMarkWatchedSkill}
+        onOnlyRoutine={() => setSkillPrompt(null)}
+      />
+
+      {/* Add Slot Modal with Syllabus & Skill Pickers */}
       <AddRoutineModal
         isOpen={isSlotModalOpen}
         onClose={() => setIsSlotModalOpen(false)}
         onAddSlot={(newBlock) => addRoutineSlot(newBlock)}
         subjects={subjects}
+        skills={skills}
       />
 
     </div>

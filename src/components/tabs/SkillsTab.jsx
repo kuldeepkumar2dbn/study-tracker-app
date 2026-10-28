@@ -43,6 +43,7 @@ export default function SkillsTab() {
     restoreSubtopic,
     deleteLecture,
     restoreLecture,
+    toggleLectureCompleted,
     deleteLevel,
     restoreLevel,
     updateSkillLevel, 
@@ -434,9 +435,10 @@ export default function SkillsTab() {
                 <div className="space-y-4">
                   {(skill.levels || []).map((lvl, levelIndex) => {
                     const isCollapsed = !!collapsedLevels[lvl.id];
-                    const lvlSubtopics = (lvl.lectures || []).flatMap(lec => lec.subtopics || []);
-                    const lvlCompleted = lvlSubtopics.filter(s => s.done).length;
-                    const lvlTotal = lvlSubtopics.length;
+                    const lvlLectures = lvl.lectures || [];
+                    const lvlSubtopics = lvlLectures.flatMap(lec => lec.subtopics || []);
+                    const lvlCompleted = lvlLectures.filter(l => l.completed).length + lvlSubtopics.filter(s => s.done).length;
+                    const lvlTotal = lvlLectures.length + lvlSubtopics.length;
                     const lvlPct = lvlTotal > 0 ? Math.round((lvlCompleted / lvlTotal) * 100) : 0;
 
                     return (
@@ -448,7 +450,7 @@ export default function SkillsTab() {
                         <div className="p-3.5 bg-theme-surface/60 border-b border-theme-border/60 flex items-center justify-between gap-3">
                           <button
                             onClick={() => toggleLevelCollapse(lvl.id)}
-                            className="flex items-center gap-2.5 text-left min-w-0 flex-1 hover:opacity-90 transition-opacity"
+                            className="flex items-center gap-2.5 text-left min-w-0 flex-1 hover:opacity-90 transition-opacity cursor-pointer"
                           >
                             {isCollapsed ? (
                               <ChevronRight className="w-4 h-4 text-theme-muted shrink-0" />
@@ -474,10 +476,17 @@ export default function SkillsTab() {
                             </div>
                           </button>
 
-                          {/* Level Progress & Trash Icon */}
+                          {/* Level Progress Bar & Trash Icon */}
                           <div className="flex items-center gap-3 shrink-0">
+                            <div className="hidden sm:block w-16 md:w-24 h-2 rounded-full bg-theme-surface overflow-hidden border border-theme-border/50">
+                              <div
+                                className="h-full bg-gradient-to-r from-theme-accent to-emerald-400 rounded-full transition-all duration-300"
+                                style={{ width: `${lvlPct}%` }}
+                              />
+                            </div>
+
                             <span className="text-[11px] font-mono-numbers text-theme-muted">
-                              <strong className="text-theme-text">{lvlCompleted}</strong>/{lvlTotal} done ({lvlPct}%)
+                              <strong className="text-theme-text">{lvlCompleted}</strong>/{lvlTotal} ({lvlPct}%)
                             </span>
 
                             {/* Trash icon: Entire Level */}
@@ -510,10 +519,31 @@ export default function SkillsTab() {
                                 {/* Lecture Title Row */}
                                 <div className="flex items-center justify-between gap-3 flex-wrap">
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
-                                    <BookOpen className="w-3.5 h-3.5 text-theme-accent shrink-0" />
-                                    <h4 className="font-semibold text-xs text-theme-text truncate" title={lec.title}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!lec.completed) celebrateTaskCompletion();
+                                        if (typeof toggleLectureCompleted === 'function') {
+                                          toggleLectureCompleted(skill.id, lvl.id, lec.id);
+                                        }
+                                      }}
+                                      className="p-0.5 rounded text-theme-muted hover:text-emerald-400 cursor-pointer transition-colors shrink-0"
+                                      title={lec.completed ? "Mark as unwatched" : "Mark as watched"}
+                                    >
+                                      {lec.completed ? (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-400/20" />
+                                      ) : (
+                                        <Circle className="w-4 h-4 text-theme-muted hover:text-theme-accent" />
+                                      )}
+                                    </button>
+                                    <h4 className={`font-semibold text-xs truncate ${lec.completed ? 'line-through text-theme-muted' : 'text-theme-text'}`} title={lec.title}>
                                       {lec.title}
                                     </h4>
+                                    {lec.completed && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 font-medium">
+                                        Watched
+                                      </span>
+                                    )}
                                     {lec.duration && (
                                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-theme-bg border border-theme-border text-theme-muted shrink-0 font-mono-numbers">
                                         {lec.duration}

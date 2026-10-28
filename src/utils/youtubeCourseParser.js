@@ -17,12 +17,282 @@
 import { extractYouTubeId } from './youtube.js';
 
 /**
- * Extracts playlist ID from URL
+ * Extracts playlist ID from URL with priority over video parameter
+ * Check if the input contains a playlist parameter: /(?:list=)([a-zA-Z0-9_-]+)/i
  */
 export function extractPlaylistId(url) {
   if (!url || typeof url !== 'string') return null;
-  const match = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+  const match = url.match(/(?:list=)([a-zA-Z0-9_-]+)/i);
   return match && match[1] ? match[1] : null;
+}
+
+/**
+ * Parses YouTube XML / RSS Feed entries into video objects
+ */
+export function parsePlaylistXml(xmlText, playlistId = '') {
+  if (!xmlText || typeof xmlText !== 'string') return [];
+  const videos = [];
+
+  // Browser DOMParser
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      const entries = xmlDoc.getElementsByTagName('entry');
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const titleEl = entry.getElementsByTagName('title')[0];
+        const title = titleEl ? titleEl.textContent.trim() : '';
+        if (!title || title === 'Private video' || title === 'Deleted video') continue;
+
+        let videoId = '';
+        const ytIdEl = entry.getElementsByTagName('yt:videoId')[0] || entry.getElementsByTagName('videoId')[0];
+        if (ytIdEl && ytIdEl.textContent) {
+          videoId = ytIdEl.textContent.trim();
+        } else {
+          const linkEl = entry.getElementsByTagName('link')[0];
+          if (linkEl && linkEl.getAttribute('href')) {
+            videoId = extractYouTubeId(linkEl.getAttribute('href'));
+          }
+        }
+        if (!videoId) continue;
+
+        let thumb = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+        const mediaThumb = entry.getElementsByTagName('media:thumbnail')[0];
+        if (mediaThumb && mediaThumb.getAttribute('url')) {
+          thumb = mediaThumb.getAttribute('url');
+        }
+
+        videos.push({
+          id: `vid-${videoId}`,
+          videoId,
+          title,
+          videoUrl: `https://www.youtube.com/watch?v=${videoId}${playlistId ? `&list=${playlistId}` : ''}`,
+          thumbnail: thumb,
+          duration: 'Full Lesson',
+          completed: false
+        });
+      }
+      if (videos.length > 0) return videos;
+    } catch (e) {
+      console.warn('DOMParser failed on XML, falling back to regex:', e);
+    }
+  }
+
+  // Regex fallback for Node test environments or XML parser errors
+  const entryRegex = /<entry[\s\S]*?<\/entry>/gi;
+  const entries = xmlText.match(entryRegex) || [];
+  for (const entry of entries) {
+    const titleMatch = entry.match(/<title>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim() : '';
+    if (!title || title === 'Private video' || title === 'Deleted video') continue;
+
+    let videoId = '';
+    const ytIdMatch = entry.match(/<yt:videoId>([\s\S]*?)<\/yt:videoId>/i) || entry.match(/<videoId>([\s\S]*?)<\/videoId>/i);
+    if (ytIdMatch) {
+      videoId = ytIdMatch[1].trim();
+    } else {
+      const linkMatch = entry.match(/href=["'](https?:\/\/[^"']+)["']/i);
+      if (linkMatch) videoId = extractYouTubeId(linkMatch[1]);
+    }
+    if (!videoId) continue;
+
+    const thumbMatch = entry.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i);
+    const thumb = thumbMatch ? thumbMatch[1] : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+    videos.push({
+      id: `vid-${videoId}`,
+      videoId,
+      title,
+      videoUrl: `https://www.youtube.com/watch?v=${videoId}${playlistId ? `&list=${playlistId}` : ''}`,
+      thumbnail: thumb,
+      duration: 'Full Lesson',
+      completed: false
+    });
+  }
+
+  return videos;
+}
+
+/**
+ * Fetches playlist videos with pagination (up to 150 items) via YouTube Data API v3
+ * or RSS XML fallback (https://www.youtube.com/feeds/videos.xml?playlist_id=ID)
+ */
+export async function fetchYouTubePlaylistVideos(playlistId, apiKey = '') {
+  if (!playlistId || typeof playlistId !== 'string') return [];
+  const cleanId = playlistId.trim();
+  const videos = [];
+  const MAX_CAP = 150;
+
+  // 1. YouTube Data API v3 (if key or OAuth token is available)
+  const tokenCandidate = apiKey || (typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('studyflow_drive_token') || sessionStorage.getItem('google_access_token')) : '') || '';
+  if (tokenCandidate) {
+    try {
+      let pageToken = '';
+      do {
+        let endpoint = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${cleanId}&maxResults=50`;
+        if (pageToken) endpoint += `&pageToken=${encodeURIComponent(pageToken)}`;
+        
+        const isBearer = tokenCandidate.startsWith('ya29.');
+        const headers = isBearer ? { 'Authorization': `Bearer ${tokenCandidate}` } : {};
+        if (!isBearer) endpoint += `&key=${encodeURIComponent(tokenCandidate)}`;
+
+        const res = await fetch(endpoint, { headers });
+        if (!res.ok) break;
+
+        const data = await res.json();
+        const items = data.items || [];
+        for (const item of items) {
+          const title = item.snippet?.title || '';
+          if (!title || title === 'Private video' || title === 'Deleted video') continue;
+
+          const videoId = item.snippet?.resourceId?.videoId || item.contentDetails?.videoId;
+          if (!videoId) continue;
+
+          videos.push({
+            id: `vid-${videoId}`,
+            videoId,
+            title,
+            videoUrl: `https://www.youtube.com/watch?v=${videoId}&list=${cleanId}`,
+            thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+            duration: 'Full Lesson',
+            completed: false
+          });
+
+          if (videos.length >= MAX_CAP) break;
+        }
+
+        pageToken = data.nextPageToken || '';
+      } while (pageToken && videos.length < MAX_CAP);
+
+      if (videos.length > 0) return videos;
+    } catch (apiErr) {
+      console.warn('YouTube Data API playlistItems error:', apiErr);
+    }
+  }
+
+  // 2. RSS XML Fallback (https://www.youtube.com/feeds/videos.xml?playlist_id=ID)
+  try {
+    const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${cleanId}`;
+    let xmlText = '';
+
+    try {
+      const res = await fetch(rssUrl);
+      if (res.ok) {
+        xmlText = await res.text();
+      }
+    } catch {}
+
+    // Public CORS fallback proxy if browser blocked direct RSS fetch
+    if (!xmlText && typeof window !== 'undefined') {
+      try {
+        const corsProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`;
+        const res = await fetch(corsProxy);
+        if (res.ok) {
+          xmlText = await res.text();
+        }
+      } catch {}
+    }
+
+    if (xmlText) {
+      const parsedXml = parsePlaylistXml(xmlText, cleanId);
+      if (parsedXml.length > 0) {
+        return parsedXml.slice(0, MAX_CAP);
+      }
+    }
+  } catch (rssErr) {
+    console.warn('RSS playlist fetch error:', rssErr);
+  }
+
+  return videos;
+}
+
+/**
+ * Complete 3-Level Distribution across video array (N items):
+ * const split1 = Math.ceil(totalVideos / 3);
+ * const split2 = Math.ceil((2 * totalVideos) / 3);
+ * Level 1 (Beginner): items.slice(0, split1)
+ * Level 2 (Intermediate): items.slice(split1, split2)
+ * Level 3 (Advanced): items.slice(split2)
+ */
+export function splitVideosInto3Levels(items = [], playlistTitle = 'Mastery Course') {
+  const totalVideos = items.length;
+  if (totalVideos === 0) return [];
+
+  const split1 = Math.ceil(totalVideos / 3);
+  const split2 = Math.ceil((2 * totalVideos) / 3);
+
+  const level1Items = items.slice(0, split1).map((item, idx) => ({
+    id: item.id || `lec-lvl1-${idx + 1}`,
+    title: item.title,
+    videoUrl: item.videoUrl || `https://www.youtube.com/watch?v=${item.videoId}`,
+    videoId: item.videoId,
+    thumbnail: item.thumbnail || (item.videoId ? `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg` : ''),
+    duration: item.duration || 'Full Lesson',
+    completed: Boolean(item.completed),
+    subtopics: item.subtopics && item.subtopics.length > 0 ? item.subtopics : [
+      { id: `st-lvl1-${idx}-1`, title: `Watch and take notes: ${item.title}`, done: Boolean(item.completed) },
+      { id: `st-lvl1-${idx}-2`, title: 'Complete hands-on exercise and verify code', done: Boolean(item.completed) }
+    ]
+  }));
+
+  const level2Items = items.slice(split1, split2).map((item, idx) => ({
+    id: item.id || `lec-lvl2-${idx + 1}`,
+    title: item.title,
+    videoUrl: item.videoUrl || `https://www.youtube.com/watch?v=${item.videoId}`,
+    videoId: item.videoId,
+    thumbnail: item.thumbnail || (item.videoId ? `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg` : ''),
+    duration: item.duration || 'Full Lesson',
+    completed: Boolean(item.completed),
+    subtopics: item.subtopics && item.subtopics.length > 0 ? item.subtopics : [
+      { id: `st-lvl2-${idx}-1`, title: `Watch and take notes: ${item.title}`, done: Boolean(item.completed) },
+      { id: `st-lvl2-${idx}-2`, title: 'Deep dive implementation & practice exercises', done: Boolean(item.completed) }
+    ]
+  }));
+
+  const level3Items = items.slice(split2).map((item, idx) => ({
+    id: item.id || `lec-lvl3-${idx + 1}`,
+    title: item.title,
+    videoUrl: item.videoUrl || `https://www.youtube.com/watch?v=${item.videoId}`,
+    videoId: item.videoId,
+    thumbnail: item.thumbnail || (item.videoId ? `https://img.youtube.com/vi/${item.videoId}/hqdefault.jpg` : ''),
+    duration: item.duration || 'Full Lesson',
+    completed: Boolean(item.completed),
+    subtopics: item.subtopics && item.subtopics.length > 0 ? item.subtopics : [
+      { id: `st-lvl3-${idx}-1`, title: `Watch and take notes: ${item.title}`, done: Boolean(item.completed) },
+      { id: `st-lvl3-${idx}-2`, title: 'Production deployment & capstone project', done: Boolean(item.completed) }
+    ]
+  }));
+
+  return [
+    {
+      id: `lvl-${Date.now()}-1`,
+      levelNum: 1,
+      title: 'Level 1: Beginner',
+      description: 'Foundations, fundamentals, and introductory lectures.',
+      tierBadge: 'Beginner',
+      badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+      lectures: level1Items
+    },
+    {
+      id: `lvl-${Date.now()}-2`,
+      levelNum: 2,
+      title: 'Level 2: Intermediate',
+      description: 'Core concepts, architectural workflows, and intermediate techniques.',
+      tierBadge: 'Intermediate',
+      badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+      lectures: level2Items
+    },
+    {
+      id: `lvl-${Date.now()}-3`,
+      levelNum: 3,
+      title: 'Level 3: Advanced',
+      description: 'Advanced mastery, performance optimization, and capstone project.',
+      tierBadge: 'Advanced',
+      badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+      lectures: level3Items
+    }
+  ];
 }
 
 /**
@@ -30,10 +300,10 @@ export function extractPlaylistId(url) {
  */
 export function deriveTitleFromUrl(url) {
   try {
-    const videoId = extractYouTubeId(url);
     const playlistId = extractPlaylistId(url);
-    if (videoId) return `YouTube Video Course (${videoId})`;
+    const videoId = extractYouTubeId(url);
     if (playlistId) return `YouTube Playlist Course (${playlistId.slice(0, 8)}...)`;
+    if (videoId) return `YouTube Video Course (${videoId})`;
     return 'Mastery Course from YouTube';
   } catch {
     return 'Mastery Course from YouTube';
@@ -463,7 +733,17 @@ export async function generateYouTubeCourseRoadmap({
   const authorName = oEmbedData?.authorName || 'YouTube Educator';
   const thumbnailUrl = oEmbedData?.thumbnailUrl || (videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '');
 
-  // 2. Parse chapters if provided
+  // 2. Fetch playlist items if playlist ID is present
+  let playlistVideos = [];
+  if (playlistId) {
+    try {
+      playlistVideos = await fetchYouTubePlaylistVideos(playlistId);
+    } catch (e) {
+      console.warn('Failed fetching playlist items:', e);
+    }
+  }
+
+  // 3. Parse chapters if provided
   let parsedLectures = [];
   if (chaptersText && chaptersText.trim()) {
     const rawChapters = parseChaptersFromText(chaptersText, cleanUrl);
@@ -474,7 +754,11 @@ export async function generateYouTubeCourseRoadmap({
         timestamp: ch.timestamp,
         seconds: ch.seconds,
         youtubeUrl: ch.youtubeUrl,
+        videoUrl: ch.youtubeUrl,
+        videoId: extractYouTubeId(ch.youtubeUrl) || videoId || '',
+        thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '',
         duration: ch.timestamp ? `@ ${ch.timestamp}` : 'Full Lesson',
+        completed: false,
         subtopics: [
           { id: `st-${Date.now()}-${idx}-1`, title: `Watch and take notes: ${ch.title}`, done: false },
           { id: `st-${Date.now()}-${idx}-2`, title: 'Code along with the instructor demonstration', done: false },
@@ -482,9 +766,11 @@ export async function generateYouTubeCourseRoadmap({
         ]
       }));
     }
+  } else if (playlistVideos.length > 0) {
+    parsedLectures = playlistVideos;
   }
 
-  // 3. If no chapters parsed, generate using topic-specific templates
+  // 4. If no chapters or playlist items parsed, generate using topic-specific templates
   if (parsedLectures.length === 0) {
     const templates = getSyllabusTemplateByTopic(finalTitle);
     parsedLectures = templates.map((tmpl, idx) => {
@@ -498,7 +784,11 @@ export async function generateYouTubeCourseRoadmap({
         id: `lec-${Date.now()}-${idx + 1}`,
         title: `Lecture ${idx + 1}: ${tmpl.title}`,
         youtubeUrl: watchUrl,
+        videoUrl: watchUrl,
+        videoId: videoId || `lec_vid_${idx + 1}`,
+        thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '',
         duration: 'Lesson Block',
+        completed: false,
         subtopics: tmpl.subtopics.map((stTitle, sIdx) => ({
           id: `st-${Date.now()}-${idx}-${sIdx + 1}`,
           title: stTitle,
@@ -508,7 +798,7 @@ export async function generateYouTubeCourseRoadmap({
     });
   }
 
-  // 4. Divide lectures into logical tiers / levels
+  // 5. Divide lectures into logical tiers / levels
   let levels = [];
 
   if (levelStructure === 'custom' && customModuleNames.length > 0) {
@@ -519,63 +809,25 @@ export async function generateYouTubeCourseRoadmap({
     levels = customModuleNames.map((modName, mIdx) => {
       const sliceStart = mIdx * itemsPerModule;
       const sliceEnd = sliceStart + itemsPerModule;
-      const modLectures = parsedLectures.slice(sliceStart, sliceEnd);
+      const modLectures = parsedLectures.slice(sliceStart, sliceEnd).map((lec, lIdx) => ({
+        ...lec,
+        id: lec.id || `lec-custom-${mIdx + 1}-${lIdx + 1}`,
+        completed: Boolean(lec.completed)
+      }));
 
       return {
         id: `lvl-${Date.now()}-${mIdx + 1}`,
+        levelNum: mIdx + 1,
         title: modName || `Module ${mIdx + 1}`,
         description: `Deliberate practice exercises and milestone objectives for ${modName}.`,
         lectures: modLectures
       };
     });
   } else {
-    // Standard 3-Tier Division (Beginner -> Intermediate -> Advanced)
-    const total = parsedLectures.length;
-    const tier1Count = Math.max(1, Math.round(total / 3));
-    const tier2Count = Math.max(1, Math.round((total - tier1Count) / 2));
-
-    const tier1Lectures = parsedLectures.slice(0, tier1Count);
-    const tier2Lectures = parsedLectures.slice(tier1Count, tier1Count + tier2Count);
-    const tier3Lectures = parsedLectures.slice(tier1Count + tier2Count);
-
-    levels = [
-      {
-        id: `lvl-${Date.now()}-1`,
-        title: 'Level 1: Basics & Foundations',
-        description: 'Prerequisites, environment setup, and fundamental building blocks.',
-        tierBadge: 'Novice to Apprentice',
-        badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-        lectures: tier1Lectures
-      },
-      {
-        id: `lvl-${Date.now()}-2`,
-        title: 'Level 2: Core Concepts',
-        description: 'Deep dive into architecture, practical workflows, and idiomatic patterns.',
-        tierBadge: 'Intermediate',
-        badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
-        lectures: tier2Lectures
-      },
-      {
-        id: `lvl-${Date.now()}-3`,
-        title: 'Level 3: Advanced & Real-World Projects',
-        description: 'Production hardening, performance tuning, and capstone deployment.',
-        tierBadge: 'Advanced & Expert',
-        badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-        lectures: tier3Lectures.length > 0 ? tier3Lectures : [
-          {
-            id: `lec-${Date.now()}-capstone`,
-            title: 'Final Capstone Project & Portfolio Submission',
-            youtubeUrl: cleanUrl || 'https://www.youtube.com',
-            duration: 'Capstone Project',
-            subtopics: [
-              { id: `st-${Date.now()}-cap-1`, title: 'Design system blueprint and milestone spec', done: false },
-              { id: `st-${Date.now()}-cap-2`, title: 'Implement full-scale end-to-end deliverable', done: false },
-              { id: `st-${Date.now()}-cap-3`, title: 'Write documentation and publish GitHub repository', done: false }
-            ]
-          }
-        ]
-      }
-    ];
+    // Standard 3-Tier Division using complete bucket split:
+    // split1 = Math.ceil(totalVideos / 3)
+    // split2 = Math.ceil((2 * totalVideos) / 3)
+    levels = splitVideosInto3Levels(parsedLectures, finalTitle);
   }
 
   // Derive initial tags
@@ -607,32 +859,35 @@ export async function generateYouTubeCourseRoadmap({
 }
 
 /**
- * Calculates current course progress based on checked subtopics
+ * Calculates current course progress based on checked subtopics and completed video lectures
  */
 export function calculateCourseProgress(course) {
   if (!course || !course.levels || course.levels.length === 0) {
     return { totalSubtopics: 0, completedSubtopics: 0, percentage: course?.masteryPct || 0 };
   }
 
-  let totalSubtopics = 0;
-  let completedSubtopics = 0;
+  let totalItems = 0;
+  let completedItems = 0;
 
   for (const lvl of course.levels) {
     for (const lec of (lvl.lectures || [])) {
+      totalItems++;
+      if (lec.completed) completedItems++;
+
       for (const st of (lec.subtopics || [])) {
-        totalSubtopics++;
-        if (st.done) completedSubtopics++;
+        totalItems++;
+        if (st.done) completedItems++;
       }
     }
   }
 
-  const percentage = totalSubtopics > 0 
-    ? Math.round((completedSubtopics / totalSubtopics) * 100) 
+  const percentage = totalItems > 0 
+    ? Math.round((completedItems / totalItems) * 100) 
     : (course.masteryPct || 0);
 
   return {
-    totalSubtopics,
-    completedSubtopics,
+    totalSubtopics: totalItems,
+    completedSubtopics: completedItems,
     percentage
   };
 }
