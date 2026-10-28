@@ -12,6 +12,7 @@ import {
   clearDemoSession
 } from '../../auth-guard';
 import { DEFAULT_GOOGLE_CLIENT_ID, DEFAULT_GOOGLE_SCOPES } from '../services/googleDrive';
+import { hydrateFromCloud } from '../services/cloud-sync';
 
 const AuthContext = createContext(null);
 
@@ -135,6 +136,14 @@ export function AuthProvider({ children }) {
               // Persist session to cookie (study_session) and localStorage
               saveUserSession(userData, accessToken, expiresInSec);
               refreshAuthState();
+
+              // Multi-Device Cloud Data Hydration
+              try {
+                await hydrateFromCloud(accessToken, userData.sub);
+              } catch (cloudErr) {
+                console.warn('Initial cloud hydration on login error:', cloudErr);
+              }
+
               resolve({ user: userData, token: accessToken });
             } else if (tokenResponse && tokenResponse.error) {
               reject(new Error(tokenResponse.error_description || tokenResponse.error || 'Google login was cancelled.'));

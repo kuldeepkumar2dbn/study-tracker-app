@@ -11,6 +11,7 @@ import {
   Link2, 
   Flame, 
   Cloud, 
+  CloudOff,
   RefreshCw, 
   ChevronDown, 
   Check, 
@@ -43,6 +44,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import RollingNumber from './RollingNumber';
 import { sanitizeUrl } from '../utils/security';
 import { isDemoUser, getDemoRemainingSeconds, clearDemoSession } from '../../auth-guard';
+import { formatRelativeSyncTime, getLastSyncedTimestamp } from '../services/cloud-sync';
 import { 
   getPlatformAnnouncement, 
   getEmergencyKillswitches, 
@@ -85,6 +87,23 @@ export function SharedHeader({
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [demoRemainingSec, setDemoRemainingSec] = useState(() => getDemoRemainingSeconds());
+  const [relativeSyncTime, setRelativeSyncTime] = useState(() => {
+    return formatRelativeSyncTime(getLastSyncedTimestamp());
+  });
+
+  // Periodically refresh relative time for Drive Sync tooltip
+  useEffect(() => {
+    const updateRelative = () => {
+      setRelativeSyncTime(formatRelativeSyncTime(getLastSyncedTimestamp()));
+    };
+    updateRelative();
+    const interval = setInterval(updateRelative, 10000);
+    window.addEventListener('studyflow-cloud-sync-status', updateRelative);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('studyflow-cloud-sync-status', updateRelative);
+    };
+  }, []);
   
   const themeDropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
@@ -218,17 +237,37 @@ export function SharedHeader({
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <div
-                  onClick={onOpenDriveModal}
-                  title="Google Drive is connected and synchronized with your account"
-                  className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all"
-                >
-                  <div className="relative flex items-center justify-center">
-                    <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
+                {syncStatus === 'syncing' ? (
+                  <div
+                    onClick={onOpenDriveModal}
+                    title="Saving changes to Google Drive..."
+                    className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 text-xs font-semibold shadow-sm cursor-pointer transition-all animate-pulse select-none"
+                  >
+                    <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+                    <span className="hidden sm:inline font-semibold">Syncing...</span>
                   </div>
-                  <span className="hidden sm:inline font-semibold">Drive Synced</span>
-                </div>
+                ) : syncStatus === 'synced' ? (
+                  <div
+                    onClick={onOpenDriveModal}
+                    title={`Google Drive is connected and synchronized with your account. Last synced: ${relativeSyncTime || 'Just now'}`}
+                    className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-emerald-500/15 transition-all select-none"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <Cloud className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full ring-2 ring-theme-surface bg-emerald-400"></span>
+                    </div>
+                    <span className="hidden sm:inline font-semibold">Drive Synced</span>
+                  </div>
+                ) : (
+                  <div
+                    onClick={onOpenDriveModal}
+                    title="Offline or unsynced — all progress saved locally to your device"
+                    className="flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-semibold shadow-sm cursor-pointer hover:bg-amber-500/15 transition-all select-none"
+                  >
+                    <CloudOff className="w-4 h-4 text-amber-400" />
+                    <span className="hidden sm:inline font-semibold">Offline - Saved locally</span>
+                  </div>
+                )}
 
                 <button
                   onClick={syncNowToDrive}

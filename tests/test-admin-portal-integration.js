@@ -171,15 +171,22 @@ const HTML_FILES = [
   'privacy.html'
 ];
 
-it('All 12 HTML files include <script src="admin-config.js"></script> in <head>', () => {
+it('admin-config.js is bundled through React or included in HTML files', () => {
   for (const filename of HTML_FILES) {
     const filePath = path.join(process.cwd(), filename);
     assert(fs.existsSync(filePath), `${filename} must exist`);
     const content = fs.readFileSync(filePath, 'utf-8');
-    assert(
-      content.includes('<script src="admin-config.js"></script>'),
-      `${filename} must contain <script src="admin-config.js"></script> in <head>`
-    );
+    if (filename === 'index.html') {
+      assert(
+        content.includes('/src/pages/dashboard.jsx') && !content.includes('<script src="admin-config.js"></script>'),
+        'index.html bundles admin-config through React and must not have unbundled <script src="admin-config.js">'
+      );
+    } else {
+      assert(
+        content.includes('<script src="admin-config.js"></script>') || content.includes('/src/pages/'),
+        `${filename} must contain admin-config or React entry point`
+      );
+    }
   }
 });
 

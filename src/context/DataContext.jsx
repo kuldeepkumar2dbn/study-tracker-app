@@ -21,6 +21,13 @@ import {
   getUserDataStorageKey 
 } from '../../auth-guard';
 import { markSyllabusTopicCompletedInSubjects } from '../utils/routineSyllabusSync';
+import { 
+  hydrateFromCloud, 
+  debounceSaveToDrive, 
+  syncNow as cloudSyncNow,
+  getSyncStatus as getGlobalSyncStatus,
+  getLastSyncedTimestamp
+} from '../services/cloud-sync';
 
 const DataContext = createContext();
 
@@ -650,9 +657,80 @@ export function DataProvider({ children }) {
     return readScoped('drive_folder_id', null);
   });
 
-  const [syncStatus, setSyncStatus] = useState('offline');
-  const [lastSyncedTime, setLastSyncedTime] = useState(null);
+  const [syncStatus, setSyncStatus] = useState(() => {
+    return getGlobalSyncStatus() || 'offline';
+  });
+  const [lastSyncedTime, setLastSyncedTime] = useState(() => {
+    const ts = getLastSyncedTimestamp();
+    return ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+  });
   const syncTimeoutRef = useRef(null);
+
+  // Background Multi-Device Cloud Data Hydration on initial mount
+  useEffect(() => {
+    const isDemo = isDemoUser();
+    const activeId = getActiveUserId();
+    const token = sessionStorage.getItem('studyflow_drive_token') || sessionStorage.getItem('google_access_token');
+    if (!isDemo && activeId && activeId !== 'guest' && token) {
+      hydrateFromCloud(token, activeId).catch(err => {
+        console.warn('Background cloud hydration error:', err);
+      });
+    }
+  }, []);
+
+  // Listen for multi-device sync events & sync status changes
+  useEffect(() => {
+    const handleCloudSync = (e) => {
+      const remoteData = e.detail?.data;
+      if (!remoteData) return;
+
+      if (Array.isArray(remoteData.routine)) {
+        setRoutineSlots(remoteData.routine);
+      }
+      if (Array.isArray(remoteData.exams)) {
+        setExams(remoteData.exams);
+      }
+      if (Array.isArray(remoteData.skills)) {
+        setSkills(remoteData.skills);
+      }
+      if (Array.isArray(remoteData.subjects)) {
+        setSubjects(remoteData.subjects);
+      }
+      if (Array.isArray(remoteData.weeklyGoals)) {
+        setWeeklyGoals(remoteData.weeklyGoals);
+      }
+      if (Array.isArray(remoteData.notes)) {
+        setNotes(remoteData.notes);
+      }
+      if (remoteData.streak !== undefined || remoteData.todayLoggedHours !== undefined) {
+        setStreakData(prev => ({
+          ...prev,
+          streakCount: Number(remoteData.streak) || 0,
+          lastActiveDate: remoteData.lastActiveDate || null,
+          todayHours: Number(remoteData.todayLoggedHours) || 0.0,
+          dailyTarget: Number(remoteData.dailyTargetHours) || prev.dailyTarget || 4.0,
+          todayLogDate: remoteData.todayLogDate || todayDateStr(),
+          weeklyVelocityHours: Number(remoteData.weeklyVelocityHours) || 0.0
+        }));
+      }
+    };
+
+    const handleSyncStatus = (e) => {
+      if (e.detail?.status) {
+        setSyncStatus(e.detail.status);
+      }
+      if (e.detail?.lastSyncedTimestamp) {
+        setLastSyncedTime(new Date(e.detail.lastSyncedTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
+    };
+
+    window.addEventListener('studyflow-cloud-sync', handleCloudSync);
+    window.addEventListener('studyflow-cloud-sync-status', handleSyncStatus);
+    return () => {
+      window.removeEventListener('studyflow-cloud-sync', handleCloudSync);
+      window.removeEventListener('studyflow-cloud-sync-status', handleSyncStatus);
+    };
+  }, []);
 
   // Set Client ID
   const setGoogleClientId = (id) => {
@@ -745,7 +823,7 @@ export function DataProvider({ children }) {
     return () => clearInterval(interval);
   }, [routineSlots]);
 
-  // Synchronize master user state document (studyflow_${user.sub}_data) for real Google users
+  // Synchronize master user state document (studyflow_${user.sub}_data) & trigger real-time debounced Drive save
   useEffect(() => {
     const isDemo = isDemoUser();
     const activeId = getActiveUserId();
@@ -768,14 +846,20 @@ export function DataProvider({ children }) {
           revisionQueue: existing.revisionQueue || [],
           exams: exams || [],
           skills: skills || [],
-          subjects: subjects || []
+          subjects: subjects || [],
+          notes: notes || [],
+          weeklyGoals: weeklyGoals || [],
+          importantLinks: importantLinks || [],
+          updatedAt: new Date().toISOString()
         };
-        localStorage.setItem(storageKey, JSON.stringify(updated));
+
+        // Real-time debounced save to Google Drive (2000ms delay, immediate localStorage write)
+        debounceSaveToDrive(updated, 2000);
       } catch (err) {
         console.error('Error syncing master user state:', err);
       }
     }
-  }, [exams, routineSlots, skills, streakData, subjects]);
+  }, [exams, routineSlots, skills, streakData, subjects, notes, weeklyGoals, importantLinks]);
 
   // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
@@ -955,31 +1039,46 @@ export function DataProvider({ children }) {
   };
 
   const syncNowToDrive = async () => {
-    if (!driveAccessToken || !driveFolderId) {
+    const isDemo = isDemoUser();
+    const activeId = getActiveUserId();
+    if (isDemo || !activeId || activeId === 'guest') {
       setSyncStatus('offline');
       return;
     }
 
+    const masterPayload = {
+      userId: activeId,
+      streak: streakData.streakCount ?? 0,
+      lastActiveDate: streakData.lastActiveDate ?? null,
+      dailyTargetHours: streakData.dailyTarget ?? 4.0,
+      todayLoggedHours: streakData.todayHours ?? 0.0,
+      todayLogDate: streakData.todayLogDate || todayDateStr(),
+      weeklyVelocityHours: streakData.weeklyVelocityHours ?? 0.0,
+      routine: routineSlots || [],
+      exams: exams || [],
+      skills: skills || [],
+      subjects: subjects || [],
+      notes: notes || [],
+      weeklyGoals: weeklyGoals || [],
+      importantLinks: importantLinks || [],
+      updatedAt: new Date().toISOString()
+    };
+
+    setSyncStatus('syncing');
     try {
-      setSyncStatus('syncing');
-      await saveStudyDataToDrive(driveAccessToken, driveFolderId, {
-        subjects,
-        exams,
-        routineSlots,
-        weeklyGoals,
-        skills,
-        streakData,
-        timerHistory,
-        weeklyTargetHours,
-        dailyTargetMinutes,
-        importantLinks,
-        lastSyncedAt: new Date().toISOString()
-      });
+      await cloudSyncNow(masterPayload);
+      if (driveAccessToken && driveFolderId) {
+        try {
+          await saveStudyDataToDrive(driveAccessToken, driveFolderId, masterPayload);
+        } catch (e) {
+          console.warn('Backup to legacy folder note:', e);
+        }
+      }
       setSyncStatus('synced');
       setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       console.error('Sync failed:', err);
-      setSyncStatus('unsaved');
+      setSyncStatus('offline');
     }
   };
 
