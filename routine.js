@@ -38,7 +38,9 @@ import {
   saveRoutine, 
   saveTomorrowPlan, 
   autoMergeTomorrowPlans,
-  syncRoutineSyllabusCompletion
+  syncRoutineSyllabusCompletion,
+  handleEndOfDayRollover,
+  checkAndTriggerEndOfDayRollover
 } from './storage-helper.js';
 import { 
   pushStudySessionToCalendar, 
@@ -79,6 +81,8 @@ export {
   saveTomorrowPlan,
   autoMergeTomorrowPlans,
   syncRoutineSyllabusCompletion,
+  handleEndOfDayRollover,
+  checkAndTriggerEndOfDayRollover,
   pushStudySessionToCalendar,
   saveCalendarEventToItem,
   formatRFC3339,
@@ -116,6 +120,8 @@ export default {
   saveTomorrowPlan,
   autoMergeTomorrowPlans,
   syncRoutineSyllabusCompletion,
+  handleEndOfDayRollover,
+  checkAndTriggerEndOfDayRollover,
   pushStudySessionToCalendar,
   saveCalendarEventToItem,
   formatRFC3339,

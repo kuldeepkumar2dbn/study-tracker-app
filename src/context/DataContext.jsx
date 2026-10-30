@@ -35,7 +35,12 @@ import {
   getSyncStatus as getGlobalSyncStatus,
   getLastSyncedTimestamp
 } from '../services/cloud-sync';
-import { patchUserData, autoMergeTomorrowPlans } from '../../storage-helper.js';
+import { 
+  patchUserData, 
+  autoMergeTomorrowPlans,
+  handleEndOfDayRollover,
+  checkAndTriggerEndOfDayRollover
+} from '../../storage-helper.js';
 
 const DataContext = createContext();
 
@@ -496,20 +501,39 @@ export function DataProvider({ children }) {
     return readScoped('completed_routine_today', []);
   });
 
-  // Next-Day Auto-Merge Engine on initialization
+  // Automatic End-of-Day Rollover & Tomorrow Plan Auto-Merge on initialization
   const [mergeToastMessage, setMergeToastMessage] = useState(null);
 
   useEffect(() => {
     if (activeId && activeId !== 'guest') {
       try {
-        const result = autoMergeTomorrowPlans(activeId);
-        if (result && result.merged) {
-          setRoutineSlots(result.updatedRoutine);
-          setTomorrowPlan(result.remainingPlans);
-          setMergeToastMessage(result.message);
+        const rolloverRes = checkAndTriggerEndOfDayRollover(activeId);
+        if (rolloverRes && rolloverRes.rolledOver) {
+          setRoutineSlots(rolloverRes.updatedRoutine);
+          setTomorrowPlan(rolloverRes.remainingTomorrowPlan);
+          if (rolloverRes.updatedSubjects) {
+            setSubjects(rolloverRes.updatedSubjects);
+          }
+          setCompletedRoutineToday([]);
+          setStreakData(prev => ({
+            ...prev,
+            todayHours: 0.0,
+            lastActiveDate: rolloverRes.todayStr,
+            todayLogDate: rolloverRes.todayStr
+          }));
+          if (rolloverRes.mergedTomorrowCount > 0) {
+            setMergeToastMessage("🌅 Tomorrow's planned topics have been merged into your Daily Routine for today!");
+          }
+        } else {
+          const result = autoMergeTomorrowPlans(activeId);
+          if (result && result.merged) {
+            setRoutineSlots(result.updatedRoutine);
+            setTomorrowPlan(result.remainingPlans);
+            setMergeToastMessage(result.message);
+          }
         }
       } catch (err) {
-        console.warn('Error during autoMergeTomorrowPlans:', err);
+        console.warn('Error during end-of-day rollover / auto-merge check:', err);
       }
     }
   }, [activeId]);
@@ -910,54 +934,32 @@ export function DataProvider({ children }) {
       const activeId = getActiveUserId();
 
       if (!isDemo && activeId && activeId !== 'guest') {
-        const key = `studyflow_${activeId}_data`;
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          try {
-            const data = JSON.parse(raw);
-            if (data.todayLogDate && data.todayLogDate !== today) {
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              const yesterdayStr = getLocalDateString(yesterday);
-
-              // Check Streak: If they studied yesterday, keep/increment streak; if they missed yesterday, reset streak to 0.
-              let newStreak = data.streak;
-              if (data.lastActiveDate === yesterdayStr) {
-                // Studied yesterday, preserve streak
-              } else {
-                // Missed yesterday, reset streak to 0
-                newStreak = 0;
-              }
-
-              data.streak = newStreak;
-              data.todayLoggedHours = 0.0;
-              data.todayLogDate = today;
-
-              localStorage.setItem(key, JSON.stringify(data));
-
-              // Update state
-              setStreakData(prev => ({
-                ...prev,
-                streakCount: newStreak,
-                todayHours: 0.0,
-                todayLogDate: today
-              }));
-
-              // Reset routine checklist for the new day
-              setRoutineSlots(prev => prev.map(s => ({ ...s, completed: false })));
+        try {
+          const rolloverRes = checkAndTriggerEndOfDayRollover(activeId);
+          if (rolloverRes && rolloverRes.rolledOver) {
+            setRoutineSlots(rolloverRes.updatedRoutine);
+            setTomorrowPlan(rolloverRes.remainingTomorrowPlan);
+            if (rolloverRes.updatedSubjects) {
+              setSubjects(rolloverRes.updatedSubjects);
             }
-          } catch (e) {
-            console.error('Error during midnight rollover check:', e);
+            setCompletedRoutineToday([]);
+            setStreakData(prev => ({
+              ...prev,
+              todayHours: 0.0,
+              lastActiveDate: rolloverRes.todayStr,
+              todayLogDate: rolloverRes.todayStr
+            }));
+            if (rolloverRes.mergedTomorrowCount > 0) {
+              setMergeToastMessage("🌅 Tomorrow's planned topics have been merged into your Daily Routine for today!");
+            }
           }
+        } catch (e) {
+          console.error('Error during midnight rollover check:', e);
         }
       } else {
         const lastRollover = localStorage.getItem(STORAGE_KEY_PREFIX + 'last_rollover_date') || today;
         if (lastRollover !== today) {
-          const allCompleted = routineSlots.length > 0 && routineSlots.every(s => s.completed);
-          if (allCompleted) {
-            setStreakData(prev => ({ ...prev, streakCount: prev.streakCount + 1 }));
-          }
-          setRoutineSlots(prev => prev.map(s => ({ ...s, completed: false })));
+          setRoutineSlots(prev => prev.filter(s => !s.completed).map(s => ({ ...s, completed: false, carriedOver: true, carriedOverNote: "Carried over from yesterday" })));
           setStreakData(prev => ({ ...prev, todayHours: 0, lastActiveDate: today }));
           localStorage.setItem(STORAGE_KEY_PREFIX + 'last_rollover_date', today);
         }

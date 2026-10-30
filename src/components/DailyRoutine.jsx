@@ -653,9 +653,19 @@ export default function DailyRoutine() {
                   </button>
 
                   <div className="min-w-0">
-                    <p className={`text-xs sm:text-sm font-semibold leading-tight ${slot.completed ? 'line-through text-theme-muted' : ''}`}>
-                      {slot.title}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className={`text-xs sm:text-sm font-semibold leading-tight ${slot.completed ? 'line-through text-theme-muted' : ''}`}>
+                        {slot.title}
+                      </p>
+                      {slot.carriedOver && (
+                        <span 
+                          className="carried-over-badge inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full"
+                          title="Unfinished task carried over from yesterday"
+                        >
+                          ⏰ Carried over from yesterday
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[11px] text-theme-muted font-mono-numbers block mt-0.5">
                       {slot.timeRange}
                     </span>

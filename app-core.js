@@ -14,6 +14,7 @@ export * from './src/components/AppShell.jsx';
 export * from './src/services/googleDrive.js';
 export * from './auth-guard.js';
 export { soundEngine } from './src/utils/audio.js';
+export { handleEndOfDayRollover, checkAndTriggerEndOfDayRollover } from './storage-helper.js';
 
 import { getUserStorageKey } from './auth-guard.js';
 

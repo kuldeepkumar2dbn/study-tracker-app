@@ -12,7 +12,7 @@
  */
 
 import { debounceSaveToDrive, populateGranularStorage } from './cloud-sync.js';
-import { getActiveUserId, isDemoUser } from './auth-guard.js';
+import { getActiveUserId, isDemoUser, getLocalDateString } from './auth-guard.js';
 
 /**
  * Reads the full current dataset for a user from LocalStorage
@@ -305,6 +305,281 @@ export function autoMergeTomorrowPlans(userId) {
   };
 }
 
+/**
+ * Calculates a subject's overall completion percentage based on its chapters and sub-topics.
+ */
+function calculateSubjectPercentage(topics = []) {
+  if (!topics || topics.length === 0) return 0;
+  let totalItems = 0;
+  let earnedScore = 0;
+
+  topics.forEach(t => {
+    if (t.subtopics && t.subtopics.length > 0) {
+      t.subtopics.forEach(st => {
+        totalItems += 1;
+        if (st.status === 'Mastered' || st.completed) earnedScore += 100;
+        else if (st.status === 'In Progress') earnedScore += 50;
+      });
+    } else {
+      totalItems += 1;
+      if (t.status === 'Mastered' || t.completed) earnedScore += 100;
+      else if (t.status === 'In Progress') earnedScore += 50;
+    }
+  });
+
+  return totalItems > 0 ? Math.round(earnedScore / totalItems) : 0;
+}
+
+/**
+ * AUTOMATED END-OF-DAY ROLLOVER & CLEANUP ENGINE
+ *
+ * SPECIFICATIONS:
+ * 1. MIDNIGHT / NEW-DAY DETECTOR:
+ *    - Compares todayStr (YYYY-MM-DD in local time) against userData.lastActiveDate.
+ *    - If todayStr > userData.lastActiveDate: executes handleEndOfDayRollover(userId).
+ * 2. END-OF-DAY CLEANUP LOGIC:
+ *    - Identifies all completed routine blocks (block.completed === true).
+ *    - Verifies that all completed items linked to a syllabus topic have topic.completed = true in userData.subjects.
+ *    - PURGES all completed blocks from userData.routine.
+ *    - KEEPS and carries over all uncompleted / remaining blocks (block.completed === false) into the new day's routine so the student's unfinished work is never lost.
+ *    - Tags carried-over blocks with a subtle badge or note: "Carried over from yesterday".
+ * 3. TOMORROW PLANNER MERGE:
+ *    - Merges all items from userData.tomorrowPlan where scheduledDate <= todayStr into userData.routine.
+ *    - Removes merged items from userData.tomorrowPlan.
+ * 4. COUNTER & STATS RESET:
+ *    - Resets userData.todayLoggedHours = 0.0 for the fresh day.
+ *    - Does NOT wipe userData.streak or clear the userData.dailyActivity heatmap history.
+ *    - Updates userData.lastActiveDate = todayStr.
+ *    - Saves changes via patchUserData and syncs to Google Drive.
+ *
+ * @param {string} userId
+ * @param {string} [customTodayStr] Optional simulation date string (YYYY-MM-DD)
+ * @returns {Object}
+ */
+export function handleEndOfDayRollover(userId, customTodayStr = null) {
+  const targetUserId = userId || getActiveUserId();
+  if (!targetUserId || targetUserId === 'guest') {
+    return { rolledOver: false, reason: 'guest_user' };
+  }
+
+  const todayStr = customTodayStr || (typeof getLocalDateString === 'function' ? getLocalDateString(new Date()) : new Date().toLocaleDateString('en-CA'));
+  const userData = getUserData(targetUserId);
+
+  const routine = Array.isArray(userData.routine) ? userData.routine : [];
+  const subjects = Array.isArray(userData.subjects) ? userData.subjects : [];
+  const tomorrowPlan = Array.isArray(userData.tomorrowPlan) ? userData.tomorrowPlan : [];
+
+  // 1. Identify completed routine blocks & uncompleted routine blocks
+  const completedBlocks = routine.filter(b => b && b.completed === true);
+  const uncompletedBlocks = routine.filter(b => !b || b.completed !== true);
+
+  // 2. Verify that all completed items linked to a syllabus topic have topic.completed = true in userData.subjects
+  let updatedSubjects = subjects;
+  if (completedBlocks.length > 0 && subjects.length > 0) {
+    let anySubjectChanged = false;
+
+    updatedSubjects = subjects.map(s => {
+      let subjectModified = false;
+      const updatedTopics = (s.topics || []).map(t => {
+        let chapterModified = false;
+
+        const matchingBlocks = completedBlocks.filter(b => {
+          if (!b.syllabusLink) return false;
+          const { subjectId, subjectName, chapterId, chapterName, topicId, topicName } = b.syllabusLink;
+          const subMatch = (subjectId && s.id === subjectId) || (subjectName && s.name === subjectName);
+          if (!subMatch) return false;
+          const chapMatch = (chapterId && t.id === chapterId) || (chapterName && t.title === chapterName);
+          const topMatch = (topicId && t.id === topicId) || (topicName && t.title === topicName);
+          const hasSubMatch = Array.isArray(t.subtopics) && t.subtopics.some(st =>
+            (topicId && st.id === topicId) || (topicName && st.title === topicName) || (topicId && st.title === topicId)
+          );
+          return chapMatch || topMatch || hasSubMatch;
+        });
+
+        if (matchingBlocks.length === 0) return t;
+
+        if (Array.isArray(t.subtopics) && t.subtopics.length > 0) {
+          const updatedSubtopics = t.subtopics.map(st => {
+            const matchedByCompletedBlock = matchingBlocks.some(b => {
+              const { topicId, topicName } = b.syllabusLink;
+              return (topicId && st.id === topicId) || (topicName && st.title === topicName) || (topicId && st.title === topicId);
+            });
+            if (matchedByCompletedBlock && (!st.completed || st.status !== 'Mastered')) {
+              chapterModified = true;
+              return { ...st, completed: true, status: 'Mastered' };
+            }
+            return st;
+          });
+
+          if (chapterModified) {
+            subjectModified = true;
+            anySubjectChanged = true;
+            const totalSubs = updatedSubtopics.length;
+            const completedSubs = updatedSubtopics.filter(st => st.status === 'Mastered' || st.completed).length;
+            const allMastered = totalSubs > 0 && completedSubs === totalSubs;
+            const anyInProgress = completedSubs > 0 || updatedSubtopics.some(st => st.status === 'In Progress');
+            const progressPct = totalSubs > 0 ? Math.round((completedSubs / totalSubs) * 100) : 100;
+
+            return {
+              ...t,
+              completed: allMastered,
+              status: allMastered ? 'Mastered' : anyInProgress ? 'In Progress' : 'Not Started',
+              progress: progressPct,
+              percentage: progressPct,
+              subtopics: updatedSubtopics
+            };
+          }
+          return t;
+        } else {
+          subjectModified = true;
+          anySubjectChanged = true;
+          return {
+            ...t,
+            completed: true,
+            status: 'Mastered',
+            progress: 100,
+            percentage: 100
+          };
+        }
+      });
+
+      if (subjectModified) {
+        const updatedSub = { ...s, topics: updatedTopics };
+        updatedSub.completionPercentage = calculateSubjectPercentage(updatedTopics);
+        return updatedSub;
+      }
+      return s;
+    });
+
+    if (!anySubjectChanged) {
+      updatedSubjects = subjects;
+    }
+  }
+
+  // 3. KEEP and carry over all uncompleted / remaining blocks into the new day's routine
+  // Tag carried-over blocks with a subtle badge or note: "Carried over from yesterday"
+  const carriedOverBlocks = uncompletedBlocks.map(block => ({
+    ...block,
+    completed: false,
+    carriedOver: true,
+    carriedOverNote: "Carried over from yesterday"
+  }));
+
+  // 4. TOMORROW PLANNER MERGE:
+  // Merge all items from tomorrowPlan where scheduledDate <= todayStr into routine
+  const itemsToMerge = tomorrowPlan.filter(plan => plan && plan.scheduledDate && plan.scheduledDate <= todayStr);
+  const remainingTomorrowPlan = tomorrowPlan.filter(plan => !plan || !plan.scheduledDate || plan.scheduledDate > todayStr);
+
+  const mergedTomorrowBlocks = itemsToMerge.map(plan => {
+    const startTime = plan.startTime || '08:00';
+    const endTime = plan.endTime || '10:00';
+    const hasSyllabus = Boolean(plan.syllabusLink && (plan.syllabusLink.subjectId || plan.syllabusLink.subjectName));
+    return {
+      id: plan.id || ('plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+      title: plan.title || 'Study Session',
+      startTime,
+      endTime,
+      timeRange: `${startTime} - ${endTime}`,
+      category: plan.category || 'Core Study',
+      syllabusLink: plan.syllabusLink || null,
+      completed: false,
+      linkType: hasSyllabus ? 'syllabus' : 'routine',
+      notified: Boolean(plan.notified),
+      calendarEventId: plan.calendarEventId || null
+    };
+  });
+
+  // Combine carried-over blocks and merged tomorrow blocks
+  const newDailyRoutine = [...carriedOverBlocks, ...mergedTomorrowBlocks];
+
+  // 5. COUNTER & STATS RESET:
+  // Reset todayLoggedHours = 0.0 for the fresh day.
+  // Do NOT wipe streak or clear dailyActivity heatmap history.
+  // Update lastActiveDate = todayStr.
+  const patchPayload = {
+    routine: newDailyRoutine,
+    tomorrowPlan: remainingTomorrowPlan,
+    completedRoutineToday: [],
+    todayLoggedHours: 0.0,
+    todayLogDate: todayStr,
+    lastActiveDate: todayStr
+  };
+
+  if (updatedSubjects !== subjects) {
+    patchPayload.subjects = updatedSubjects;
+  }
+
+  if (userData.streak !== undefined) {
+    patchPayload.streak = userData.streak;
+  }
+  if (userData.dailyActivity !== undefined) {
+    patchPayload.dailyActivity = userData.dailyActivity;
+  }
+
+  // 6. ATOMIC & SAFE PERSISTENCE:
+  const patchedData = patchUserData(targetUserId, patchPayload);
+
+  // Notify listeners across all views
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('studyflow-day-rollover', {
+        detail: {
+          userId: targetUserId,
+          todayStr,
+          purgedCompletedCount: completedBlocks.length,
+          carriedOverCount: carriedOverBlocks.length,
+          mergedTomorrowCount: mergedTomorrowBlocks.length,
+          updatedRoutine: newDailyRoutine,
+          remainingTomorrowPlan
+        }
+      }));
+      window.dispatchEvent(new Event('studyflow-data-changed'));
+    } catch {}
+  }
+
+  return {
+    rolledOver: true,
+    todayStr,
+    purgedCompletedCount: completedBlocks.length,
+    carriedOverCount: carriedOverBlocks.length,
+    mergedTomorrowCount: mergedTomorrowBlocks.length,
+    updatedRoutine: newDailyRoutine,
+    remainingTomorrowPlan,
+    updatedSubjects,
+    patchedData
+  };
+}
+
+/**
+ * Checks if a new day has arrived (todayStr > userData.lastActiveDate).
+ * If so, triggers handleEndOfDayRollover automatically.
+ *
+ * @param {string} userId
+ * @param {string} [customTodayStr]
+ * @returns {Object}
+ */
+export function checkAndTriggerEndOfDayRollover(userId, customTodayStr = null) {
+  const targetUserId = userId || getActiveUserId();
+  if (!targetUserId || targetUserId === 'guest') {
+    return { rolledOver: false, reason: 'guest_user' };
+  }
+
+  const todayStr = customTodayStr || (typeof getLocalDateString === 'function' ? getLocalDateString(new Date()) : new Date().toLocaleDateString('en-CA'));
+  const userData = getUserData(targetUserId);
+
+  const lastDate = userData.lastActiveDate;
+  if (!lastDate || todayStr > lastDate) {
+    return handleEndOfDayRollover(targetUserId, todayStr);
+  }
+
+  return {
+    rolledOver: false,
+    reason: 'same_day',
+    todayStr,
+    lastActiveDate: lastDate
+  };
+}
+
 export default {
   getUserData,
   mergeUserData,
@@ -316,5 +591,7 @@ export default {
   saveNotes,
   saveTomorrowPlan,
   syncRoutineSyllabusCompletion,
-  autoMergeTomorrowPlans
+  autoMergeTomorrowPlans,
+  handleEndOfDayRollover,
+  checkAndTriggerEndOfDayRollover
 };
