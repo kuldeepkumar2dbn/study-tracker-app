@@ -106,7 +106,8 @@ export function createRoutineBlock({
   completed = false,
   linkType = null,
   syllabusLink = null,
-  skillLink = null
+  skillLink = null,
+  calendarEventId = null
 }) {
   const blockId = id || ('block_' + Date.now());
   const formattedTimeRange = `${startTime} - ${endTime}`;
@@ -121,6 +122,7 @@ export function createRoutineBlock({
     category: category || 'Core Study',
     completed: Boolean(completed),
     linkType: resolvedLinkType,
+    calendarEventId: calendarEventId || null,
     syllabusLink: syllabusLink ? {
       subjectId: syllabusLink.subjectId,
       subjectName: syllabusLink.subjectName,

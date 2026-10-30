@@ -17,6 +17,13 @@ import {
 import { getIncompleteSubtopics, createRoutineBlock } from '../utils/routineSyllabusSync';
 import { getUnwatchedVideosForSkill } from '../utils/routineSkillSync';
 import { getActiveUserId, getUserStorageKey } from '../../auth-guard';
+import { hasCalendarScope, requestCalendarScope } from '../services/google-auth';
+import { 
+  pushStudySessionToCalendar, 
+  showCalendarSuccessToast, 
+  getCalendarPreference, 
+  setCalendarPreference 
+} from '../services/calendar-sync';
 
 export default function AddRoutineModal({
   isOpen,
@@ -29,6 +36,8 @@ export default function AddRoutineModal({
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('10:00');
   const [category, setCategory] = useState('Core Study');
+  const [pushToCalendar, setPushToCalendar] = useState(() => getCalendarPreference());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Segmented tab source toggle: 'syllabus' | 'skill' | 'none'
   const [linkSourceTab, setLinkSourceTab] = useState('syllabus');
@@ -180,7 +189,7 @@ export default function AddRoutineModal({
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
@@ -215,6 +224,32 @@ export default function AddRoutineModal({
       };
     }
 
+    setIsSubmitting(true);
+    let calendarEventId = null;
+
+    if (pushToCalendar) {
+      try {
+        if (!hasCalendarScope()) {
+          await requestCalendarScope();
+        }
+        const todayStr = new Date().toLocaleDateString('en-CA');
+        const calRes = await pushStudySessionToCalendar({
+          title: title.trim(),
+          startTime,
+          endTime,
+          scheduledDate: todayStr,
+          subjectName: syllabusLink?.subjectName || (skillLink ? skillLink.skillTitle : null)
+        });
+
+        if (calRes && calRes.success) {
+          calendarEventId = calRes.eventId;
+          showCalendarSuccessToast();
+        }
+      } catch (calErr) {
+        console.warn('Calendar sync encountered an issue, proceeding with local save:', calErr);
+      }
+    }
+
     const newBlock = createRoutineBlock({
       title: title.trim(),
       startTime,
@@ -222,12 +257,14 @@ export default function AddRoutineModal({
       category,
       linkType,
       syllabusLink,
-      skillLink
+      skillLink,
+      calendarEventId
     });
 
     onAddSlot(newBlock);
 
     // Reset form
+    setIsSubmitting(false);
     setTitle('');
     setStartTime('08:00');
     setEndTime('10:00');
@@ -692,6 +729,30 @@ export default function AddRoutineModal({
               )}
             </div>
           )}
+
+          {/* Google Calendar Push Toggle */}
+          <div className="p-3.5 rounded-xl bg-theme-surface/70 border border-theme-border flex flex-col gap-1.5 transition-all">
+            <label className="flex items-center gap-2.5 cursor-pointer text-xs font-medium text-theme-text select-none">
+              <input
+                type="checkbox"
+                id="routine-push-calendar-toggle"
+                checked={pushToCalendar}
+                onChange={(e) => {
+                  setPushToCalendar(e.target.checked);
+                  setCalendarPreference(e.target.checked);
+                }}
+                className="w-4 h-4 rounded border-theme-border text-theme-accent focus:ring-theme-accent cursor-pointer accent-indigo-500"
+              />
+              <span className="font-semibold flex items-center gap-1.5">
+                📅 Push to Google Calendar <span className="text-[11px] font-normal text-theme-muted">(30-min phone & lock-screen alarm)</span>
+              </span>
+            </label>
+            {pushToCalendar && (
+              <p className="text-[11px] text-theme-muted pl-6.5 flex items-center gap-1.5 animate-fadeIn">
+                <span className="text-xs">🔔</span> Rings on your phone's calendar 30 minutes before the session starts.
+              </p>
+            )}
+          </div>
 
           {/* Modal Actions */}
           <div className="pt-3 border-t border-theme-border flex justify-end gap-2">

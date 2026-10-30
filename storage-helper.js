@@ -261,7 +261,8 @@ export function autoMergeTomorrowPlans(userId) {
       syllabusLink: plan.syllabusLink || null,
       completed: false,
       linkType: hasSyllabus ? 'syllabus' : 'routine',
-      notified: Boolean(plan.notified)
+      notified: Boolean(plan.notified),
+      calendarEventId: plan.calendarEventId || null
     };
   });
 

@@ -10,6 +10,13 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { getIncompleteSubtopics } from '../utils/routineSyllabusSync';
+import { hasCalendarScope, requestCalendarScope } from '../services/google-auth';
+import { 
+  pushStudySessionToCalendar, 
+  showCalendarSuccessToast, 
+  getCalendarPreference, 
+  setCalendarPreference 
+} from '../services/calendar-sync';
 
 const CATEGORIES = ['Core Study', 'Revision', 'Problem Solving'];
 
@@ -31,6 +38,8 @@ export default function TomorrowPlannerModal({
   const [endTime, setEndTime] = useState('12:00');
   const [scheduledDate, setScheduledDate] = useState(getTomorrowDateStr());
   const [category, setCategory] = useState('Core Study');
+  const [pushToCalendar, setPushToCalendar] = useState(() => getCalendarPreference());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Syllabus Link State
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
@@ -118,9 +127,11 @@ export default function TomorrowPlannerModal({
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
+
+    setIsSubmitting(true);
 
     let syllabusLink = null;
     if (selectedSubject) {
@@ -133,6 +144,30 @@ export default function TomorrowPlannerModal({
       };
     }
 
+    let calendarEventId = editingPlan?.calendarEventId || null;
+
+    if (pushToCalendar) {
+      try {
+        if (!hasCalendarScope()) {
+          await requestCalendarScope();
+        }
+        const calRes = await pushStudySessionToCalendar({
+          title: title.trim(),
+          startTime,
+          endTime,
+          scheduledDate,
+          subjectName: syllabusLink?.subjectName || null
+        });
+
+        if (calRes && calRes.success) {
+          calendarEventId = calRes.eventId;
+          showCalendarSuccessToast();
+        }
+      } catch (calErr) {
+        console.warn('Tomorrow planner calendar sync error, saving locally:', calErr);
+      }
+    }
+
     onSave({
       id: editingPlan?.id,
       title: title.trim(),
@@ -141,9 +176,11 @@ export default function TomorrowPlannerModal({
       scheduledDate,
       category,
       syllabusLink,
-      notified: false
+      notified: false,
+      calendarEventId
     });
 
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -352,6 +389,30 @@ export default function TomorrowPlannerModal({
                 );
               })}
             </div>
+          </div>
+
+          {/* Google Calendar Push Toggle */}
+          <div className="p-3.5 rounded-xl bg-theme-surface/70 border border-theme-border flex flex-col gap-1.5 transition-all">
+            <label className="flex items-center gap-2.5 cursor-pointer text-xs font-medium text-theme-text select-none">
+              <input
+                type="checkbox"
+                id="tomorrow-push-calendar-toggle"
+                checked={pushToCalendar}
+                onChange={(e) => {
+                  setPushToCalendar(e.target.checked);
+                  setCalendarPreference(e.target.checked);
+                }}
+                className="w-4 h-4 rounded border-theme-border text-amber-500 focus:ring-amber-500 cursor-pointer accent-amber-500"
+              />
+              <span className="font-semibold flex items-center gap-1.5">
+                📅 Push to Google Calendar <span className="text-[11px] font-normal text-theme-muted">(30-min phone & lock-screen alarm)</span>
+              </span>
+            </label>
+            {pushToCalendar && (
+              <p className="text-[11px] text-theme-muted pl-6.5 flex items-center gap-1.5 animate-fadeIn">
+                <span className="text-xs">🔔</span> Rings on your phone's calendar 30 minutes before the session starts.
+              </p>
+            )}
           </div>
 
           {/* Footer Actions */}

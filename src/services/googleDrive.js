@@ -6,8 +6,9 @@ import { validateFileBinarySignature } from '../utils/security.js';
 export const FOLDER_NAME = 'MyStudyTracker_Data';
 export const DATA_FILE_NAME = 'study_data.json';
 export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+export const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 export const DEFAULT_GOOGLE_CLIENT_ID = '316205351069-hnmklkhtlbqufp22dm0poqvo6lfjjs1c.apps.googleusercontent.com';
-export const DEFAULT_GOOGLE_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+export const DEFAULT_GOOGLE_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
 
 let tokenClientInstance = null;
 
@@ -17,7 +18,7 @@ let tokenClientInstance = null;
  * @param {Function} onTokenSuccess Callback with tokenResponse
  * @param {Function} onError Callback with error
  */
-export function initGoogleTokenClient(clientId = DEFAULT_GOOGLE_CLIENT_ID, onTokenSuccess, onError) {
+export function initGoogleTokenClient(clientId = DEFAULT_GOOGLE_CLIENT_ID, onTokenSuccess, onError, customScope = DEFAULT_GOOGLE_SCOPES) {
   if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
     if (onError) onError(new Error('Google Identity Services SDK not loaded yet.'));
     return null;
@@ -26,9 +27,14 @@ export function initGoogleTokenClient(clientId = DEFAULT_GOOGLE_CLIENT_ID, onTok
   try {
     tokenClientInstance = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId || DEFAULT_GOOGLE_CLIENT_ID,
-      scope: DEFAULT_GOOGLE_SCOPES,
+      scope: customScope || DEFAULT_GOOGLE_SCOPES,
       callback: (tokenResponse) => {
         if (tokenResponse && tokenResponse.access_token) {
+          if (tokenResponse.scope && typeof sessionStorage !== 'undefined') {
+            const currentScopes = sessionStorage.getItem('google_granted_scopes') || '';
+            const combined = `${currentScopes} ${tokenResponse.scope}`.trim();
+            sessionStorage.setItem('google_granted_scopes', combined);
+          }
           if (onTokenSuccess) onTokenSuccess(tokenResponse);
         } else if (tokenResponse && tokenResponse.error) {
           if (onError) onError(new Error(tokenResponse.error_description || tokenResponse.error));
@@ -90,6 +96,11 @@ export async function requestSilentDriveToken(clientId = DEFAULT_GOOGLE_CLIENT_I
             sessionStorage.setItem('studyflow_drive_token', token);
             sessionStorage.setItem('google_access_token', token);
             sessionStorage.setItem('google_token_expiry', String(expiry));
+            if (tokenResponse.scope) {
+              const currentScopes = sessionStorage.getItem('google_granted_scopes') || '';
+              const combined = `${currentScopes} ${tokenResponse.scope}`.trim();
+              sessionStorage.setItem('google_granted_scopes', combined);
+            }
 
             // Strictly purge any legacy tokens from persistent localStorage
             localStorage.removeItem('google_access_token');

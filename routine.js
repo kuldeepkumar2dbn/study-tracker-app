@@ -32,6 +32,17 @@ import {
 } from './src/utils/routineSkillSync.js';
 
 import { patchUserData, saveRoutine, saveTomorrowPlan, autoMergeTomorrowPlans } from './storage-helper.js';
+import { 
+  pushStudySessionToCalendar, 
+  saveCalendarEventToItem, 
+  formatRFC3339, 
+  formatStudyEventTitle, 
+  buildCalendarEventPayload, 
+  showCalendarSuccessToast,
+  getCalendarPreference,
+  setCalendarPreference
+} from './calendar-sync.js';
+import { hasCalendarScope, requestCalendarScope, CALENDAR_EVENTS_SCOPE } from './google-auth.js';
 
 const RoutineView = DailyRoutine;
 
@@ -56,7 +67,18 @@ export {
   saveRoutine,
   patchUserData,
   saveTomorrowPlan,
-  autoMergeTomorrowPlans
+  autoMergeTomorrowPlans,
+  pushStudySessionToCalendar,
+  saveCalendarEventToItem,
+  formatRFC3339,
+  formatStudyEventTitle,
+  buildCalendarEventPayload,
+  showCalendarSuccessToast,
+  getCalendarPreference,
+  setCalendarPreference,
+  hasCalendarScope,
+  requestCalendarScope,
+  CALENDAR_EVENTS_SCOPE
 };
 
 export default {
@@ -80,6 +102,17 @@ export default {
   saveRoutine,
   patchUserData,
   saveTomorrowPlan,
-  autoMergeTomorrowPlans
+  autoMergeTomorrowPlans,
+  pushStudySessionToCalendar,
+  saveCalendarEventToItem,
+  formatRFC3339,
+  formatStudyEventTitle,
+  buildCalendarEventPayload,
+  showCalendarSuccessToast,
+  getCalendarPreference,
+  setCalendarPreference,
+  hasCalendarScope,
+  requestCalendarScope,
+  CALENDAR_EVENTS_SCOPE
 };
 

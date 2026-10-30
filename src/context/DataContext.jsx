@@ -1644,7 +1644,10 @@ export function DataProvider({ children }) {
       timeRange: formattedRange,
       category: slot.category || 'Core Study',
       completed: Boolean(slot.completed),
-      syllabusLink: slot.syllabusLink || null
+      syllabusLink: slot.syllabusLink || null,
+      skillLink: slot.skillLink || null,
+      linkType: slot.linkType || null,
+      calendarEventId: slot.calendarEventId || null
     };
 
     setRoutineSlots(prev => [...prev, newSlot]);
@@ -1698,7 +1701,8 @@ export function DataProvider({ children }) {
         chapterName: planItem.syllabusLink.chapterName,
         topicName: planItem.syllabusLink.topicName
       } : null,
-      notified: Boolean(planItem.notified)
+      notified: Boolean(planItem.notified),
+      calendarEventId: planItem.calendarEventId || null
     };
 
     setTomorrowPlan(prev => [...prev, newItem]);

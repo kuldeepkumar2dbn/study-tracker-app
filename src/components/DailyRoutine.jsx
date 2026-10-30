@@ -361,10 +361,20 @@ export default function DailyRoutine() {
                       </p>
                     )}
 
-                    {/* Scheduled Date */}
-                    <div className="flex items-center gap-1.5 text-[11px] text-theme-muted font-mono-numbers">
-                      <Calendar className="w-3 h-3 text-amber-500" />
-                      <span>Scheduled: {plan.scheduledDate || 'Tomorrow'}</span>
+                    {/* Scheduled Date & Calendar Badge */}
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-theme-muted font-mono-numbers">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3 h-3 text-amber-500" />
+                        <span>Scheduled: {plan.scheduledDate || 'Tomorrow'}</span>
+                      </div>
+                      {plan.calendarEventId && (
+                        <span 
+                          className="inline-flex items-center gap-1 text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-md font-medium"
+                          title="Synced to Google Calendar (30-min advance reminder)"
+                        >
+                          📅 Calendar
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -636,6 +646,16 @@ export default function DailyRoutine() {
                     ) : slot.syllabusLink ? (
                       <SyllabusRoutineChip syllabusLink={slot.syllabusLink} subjects={subjects} />
                     ) : null}
+                    {slot.calendarEventId && (
+                      <div className="mt-1">
+                        <span 
+                          className="inline-flex items-center gap-1 text-[10px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-md font-medium"
+                          title="Synced to Google Calendar (30-min advance reminder)"
+                        >
+                          📅 Calendar Synced
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

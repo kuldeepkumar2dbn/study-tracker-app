@@ -756,6 +756,23 @@ export function AppLayout({ activeTabId, children }) {
     return () => window.removeEventListener('studyflow-tomorrow-plan-merged', handleMerged);
   }, []);
 
+  // Google Calendar Event Created Toast Listener
+  const [calendarToast, setCalendarToast] = useState(null);
+
+  useEffect(() => {
+    const handleCalendarEvent = (e) => {
+      const msg = e.detail?.message || "📅 Event added to your Google Calendar! Reminder set for 30 minutes prior.";
+      setCalendarToast(msg);
+      const timer = setTimeout(() => {
+        setCalendarToast(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    };
+
+    window.addEventListener('studyflow-calendar-event-created', handleCalendarEvent);
+    return () => window.removeEventListener('studyflow-calendar-event-created', handleCalendarEvent);
+  }, []);
+
   useEffect(() => {
     if (mergeToastMessage) {
       setMergedToast(mergeToastMessage);
@@ -1096,6 +1113,33 @@ export function AppLayout({ activeTabId, children }) {
               setMergedToast(null);
               if (setMergeToastMessage) setMergeToastMessage(null);
             }}
+            className="p-1.5 hover:bg-theme-cardHover rounded-lg text-theme-muted hover:text-theme-text transition-colors shrink-0 cursor-pointer"
+            aria-label="Dismiss toast"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Google Calendar Event Created Toast */}
+      {calendarToast && (
+        <div 
+          id="calendar-event-created-toast"
+          className="fixed bottom-6 right-6 z-50 max-w-md bg-theme-surface/95 border border-indigo-500/40 text-theme-text p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-slideUp backdrop-blur-md"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl shrink-0">📅</span>
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-theme-text">
+                {calendarToast}
+              </p>
+              <p className="text-[11px] text-theme-muted mt-0.5">
+                30-minute advance reminder configured on your calendar.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setCalendarToast(null)}
             className="p-1.5 hover:bg-theme-cardHover rounded-lg text-theme-muted hover:text-theme-text transition-colors shrink-0 cursor-pointer"
             aria-label="Dismiss toast"
           >
