@@ -273,10 +273,13 @@ export function completeRoutineTaskWithSyllabusSync({
     };
   }
 
-  // 1. Mark target slot as completed
+  // 1. Mark target slot as completed and clean up carriedOver flags
   const completedSlot = {
     ...targetSlot,
     completed: true,
+    carriedOver: false,
+    carriedFromDate: null,
+    carriedOverNote: null,
     completedAt: new Date().toISOString()
   };
 

@@ -356,6 +356,20 @@ function calculateSubjectPercentage(topics = []) {
  * @param {string} [customTodayStr] Optional simulation date string (YYYY-MM-DD)
  * @returns {Object}
  */
+export function carryOverUncompletedTasks(routine = [], lastActiveDate = null) {
+  if (!Array.isArray(routine)) return [];
+  const fromDate = lastActiveDate || (typeof getLocalDateString === 'function' ? getLocalDateString(new Date()) : new Date().toLocaleDateString('en-CA'));
+  return routine
+    .filter(block => block && block.completed !== true)
+    .map(block => ({
+      ...block,
+      completed: false,
+      carriedOver: true,
+      carriedFromDate: block.carriedFromDate || fromDate,
+      carriedOverNote: "Carried over from yesterday"
+    }));
+}
+
 export function handleEndOfDayRollover(userId, customTodayStr = null) {
   const targetUserId = userId || getActiveUserId();
   if (!targetUserId || targetUserId === 'guest') {
@@ -457,11 +471,13 @@ export function handleEndOfDayRollover(userId, customTodayStr = null) {
   }
 
   // 3. KEEP and carry over all uncompleted / remaining blocks into the new day's routine
-  // Tag carried-over blocks with a subtle badge or note: "Carried over from yesterday"
+  // Tag carried-over blocks with carriedOver: true and carriedFromDate: lastActiveDate
+  const originalDate = userData.lastActiveDate || userData.todayLogDate || null;
   const carriedOverBlocks = uncompletedBlocks.map(block => ({
     ...block,
     completed: false,
     carriedOver: true,
+    carriedFromDate: block.carriedFromDate || originalDate,
     carriedOverNote: "Carried over from yesterday"
   }));
 
@@ -593,5 +609,6 @@ export default {
   syncRoutineSyllabusCompletion,
   autoMergeTomorrowPlans,
   handleEndOfDayRollover,
-  checkAndTriggerEndOfDayRollover
+  checkAndTriggerEndOfDayRollover,
+  carryOverUncompletedTasks
 };

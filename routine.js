@@ -42,6 +42,7 @@ import {
   handleEndOfDayRollover,
   checkAndTriggerEndOfDayRollover
 } from './storage-helper.js';
+import { carryOverUncompletedTasks } from './routine-rollover.js';
 import { 
   pushStudySessionToCalendar, 
   saveCalendarEventToItem, 
@@ -83,6 +84,7 @@ export {
   syncRoutineSyllabusCompletion,
   handleEndOfDayRollover,
   checkAndTriggerEndOfDayRollover,
+  carryOverUncompletedTasks,
   pushStudySessionToCalendar,
   saveCalendarEventToItem,
   formatRFC3339,
@@ -122,6 +124,7 @@ export default {
   syncRoutineSyllabusCompletion,
   handleEndOfDayRollover,
   checkAndTriggerEndOfDayRollover,
+  carryOverUncompletedTasks,
   pushStudySessionToCalendar,
   saveCalendarEventToItem,
   formatRFC3339,

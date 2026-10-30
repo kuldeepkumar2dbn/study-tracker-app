@@ -416,7 +416,9 @@ export default function DashboardTab({ onNavigateTab }) {
                   className={`routine-block-item card-glow-hover p-3 rounded-xl border text-xs flex items-center justify-between gap-3 cursor-pointer transition-all shadow-sm ${
                     slot.completed
                       ? 'bg-theme-bg/40 border-theme-border/40 text-theme-muted line-through'
-                      : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
+                      : slot.carriedOver
+                        ? 'bg-theme-surface border-amber-500/30 hover:border-amber-500/50 text-theme-text shadow-glow-amber/5'
+                        : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -428,7 +430,17 @@ export default function DashboardTab({ onNavigateTab }) {
                       )}
                     </button>
                     <div className="min-w-0">
-                      <p className="font-medium truncate">{slot.title}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-medium truncate">{slot.title}</p>
+                        {slot.carriedOver && (
+                          <span 
+                            className="carried-over-badge inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                            title={slot.carriedFromDate ? `Carried over from ${slot.carriedFromDate}` : "Carried over from yesterday"}
+                          >
+                            ⏳ Carried Over
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-theme-muted font-mono-numbers block">
                         {slot.timeRange}
                       </span>

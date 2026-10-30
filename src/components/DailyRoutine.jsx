@@ -640,7 +640,9 @@ export default function DailyRoutine() {
                     ? 'opacity-0 -translate-x-6 scale-95 pointer-events-none'
                     : slot.completed
                       ? 'bg-theme-bg/50 border-theme-border/50 text-theme-muted'
-                      : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
+                      : slot.carriedOver
+                        ? 'bg-theme-surface border-amber-500/30 hover:border-amber-500/50 text-theme-text shadow-glow-amber/5'
+                        : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -659,10 +661,10 @@ export default function DailyRoutine() {
                       </p>
                       {slot.carriedOver && (
                         <span 
-                          className="carried-over-badge inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full"
-                          title="Unfinished task carried over from yesterday"
+                          className="carried-over-badge inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          title={slot.carriedFromDate ? `Carried over from ${slot.carriedFromDate}` : "Carried over from yesterday"}
                         >
-                          ⏰ Carried over from yesterday
+                          ⏳ Carried Over
                         </span>
                       )}
                     </div>
