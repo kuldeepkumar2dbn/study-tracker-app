@@ -88,6 +88,7 @@ export function mergeUserData(existing = {}, updates = {}) {
   if (updates.subjects === undefined && existing.subjects) updated.subjects = existing.subjects;
   if (updates.routine === undefined && existing.routine) updated.routine = existing.routine;
   if (updates.tomorrowPlan === undefined && existing.tomorrowPlan) updated.tomorrowPlan = existing.tomorrowPlan;
+  if (updates.completedRoutineToday === undefined && existing.completedRoutineToday) updated.completedRoutineToday = existing.completedRoutineToday;
   if (updates.skills === undefined && existing.skills) updated.skills = existing.skills;
   if (updates.exams === undefined && existing.exams) updated.exams = existing.exams;
   if (updates.notes === undefined && existing.notes) updated.notes = existing.notes;
@@ -211,6 +212,14 @@ export function saveTomorrowPlan(userId, newPlans) {
   return patchUserData(userId, { tomorrowPlan: newPlans });
 }
 
+export function syncRoutineSyllabusCompletion(userId, { routine, subjects, completedRoutineToday }) {
+  return patchUserData(userId, {
+    routine,
+    subjects,
+    completedRoutineToday
+  });
+}
+
 /**
  * NEXT-DAY AUTO-MERGE ENGINE:
  * - On app initialization / page load across all views:
@@ -306,5 +315,6 @@ export default {
   saveExams,
   saveNotes,
   saveTomorrowPlan,
+  syncRoutineSyllabusCompletion,
   autoMergeTomorrowPlans
 };

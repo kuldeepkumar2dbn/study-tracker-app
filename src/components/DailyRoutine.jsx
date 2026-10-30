@@ -42,6 +42,9 @@ export default function DailyRoutine() {
     addRoutineSlot, 
     toggleRoutineSlot, 
     deleteRoutineSlot, 
+    completedRoutineToday = [],
+    completeRoutineTask,
+    undoCompletedRoutineTask,
     tomorrowPlan = [],
     addTomorrowPlan,
     updateTomorrowPlan,
@@ -58,6 +61,11 @@ export default function DailyRoutine() {
   const [activeRoutineTab, setActiveRoutineTab] = useState('today');
   const [isTomorrowModalOpen, setIsTomorrowModalOpen] = useState(false);
   const [editingTomorrowPlan, setEditingTomorrowPlan] = useState(null);
+
+  // Animation and Completed Today view states
+  const [fadingSlotId, setFadingSlotId] = useState(null);
+  const [showCompletedToday, setShowCompletedToday] = useState(false);
+  const [syncToastMessage, setSyncToastMessage] = useState(null);
 
   // Modal, syllabus & skill prompt states
   const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
@@ -95,39 +103,46 @@ export default function DailyRoutine() {
   const allSlotsCompleted = totalSlots > 0 && completedSlots === totalSlots;
 
   const handleToggleSlot = (id) => {
-    const targetSlot = routineSlots.find(s => s.id === id);
-    if (targetSlot && !targetSlot.completed) {
-      if (completedSlots + 1 === totalSlots && totalSlots > 0) {
+    const targetSlot = (routineSlots || []).find(s => s.id === id);
+    if (!targetSlot) return;
+
+    if (!targetSlot.completed) {
+      if (routineSlots.length === 1) {
         celebrateMajorMilestone();
       } else {
         celebrateTaskCompletion();
       }
 
-      // If linked to a skill video, prompt to mark video as watched in Skill Tracker
-      if (targetSlot.linkType === 'skill' || targetSlot.skillLink) {
-        const sLink = targetSlot.skillLink;
-        if (sLink && (sLink.videoTitle || sLink.videoId)) {
-          setSkillPrompt({
-            slotId: targetSlot.id,
-            skillId: sLink.skillId,
-            skillTitle: sLink.skillTitle,
-            videoId: sLink.videoId,
-            videoTitle: sLink.videoTitle
-          });
+      // Add a brief 300ms fade-out/slide animation on that routine card
+      setFadingSlotId(id);
+
+      setTimeout(() => {
+        if (completeRoutineTask) {
+          const res = completeRoutineTask(id);
+          if (res && res.syllabusUpdated) {
+            const subjectName = targetSlot.syllabusLink?.subjectName || 'Syllabus';
+            setSyncToastMessage(`🎉 Completed "${targetSlot.title}" & marked Mastered in ${subjectName}!`);
+            setTimeout(() => setSyncToastMessage(null), 3500);
+          } else {
+            setSyncToastMessage(`✓ Finished "${targetSlot.title}"`);
+            setTimeout(() => setSyncToastMessage(null), 2500);
+          }
+        } else {
+          toggleRoutineSlot(id);
         }
-      }
-      // If linked to a syllabus topic, prompt to mark syllabus done too
-      else if (targetSlot.syllabusLink && targetSlot.syllabusLink.topicName) {
-        setSyllabusPrompt({
-          slotId: targetSlot.id,
-          topicName: targetSlot.syllabusLink.topicName,
-          subjectId: targetSlot.syllabusLink.subjectId,
-          chapterId: targetSlot.syllabusLink.chapterId,
-          topicId: targetSlot.syllabusLink.topicId
-        });
-      }
+        setFadingSlotId(null);
+      }, 300);
+    } else {
+      toggleRoutineSlot(id);
     }
-    toggleRoutineSlot(id);
+  };
+
+  const handleUndoComplete = (id) => {
+    if (undoCompletedRoutineTask) {
+      undoCompletedRoutineTask(id);
+      setSyncToastMessage("↺ Restored task back to active Daily Routine");
+      setTimeout(() => setSyncToastMessage(null), 3000);
+    }
   };
 
   const handleMarkDoneSyllabus = (promptData) => {
@@ -607,8 +622,8 @@ export default function DailyRoutine() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2.5 py-1 rounded-full bg-theme-surface border border-theme-border font-mono-numbers text-theme-muted">
-                {completedSlots} / {totalSlots} Done
+              <span id="routine-remaining-count" className="text-xs px-2.5 py-1 rounded-full bg-theme-surface border border-theme-border font-mono-numbers text-theme-muted">
+                {routineSlots.length} remaining {completedRoutineToday.length > 0 && `(${completedRoutineToday.length} done)`}
               </span>
             </div>
           </div>
@@ -618,11 +633,14 @@ export default function DailyRoutine() {
             {routineSlots.map((slot) => (
               <div
                 key={slot.id}
+                id={`routine-slot-${slot.id}`}
                 onClick={() => handleToggleSlot(slot.id)}
-                className={`routine-block-item card-glow-hover p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm ${
-                  slot.completed
-                    ? 'bg-theme-bg/50 border-theme-border/50 text-theme-muted'
-                    : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
+                className={`routine-block-item card-glow-hover p-3.5 rounded-xl border transition-all duration-300 cursor-pointer flex items-center justify-between gap-3 shadow-sm ${
+                  fadingSlotId === slot.id
+                    ? 'opacity-0 -translate-x-6 scale-95 pointer-events-none'
+                    : slot.completed
+                      ? 'bg-theme-bg/50 border-theme-border/50 text-theme-muted'
+                      : 'bg-theme-surface border-theme-border hover:border-theme-accent/40 text-theme-text'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -691,6 +709,68 @@ export default function DailyRoutine() {
               </div>
             )}
           </div>
+
+          {/* Optional "Show Completed Today" Toggle */}
+          {completedRoutineToday && completedRoutineToday.length > 0 && (
+            <div className="pt-3 border-t border-theme-border/60">
+              <button
+                id="toggle-completed-today-btn"
+                type="button"
+                onClick={() => setShowCompletedToday(prev => !prev)}
+                className="w-full py-2 px-3 rounded-xl bg-theme-surface/70 hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-muted hover:text-theme-text flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Show Completed Today ({completedRoutineToday.length})</span>
+                </span>
+                <span className="text-[11px] font-mono-numbers text-theme-muted">
+                  {showCompletedToday ? '▲ Hide' : '▼'}
+                </span>
+              </button>
+
+              {showCompletedToday && (
+                <div id="completed-today-list" className="mt-2.5 space-y-2 animate-fadeIn max-h-56 overflow-y-auto pr-1">
+                  {completedRoutineToday.map((item) => (
+                    <div
+                      key={item.id}
+                      id={`completed-task-${item.id}`}
+                      className="completed-routine-item p-3 rounded-xl bg-theme-bg/50 border border-theme-border/50 flex items-center justify-between gap-3 text-theme-muted"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium line-through text-theme-muted truncate">
+                            {item.title}
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-theme-muted/80 font-mono-numbers mt-0.5">
+                            <span>{item.timeRange || `${item.startTime} - ${item.endTime}`}</span>
+                            {item.syllabusLink && (
+                              <span className="truncate text-indigo-400/90">
+                                • 📚 {item.syllabusLink.subjectName}: {item.syllabusLink.topicName}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        id={`undo-task-${item.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUndoComplete(item.id);
+                        }}
+                        className="undo-btn px-2.5 py-1 rounded-lg bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-[11px] font-semibold text-theme-accent hover:text-theme-accentHover flex items-center gap-1 transition-colors shrink-0 cursor-pointer shadow-sm"
+                        title="Restore task back to active routine"
+                      >
+                        <span>↺ Undo</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Weekly Goals Checklist (5 cols) */}
@@ -801,6 +881,17 @@ export default function DailyRoutine() {
         editingPlan={editingTomorrowPlan}
         subjects={subjects}
       />
+
+      {/* Dynamic Sync Toast */}
+      {syncToastMessage && (
+        <div
+          id="routine-sync-toast"
+          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl glass-panel border border-emerald-500/30 bg-emerald-950/85 text-emerald-200 text-xs font-semibold shadow-2xl flex items-center gap-2 animate-slideUp backdrop-blur-md"
+        >
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{syncToastMessage}</span>
+        </div>
+      )}
 
     </div>
   );

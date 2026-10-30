@@ -520,6 +520,7 @@ export function createZeroStateData(userId) {
     dailyActivity: {},
     routine: [],
     tomorrowPlan: [],
+    completedRoutineToday: [],
     revisionQueue: [],
     exams: [],
     skills: []

@@ -22,7 +22,9 @@ import {
   getIncompleteSubtopics,
   createRoutineBlock,
   markSyllabusTopicCompletedInSubjects,
-  calculateSubjectMastery
+  calculateSubjectMastery,
+  completeRoutineTaskWithSyllabusSync,
+  undoCompletedRoutineTask
 } from './src/utils/routineSyllabusSync.js';
 import {
   formatSkillChipLabel,
@@ -31,7 +33,13 @@ import {
   markSkillVideoCompletedInSkills
 } from './src/utils/routineSkillSync.js';
 
-import { patchUserData, saveRoutine, saveTomorrowPlan, autoMergeTomorrowPlans } from './storage-helper.js';
+import { 
+  patchUserData, 
+  saveRoutine, 
+  saveTomorrowPlan, 
+  autoMergeTomorrowPlans,
+  syncRoutineSyllabusCompletion
+} from './storage-helper.js';
 import { 
   pushStudySessionToCalendar, 
   saveCalendarEventToItem, 
@@ -60,6 +68,8 @@ export {
   createRoutineBlock,
   markSyllabusTopicCompletedInSubjects,
   calculateSubjectMastery,
+  completeRoutineTaskWithSyllabusSync,
+  undoCompletedRoutineTask,
   formatSkillChipLabel,
   getUnwatchedVideosForSkill,
   createSkillRoutineBlock,
@@ -68,6 +78,7 @@ export {
   patchUserData,
   saveTomorrowPlan,
   autoMergeTomorrowPlans,
+  syncRoutineSyllabusCompletion,
   pushStudySessionToCalendar,
   saveCalendarEventToItem,
   formatRFC3339,
@@ -94,6 +105,8 @@ export default {
   createRoutineBlock,
   markSyllabusTopicCompletedInSubjects,
   calculateSubjectMastery,
+  completeRoutineTaskWithSyllabusSync,
+  undoCompletedRoutineTask,
   formatSkillChipLabel,
   getUnwatchedVideosForSkill,
   createSkillRoutineBlock,
@@ -102,6 +115,7 @@ export default {
   patchUserData,
   saveTomorrowPlan,
   autoMergeTomorrowPlans,
+  syncRoutineSyllabusCompletion,
   pushStudySessionToCalendar,
   saveCalendarEventToItem,
   formatRFC3339,

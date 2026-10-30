@@ -20,7 +20,11 @@ import {
   getOrCreateZeroStateData, 
   getUserDataStorageKey 
 } from '../../auth-guard';
-import { markSyllabusTopicCompletedInSubjects } from '../utils/routineSyllabusSync';
+import { 
+  markSyllabusTopicCompletedInSubjects,
+  completeRoutineTaskWithSyllabusSync,
+  undoCompletedRoutineTask
+} from '../utils/routineSyllabusSync';
 import { markSkillVideoCompletedInSkills } from '../utils/routineSkillSync';
 import { 
   hydrateFromCloud, 
@@ -479,6 +483,17 @@ export function DataProvider({ children }) {
       return initialUserData.tomorrowPlan;
     }
     return readScoped('tomorrow_plan', []);
+  });
+
+  // State: Completed Routine Tasks for Today
+  const [completedRoutineToday, setCompletedRoutineToday] = useState(() => {
+    if (isDemo) {
+      return readScoped('completed_routine_today', []);
+    }
+    if (initialUserData && Array.isArray(initialUserData.completedRoutineToday)) {
+      return initialUserData.completedRoutineToday;
+    }
+    return readScoped('completed_routine_today', []);
   });
 
   // Next-Day Auto-Merge Engine on initialization
@@ -970,6 +985,7 @@ export function DataProvider({ children }) {
           dailyActivity: dailyActivity || {},
           routine: routineSlots || [],
           tomorrowPlan: tomorrowPlan || [],
+          completedRoutineToday: completedRoutineToday || [],
           exams: exams || [],
           skills: skills || [],
           subjects: subjects || [],
@@ -981,7 +997,7 @@ export function DataProvider({ children }) {
         console.error('Error syncing master user state:', err);
       }
     }
-  }, [exams, routineSlots, tomorrowPlan, skills, streakData, subjects, notes, weeklyGoals, importantLinks, dailyActivity]);
+  }, [exams, routineSlots, tomorrowPlan, completedRoutineToday, skills, streakData, subjects, notes, weeklyGoals, importantLinks, dailyActivity]);
 
   // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
@@ -1654,11 +1670,70 @@ export function DataProvider({ children }) {
     return newSlot;
   };
 
-  const markSyllabusTopicCompleted = (subjectId, chapterId, topicId) => {
-    const res = markSyllabusTopicCompletedInSubjects(subjects, subjectId, chapterId, topicId, activeId);
+  const markSyllabusTopicCompleted = (subjectId, chapterId, topicId, topicName) => {
+    const res = markSyllabusTopicCompletedInSubjects(subjects, subjectId, chapterId, topicId, activeId, topicName);
     setSubjects(res.updatedSubjects);
     writeScoped('subjects', res.updatedSubjects);
+
+    // Two-way sync: If any active routine slot is linked to this topic, complete it and move to completedRoutineToday
+    const linkedSlot = (routineSlots || []).find(s => {
+      if (!s.syllabusLink) return false;
+      const subMatch = (subjectId && s.syllabusLink.subjectId === subjectId);
+      const topMatch = (topicId && s.syllabusLink.topicId === topicId) || 
+                       (topicName && s.syllabusLink.topicName === topicName) ||
+                       (topicId && s.syllabusLink.topicName === topicId);
+      return subMatch && topMatch;
+    });
+
+    if (linkedSlot) {
+      completeRoutineTask(linkedSlot.id);
+    }
+
     return res;
+  };
+
+  const completeRoutineTask = (slotId) => {
+    const result = completeRoutineTaskWithSyllabusSync({
+      routine: routineSlots,
+      subjects: subjects,
+      completedToday: completedRoutineToday,
+      slotId,
+      userId: activeId
+    });
+
+    setRoutineSlots(result.remainingRoutine);
+    setCompletedRoutineToday(result.updatedCompletedToday);
+    writeScoped('routine_slots', result.remainingRoutine);
+    writeScoped('completed_routine_today', result.updatedCompletedToday);
+
+    if (result.syllabusUpdated) {
+      setSubjects(result.updatedSubjects);
+      writeScoped('subjects', result.updatedSubjects);
+    }
+
+    return result;
+  };
+
+  const undoCompletedRoutine = (slotId) => {
+    const result = undoCompletedRoutineTask({
+      routine: routineSlots,
+      subjects: subjects,
+      completedToday: completedRoutineToday,
+      slotId,
+      userId: activeId
+    });
+
+    setRoutineSlots(result.restoredRoutine);
+    setCompletedRoutineToday(result.remainingCompletedToday);
+    writeScoped('routine_slots', result.restoredRoutine);
+    writeScoped('completed_routine_today', result.remainingCompletedToday);
+
+    if (result.updatedSubjects && result.updatedSubjects !== subjects) {
+      setSubjects(result.updatedSubjects);
+      writeScoped('subjects', result.updatedSubjects);
+    }
+
+    return result;
   };
 
   const markSkillVideoCompleted = (skillId, videoId) => {
@@ -1669,6 +1744,10 @@ export function DataProvider({ children }) {
   };
 
   const toggleRoutineSlot = (id) => {
+    const targetSlot = (routineSlots || []).find(s => s.id === id);
+    if (targetSlot && !targetSlot.completed) {
+      return completeRoutineTask(id);
+    }
     setRoutineSlots(prev => prev.map(s => {
       if (s.id !== id) return s;
       return { ...s, completed: !s.completed };
@@ -2056,6 +2135,11 @@ export function DataProvider({ children }) {
         addRoutineSlot,
         toggleRoutineSlot,
         deleteRoutineSlot,
+        completedRoutineToday,
+        setCompletedRoutineToday,
+        completeRoutineTask,
+        undoCompletedRoutineTask: undoCompletedRoutine,
+        undoCompletedRoutine,
         tomorrowPlan,
         addTomorrowPlan,
         updateTomorrowPlan,
