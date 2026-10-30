@@ -789,6 +789,14 @@ if (typeof window !== 'undefined') {
     localStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
     localStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
     localStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+    localStorage.removeItem('google_granted_scopes');
+    const ssScopes = sessionStorage.getItem('google_granted_scopes');
+    if (ssScopes && ssScopes.includes('calendar')) {
+      sessionStorage.removeItem('google_granted_scopes');
+      sessionStorage.removeItem(AUTH_KEYS.ACCESS_TOKEN);
+      sessionStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
+      sessionStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
+    }
   } catch {}
   getUserProfile();
 }

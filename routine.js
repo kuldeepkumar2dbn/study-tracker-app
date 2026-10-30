@@ -42,7 +42,7 @@ import {
   getCalendarPreference,
   setCalendarPreference
 } from './calendar-sync.js';
-import { hasCalendarScope, requestCalendarScope, CALENDAR_EVENTS_SCOPE } from './google-auth.js';
+import { hasCalendarScope, requestCalendarScope } from './google-auth.js';
 
 const RoutineView = DailyRoutine;
 
@@ -77,8 +77,7 @@ export {
   getCalendarPreference,
   setCalendarPreference,
   hasCalendarScope,
-  requestCalendarScope,
-  CALENDAR_EVENTS_SCOPE
+  requestCalendarScope
 };
 
 export default {
@@ -112,7 +111,6 @@ export default {
   getCalendarPreference,
   setCalendarPreference,
   hasCalendarScope,
-  requestCalendarScope,
-  CALENDAR_EVENTS_SCOPE
+  requestCalendarScope
 };
 

@@ -1,26 +1,56 @@
 /**
  * Google OAuth2 & Identity Services Helper (google-auth.js)
- * Supports Incremental Consent for Google Calendar & Drive Scopes
+ * Clean OAuth Configuration decoupled from sensitive scopes
+ *
+ * Scopes:
+ * - Basic Auth (Login): 'openid email profile' (Non-sensitive, no verification warnings)
+ * - Drive Storage (Sync): 'https://www.googleapis.com/auth/drive.file' (Incremental consent only)
  */
 
 import { 
   DEFAULT_GOOGLE_CLIENT_ID, 
   DRIVE_FILE_SCOPE, 
-  CALENDAR_EVENTS_SCOPE, 
+  BASIC_AUTH_SCOPES,
   DEFAULT_GOOGLE_SCOPES,
-  initGoogleTokenClient 
+  initGoogleTokenClient,
+  cleanStorage 
 } from './src/services/googleDrive.js';
 import { getActiveAccessToken } from './cloud-sync.js';
 
 export { 
   DEFAULT_GOOGLE_CLIENT_ID, 
   DRIVE_FILE_SCOPE, 
-  CALENDAR_EVENTS_SCOPE, 
+  BASIC_AUTH_SCOPES,
   DEFAULT_GOOGLE_SCOPES,
-  initGoogleTokenClient 
+  initGoogleTokenClient,
+  cleanStorage 
 };
 
 export const SCOPES_STORAGE_KEY = 'google_granted_scopes';
+
+/**
+ * Parses JWT payload from Google Identity Services credential response (One-Tap / Sign-In Button)
+ * @param {string} token JWT token string
+ * @returns {Object|null} Decoded JSON payload
+ */
+export function parseJwtPayload(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Retrieves the space-separated list of currently granted OAuth scopes
@@ -46,7 +76,8 @@ export function saveGrantedScopes(scopeString) {
     const newScopes = scopeString.split(/\s+/);
     const existingSet = new Set(existing ? existing.split(/\s+/) : []);
     newScopes.forEach(s => {
-      if (s) existingSet.add(s);
+      // Exclude any sensitive calendar scopes from being persisted
+      if (s && !s.includes('calendar')) existingSet.add(s);
     });
     sessionStorage.setItem(SCOPES_STORAGE_KEY, Array.from(existingSet).join(' '));
   } catch (err) {
@@ -55,35 +86,29 @@ export function saveGrantedScopes(scopeString) {
 }
 
 /**
- * Checks whether the Google Calendar Events scope is granted.
- * Supports checking a tokenResponse object, a custom scope string, or reading from sessionStorage.
- *
+ * Checks whether the drive.file scope is granted
  * @param {Object|string|null} tokenResponseOrScopes
- * @returns {boolean} True if calendar.events scope is granted
+ * @returns {boolean} True if drive.file scope is granted
  */
-export function hasCalendarScope(tokenResponseOrScopes = null) {
-  // 1. Direct string check
+export function hasDriveScope(tokenResponseOrScopes = null) {
   if (typeof tokenResponseOrScopes === 'string') {
-    return tokenResponseOrScopes.includes(CALENDAR_EVENTS_SCOPE);
+    return tokenResponseOrScopes.includes(DRIVE_FILE_SCOPE);
   }
 
-  // 2. TokenResponse object check
   if (tokenResponseOrScopes && typeof tokenResponseOrScopes.scope === 'string') {
-    return tokenResponseOrScopes.scope.includes(CALENDAR_EVENTS_SCOPE);
+    return tokenResponseOrScopes.scope.includes(DRIVE_FILE_SCOPE);
   }
 
-  // 3. GIS official helper check if tokenResponse is provided
   if (tokenResponseOrScopes && typeof window !== 'undefined' && window.google?.accounts?.oauth2?.hasGrantedAllScopes) {
     try {
-      if (window.google.accounts.oauth2.hasGrantedAllScopes(tokenResponseOrScopes, CALENDAR_EVENTS_SCOPE)) {
+      if (window.google.accounts.oauth2.hasGrantedAllScopes(tokenResponseOrScopes, DRIVE_FILE_SCOPE)) {
         return true;
       }
     } catch {}
   }
 
-  // 4. SessionStorage check
   const granted = getGrantedScopes();
-  if (granted && granted.includes(CALENDAR_EVENTS_SCOPE)) {
+  if (granted && granted.includes(DRIVE_FILE_SCOPE)) {
     return true;
   }
 
@@ -91,24 +116,19 @@ export function hasCalendarScope(tokenResponseOrScopes = null) {
 }
 
 /**
- * Incremental Consent: Requests Google Calendar scope without disrupting the student's login session.
- *
- * - Checks if calendar scope is already granted.
- * - If not, triggers `tokenClient.requestAccessToken({ scope: CALENDAR_EVENTS_SCOPE, prompt: 'consent' })`.
- * - Updates sessionStorage tokens and granted scopes on success.
- * - Never clears cookie session or user identity data on cancellation or denial.
+ * Requests the drive.file scope via incremental consent.
+ * Only called when user clicks "☁️ Sync Now" or interacts with Drive Notes.
  *
  * @param {Object} options
  * @param {string} [options.clientId]
  * @param {string} [options.prompt]
  * @returns {Promise<{ success: boolean, granted: boolean, accessToken?: string, error?: string }>}
  */
-export async function requestCalendarScope({
+export async function requestDriveScope({
   clientId = DEFAULT_GOOGLE_CLIENT_ID,
   prompt = 'consent'
 } = {}) {
-  // If already granted, resolve immediately
-  if (hasCalendarScope()) {
+  if (hasDriveScope()) {
     const existingToken = getActiveAccessToken();
     return {
       success: true,
@@ -131,20 +151,18 @@ export async function requestCalendarScope({
 
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: activeClientId,
-        scope: CALENDAR_EVENTS_SCOPE,
+        scope: DRIVE_FILE_SCOPE,
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             const token = tokenResponse.access_token;
             const expiresIn = Number(tokenResponse.expires_in) || 3600;
             const expiry = Date.now() + expiresIn * 1000;
 
-            // Update active access token in sessionStorage without touching long-lived login cookie
             sessionStorage.setItem('studyflow_drive_token', token);
             sessionStorage.setItem('google_access_token', token);
             sessionStorage.setItem('google_token_expiry', String(expiry));
 
-            // Record granted calendar scope
-            const scopesGranted = tokenResponse.scope || CALENDAR_EVENTS_SCOPE;
+            const scopesGranted = tokenResponse.scope || DRIVE_FILE_SCOPE;
             saveGrantedScopes(scopesGranted);
 
             resolve({
@@ -156,7 +174,7 @@ export async function requestCalendarScope({
             resolve({
               success: false,
               granted: false,
-              error: tokenResponse?.error_description || tokenResponse?.error || 'Calendar permission was denied or closed.'
+              error: tokenResponse?.error_description || tokenResponse?.error || 'Drive permission was not granted.'
             });
           }
         },
@@ -174,20 +192,44 @@ export async function requestCalendarScope({
       resolve({
         success: false,
         granted: false,
-        error: err?.message || 'Failed to initialize calendar authorization request.'
+        error: err?.message || 'Failed to initialize Drive authorization request.'
       });
     }
   });
 }
 
+/**
+ * Safe backward-compatibility stubs ensuring no calendar scopes are ever requested
+ */
+export function hasCalendarScope() {
+  return false;
+}
+
+export async function requestCalendarScope() {
+  return {
+    success: false,
+    granted: false,
+    error: 'Calendar scope removed for Google OAuth verification compliance.'
+  };
+}
+
+// Automatically clean cached expired tokens from localStorage on load
+if (typeof window !== 'undefined') {
+  cleanStorage();
+}
+
 export default {
-  CALENDAR_EVENTS_SCOPE,
+  BASIC_AUTH_SCOPES,
   DRIVE_FILE_SCOPE,
   DEFAULT_GOOGLE_SCOPES,
   DEFAULT_GOOGLE_CLIENT_ID,
+  cleanStorage,
+  parseJwtPayload,
+  hasDriveScope,
+  requestDriveScope,
   hasCalendarScope,
+  requestCalendarScope,
   getGrantedScopes,
   saveGrantedScopes,
-  requestCalendarScope,
   initGoogleTokenClient
 };

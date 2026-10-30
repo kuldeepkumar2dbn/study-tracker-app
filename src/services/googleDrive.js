@@ -5,10 +5,40 @@ import { validateFileBinarySignature } from '../utils/security.js';
 
 export const FOLDER_NAME = 'MyStudyTracker_Data';
 export const DATA_FILE_NAME = 'study_data.json';
+export const BASIC_AUTH_SCOPES = 'openid email profile';
 export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-export const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 export const DEFAULT_GOOGLE_CLIENT_ID = '316205351069-hnmklkhtlbqufp22dm0poqvo6lfjjs1c.apps.googleusercontent.com';
-export const DEFAULT_GOOGLE_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.events';
+export const DEFAULT_GOOGLE_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
+
+/**
+ * Purges legacy or cached expired access tokens in localStorage
+ */
+export function cleanStorage() {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem('google_access_token');
+      localStorage.removeItem('studyflow_drive_token');
+      localStorage.removeItem('google_token_expiry');
+      localStorage.removeItem('google_granted_scopes');
+    } catch {}
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const scopes = sessionStorage.getItem('google_granted_scopes');
+      if (scopes && scopes.includes('calendar')) {
+        sessionStorage.removeItem('google_granted_scopes');
+        sessionStorage.removeItem('google_access_token');
+        sessionStorage.removeItem('studyflow_drive_token');
+        sessionStorage.removeItem('google_token_expiry');
+      }
+    } catch {}
+  }
+}
+
+// Auto-clean storage on load
+if (typeof window !== 'undefined') {
+  cleanStorage();
+}
 
 let tokenClientInstance = null;
 

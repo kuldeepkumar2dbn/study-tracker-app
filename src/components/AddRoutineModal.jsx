@@ -17,7 +17,6 @@ import {
 import { getIncompleteSubtopics, createRoutineBlock } from '../utils/routineSyllabusSync';
 import { getUnwatchedVideosForSkill } from '../utils/routineSkillSync';
 import { getActiveUserId, getUserStorageKey } from '../../auth-guard';
-import { hasCalendarScope, requestCalendarScope } from '../services/google-auth';
 import { 
   pushStudySessionToCalendar, 
   showCalendarSuccessToast, 
@@ -229,9 +228,6 @@ export default function AddRoutineModal({
 
     if (pushToCalendar) {
       try {
-        if (!hasCalendarScope()) {
-          await requestCalendarScope();
-        }
         const todayStr = new Date().toLocaleDateString('en-CA');
         const calRes = await pushStudySessionToCalendar({
           title: title.trim(),

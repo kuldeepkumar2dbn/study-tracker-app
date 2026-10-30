@@ -21,7 +21,12 @@ import {
   initDemoSession, 
   clearDemoSession 
 } from '../../auth-guard';
-import { DEFAULT_GOOGLE_CLIENT_ID, DEFAULT_GOOGLE_SCOPES } from '../services/googleDrive';
+import { 
+  DEFAULT_GOOGLE_CLIENT_ID, 
+  BASIC_AUTH_SCOPES,
+  cleanStorage 
+} from '../services/googleDrive';
+import { parseJwtPayload } from '../../google-auth';
 import { getSafeQueryParam } from '../utils/security';
 
 function LoginPage() {
@@ -46,7 +51,10 @@ function LoginPage() {
   });
 
   // Auto-redirect to dashboard if already authenticated with active genuine session
+  // Also clean storage to prevent stale expired access tokens in localStorage
   useEffect(() => {
+    cleanStorage();
+
     try {
       const isExpired = getSafeQueryParam('expired', ['true', 'false']) === 'true';
       const isBanned = getSafeQueryParam('banned', ['true', 'false']) === 'true';
@@ -61,6 +69,92 @@ function LoginPage() {
       console.warn('Auth check error:', e);
     }
   }, []);
+
+  // Initialize official Google Sign-In button (renderButton) & One-Tap (pure basic identity)
+  useEffect(() => {
+    let isMounted = true;
+    const initGisOneTap = () => {
+      if (window.google?.accounts?.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: DEFAULT_GOOGLE_CLIENT_ID,
+            callback: handleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true
+          });
+
+          // Render official Google button into container if available
+          const btnContainer = document.getElementById('gsi-rendered-button');
+          if (btnContainer && isMounted) {
+            btnContainer.innerHTML = '';
+            window.google.accounts.id.renderButton(btnContainer, {
+              type: 'standard',
+              theme: 'outline',
+              size: 'large',
+              text: 'signin_with',
+              shape: 'pill',
+              logo_alignment: 'left',
+              width: 320
+            });
+          }
+
+          // Optional prompt for One-Tap
+          try {
+            window.google.accounts.id.prompt();
+          } catch {}
+        } catch (e) {
+          console.warn('Google One-Tap initialization notice:', e);
+        }
+      }
+    };
+
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (window.google?.accounts?.id) {
+        clearInterval(interval);
+        initGisOneTap();
+      } else if (attempts > 30) {
+        clearInterval(interval);
+      }
+    }, 200);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // One-Tap / renderButton credential handler (Pure OpenID Connect, zero sensitive permissions)
+  const handleCredentialResponse = async (response) => {
+    if (!response || !response.credential) return;
+    setIsLoading(true);
+    setStatusText('Signing in with Google One-Tap...');
+
+    try {
+      const payload = parseJwtPayload(response.credential);
+      if (payload && (payload.email || payload.sub)) {
+        const userData = {
+          sub: payload.sub || ('user_' + Date.now()),
+          name: payload.name || payload.given_name || 'Student',
+          email: payload.email || '',
+          picture: payload.picture || ''
+        };
+
+        // Decoupled login: saves persistent profile session without requiring Drive permissions
+        saveUserSession(userData);
+        setStatusText('Redirecting to Study Tracker...');
+        window.location.replace('/index.html');
+      } else {
+        throw new Error('Could not parse Google ID token payload.');
+      }
+    } catch (err) {
+      console.error('One-Tap login error:', err);
+      setErrorMessage(err.message || 'One-Tap sign-in failed.');
+      setIsLoading(false);
+      setStatusText('');
+    }
+  };
 
   // Helper to ensure GIS SDK is loaded
   const waitForGis = () => {
@@ -82,6 +176,7 @@ function LoginPage() {
     });
   };
 
+  // Custom Sign-In Button Handler: Decoupled login strictly with BASIC_AUTH_SCOPES ('openid email profile')
   const handleGoogleLogin = async () => {
     setErrorMessage('');
     setIsLoading(true);
@@ -95,14 +190,15 @@ function LoginPage() {
 
       setStatusText('Waiting for approval in Google popup...');
 
+      // Decoupled login: Scope is strictly BASIC_AUTH_SCOPES ('openid email profile')
+      // No drive.file and NO sensitive scopes during initial login handshake
       const tokenClient = oauth2.initTokenClient({
         client_id: DEFAULT_GOOGLE_CLIENT_ID,
-        scope: DEFAULT_GOOGLE_SCOPES,
+        scope: BASIC_AUTH_SCOPES,
         callback: async (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             const accessToken = tokenResponse.access_token;
-            const expiresInSec = Number(tokenResponse.expires_in) || 3600;
-            setStatusText('Saving authorization and loading profile...');
+            setStatusText('Loading profile...');
 
             let userData = {
               sub: 'user_' + Date.now(),
@@ -131,7 +227,8 @@ function LoginPage() {
             }
 
             // Write persistent cookie (study_session) and localStorage
-            saveUserSession(userData, accessToken, expiresInSec);
+            // Strictly decoupled: no Drive tokens in localStorage
+            saveUserSession(userData);
 
             setStatusText('Redirecting to Study Tracker...');
             window.location.replace('/index.html');
@@ -149,8 +246,8 @@ function LoginPage() {
         }
       });
 
-      // Prompt for both email identity and Drive file permissions upfront
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      // No forced consent screen for basic profile
+      tokenClient.requestAccessToken({ prompt: '' });
     } catch (err) {
       console.error('Login error:', err);
       setErrorMessage(err.message || 'An unexpected error occurred during sign-in.');
@@ -275,6 +372,9 @@ function LoginPage() {
               <span>{statusText}</span>
             </div>
           )}
+
+          {/* Official Google Sign-In Button Container (renderButton - basic identity) */}
+          <div id="gsi-rendered-button" className="w-full flex justify-center mb-3 min-h-[44px]"></div>
 
           {/* Google GIS Sign-In Action Button */}
           <button

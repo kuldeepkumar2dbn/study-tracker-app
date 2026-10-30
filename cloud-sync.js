@@ -70,6 +70,8 @@ export function formatRelativeSyncTime(timestamp) {
 export function getActiveAccessToken() {
   if (typeof window === 'undefined') return null;
   try {
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('studyflow_drive_token');
     return sessionStorage.getItem('studyflow_drive_token') || 
            sessionStorage.getItem('google_access_token') || 
            null;

@@ -10,7 +10,6 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { getIncompleteSubtopics } from '../utils/routineSyllabusSync';
-import { hasCalendarScope, requestCalendarScope } from '../services/google-auth';
 import { 
   pushStudySessionToCalendar, 
   showCalendarSuccessToast, 
@@ -148,9 +147,6 @@ export default function TomorrowPlannerModal({
 
     if (pushToCalendar) {
       try {
-        if (!hasCalendarScope()) {
-          await requestCalendarScope();
-        }
         const calRes = await pushStudySessionToCalendar({
           title: title.trim(),
           startTime,
