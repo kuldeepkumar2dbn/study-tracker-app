@@ -70,7 +70,8 @@ assert(!BASIC_AUTH_SCOPES.includes('calendar'), 'BASIC_AUTH_SCOPES strictly DOES
 assert(!BASIC_AUTH_SCOPES.includes('drive'), 'BASIC_AUTH_SCOPES strictly DOES NOT contain drive scope (login decoupled)');
 
 // 1.2 Global Source Code Audit: Ensure NO tokenClient requests calendar.events
-const excludeFolders = ['node_modules', '.git', 'dist', 'tests'];
+const sourceDirs = ['./src', './public', '.'];
+const excludeFolders = ['node_modules', '.git', 'dist'];
 
 function scanFiles(dir, fileList = []) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -79,7 +80,7 @@ function scanFiles(dir, fileList = []) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       scanFiles(fullPath, fileList);
-    } else if (/\.(jsx?|html)$/.test(entry.name)) {
+    } else if (/\.(jsx?|html)$/.test(entry.name) && !entry.name.includes('test-google-calendar-sync') && !entry.name.includes('test-oauth-scopes-audit')) {
       fileList.push(fullPath);
     }
   }
@@ -195,3 +196,4 @@ assert(sessionStorage.getItem('google_access_token') === null, 'cleanStorage pur
 console.log('\n================================================================');
 console.log(`--- RESULTS: ${passedTests} / ${totalTests} TESTS PASSED ---`);
 console.log('================================================================\n');
+
