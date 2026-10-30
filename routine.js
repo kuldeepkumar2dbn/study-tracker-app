@@ -12,6 +12,7 @@
 
 import DailyRoutine from './src/components/DailyRoutine.jsx';
 import AddRoutineModal from './src/components/AddRoutineModal.jsx';
+import TomorrowPlannerModal from './src/components/TomorrowPlannerModal.jsx';
 import SyllabusRoutineChip from './src/components/SyllabusRoutineChip.jsx';
 import SyllabusSyncToast from './src/components/SyllabusSyncToast.jsx';
 import SkillRoutineChip from './src/components/SkillRoutineChip.jsx';
@@ -30,11 +31,15 @@ import {
   markSkillVideoCompletedInSkills
 } from './src/utils/routineSkillSync.js';
 
-import { patchUserData, saveRoutine } from './storage-helper.js';
+import { patchUserData, saveRoutine, saveTomorrowPlan, autoMergeTomorrowPlans } from './storage-helper.js';
+
+const RoutineView = DailyRoutine;
 
 export {
   DailyRoutine,
+  RoutineView,
   AddRoutineModal,
+  TomorrowPlannerModal,
   SyllabusRoutineChip,
   SyllabusSyncToast,
   SkillRoutineChip,
@@ -49,12 +54,16 @@ export {
   createSkillRoutineBlock,
   markSkillVideoCompletedInSkills,
   saveRoutine,
-  patchUserData
+  patchUserData,
+  saveTomorrowPlan,
+  autoMergeTomorrowPlans
 };
 
 export default {
   DailyRoutine,
+  RoutineView,
   AddRoutineModal,
+  TomorrowPlannerModal,
   SyllabusRoutineChip,
   SyllabusSyncToast,
   SkillRoutineChip,
@@ -69,6 +78,8 @@ export default {
   createSkillRoutineBlock,
   markSkillVideoCompletedInSkills,
   saveRoutine,
-  patchUserData
+  patchUserData,
+  saveTomorrowPlan,
+  autoMergeTomorrowPlans
 };
 

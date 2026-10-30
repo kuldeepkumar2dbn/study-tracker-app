@@ -31,7 +31,7 @@ import {
   getSyncStatus as getGlobalSyncStatus,
   getLastSyncedTimestamp
 } from '../services/cloud-sync';
-import { patchUserData } from '../../storage-helper.js';
+import { patchUserData, autoMergeTomorrowPlans } from '../../storage-helper.js';
 
 const DataContext = createContext();
 
@@ -469,6 +469,35 @@ export function DataProvider({ children }) {
     }
     return readScoped('routine_slots', []);
   });
+
+  // State: Tomorrow's Plan Slots
+  const [tomorrowPlan, setTomorrowPlan] = useState(() => {
+    if (isDemo) {
+      return readScoped('tomorrow_plan', []);
+    }
+    if (initialUserData && Array.isArray(initialUserData.tomorrowPlan)) {
+      return initialUserData.tomorrowPlan;
+    }
+    return readScoped('tomorrow_plan', []);
+  });
+
+  // Next-Day Auto-Merge Engine on initialization
+  const [mergeToastMessage, setMergeToastMessage] = useState(null);
+
+  useEffect(() => {
+    if (activeId && activeId !== 'guest') {
+      try {
+        const result = autoMergeTomorrowPlans(activeId);
+        if (result && result.merged) {
+          setRoutineSlots(result.updatedRoutine);
+          setTomorrowPlan(result.remainingPlans);
+          setMergeToastMessage(result.message);
+        }
+      } catch (err) {
+        console.warn('Error during autoMergeTomorrowPlans:', err);
+      }
+    }
+  }, [activeId]);
 
   // State: Weekly Goals
   const [weeklyGoals, setWeeklyGoals] = useState(() => {
@@ -940,6 +969,7 @@ export function DataProvider({ children }) {
           weeklyVelocityHours: streakData.weeklyVelocityHours ?? 0.0,
           dailyActivity: dailyActivity || {},
           routine: routineSlots || [],
+          tomorrowPlan: tomorrowPlan || [],
           exams: exams || [],
           skills: skills || [],
           subjects: subjects || [],
@@ -951,7 +981,7 @@ export function DataProvider({ children }) {
         console.error('Error syncing master user state:', err);
       }
     }
-  }, [exams, routineSlots, skills, streakData, subjects, notes, weeklyGoals, importantLinks, dailyActivity]);
+  }, [exams, routineSlots, tomorrowPlan, skills, streakData, subjects, notes, weeklyGoals, importantLinks, dailyActivity]);
 
   // LocalStorage Persistence scoped to authenticated student (user.sub)
   useEffect(() => {
@@ -959,6 +989,7 @@ export function DataProvider({ children }) {
       writeScoped('subjects', subjects);
       writeScoped('exams', exams);
       writeScoped('routine_slots', routineSlots);
+      writeScoped('tomorrow_plan', tomorrowPlan);
       writeScoped('weekly_goals', weeklyGoals);
       writeScoped('daily_activity', dailyActivity);
       // Persist skills to both studyflow_${userId}_skills and writeScoped
@@ -1645,6 +1676,50 @@ export function DataProvider({ children }) {
     setRoutineSlots(prev => prev.filter(s => s.id !== id));
   };
 
+  // Tomorrow's Plan Actions
+  const addTomorrowPlan = (planItem) => {
+    const defaultDate = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return d.toLocaleDateString('en-CA');
+    })();
+
+    const newItem = {
+      id: planItem.id || ('plan_' + Date.now()),
+      title: (planItem.title || '').trim(),
+      startTime: planItem.startTime || '10:00',
+      endTime: planItem.endTime || '12:00',
+      scheduledDate: planItem.scheduledDate || defaultDate,
+      category: planItem.category || 'Core Study',
+      syllabusLink: planItem.syllabusLink ? {
+        subjectId: planItem.syllabusLink.subjectId,
+        subjectName: planItem.syllabusLink.subjectName,
+        chapterId: planItem.syllabusLink.chapterId,
+        chapterName: planItem.syllabusLink.chapterName,
+        topicName: planItem.syllabusLink.topicName
+      } : null,
+      notified: Boolean(planItem.notified)
+    };
+
+    setTomorrowPlan(prev => [...prev, newItem]);
+    return newItem;
+  };
+
+  const updateTomorrowPlan = (id, updates) => {
+    setTomorrowPlan(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      return {
+        ...p,
+        ...updates,
+        id: p.id
+      };
+    }));
+  };
+
+  const deleteTomorrowPlan = (id) => {
+    setTomorrowPlan(prev => prev.filter(p => p.id !== id));
+  };
+
   // Weekly Goals Actions
   const addWeeklyGoal = (title) => {
     setWeeklyGoals(prev => [...prev, {
@@ -1977,6 +2052,12 @@ export function DataProvider({ children }) {
         addRoutineSlot,
         toggleRoutineSlot,
         deleteRoutineSlot,
+        tomorrowPlan,
+        addTomorrowPlan,
+        updateTomorrowPlan,
+        deleteTomorrowPlan,
+        mergeToastMessage,
+        setMergeToastMessage,
         markSyllabusTopicCompleted,
         markSkillVideoCompleted,
         weeklyGoals,

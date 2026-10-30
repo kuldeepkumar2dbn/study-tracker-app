@@ -408,6 +408,9 @@ export function populateGranularStorage(userId, data) {
     if (Array.isArray(data.notes)) {
       localStorage.setItem(`studyflow_${userId}_notes`, JSON.stringify(data.notes));
     }
+    if (Array.isArray(data.tomorrowPlan)) {
+      localStorage.setItem(`studyflow_${userId}_tomorrow_plan`, JSON.stringify(data.tomorrowPlan));
+    }
     if (data.dailyActivity && typeof data.dailyActivity === 'object') {
       localStorage.setItem(`studyflow_${userId}_daily_activity`, JSON.stringify(data.dailyActivity));
     }

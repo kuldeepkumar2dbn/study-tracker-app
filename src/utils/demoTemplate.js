@@ -335,6 +335,8 @@ export function getFreshDemoTemplateData() {
     weekly_target_hrs: 28,
     important_links,
     notes,
+    tomorrow_plan: [],
+    tomorrowPlan: [],
     timer_history: [],
     drive_files: []
   };

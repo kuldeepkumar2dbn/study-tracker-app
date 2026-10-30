@@ -519,6 +519,7 @@ export function createZeroStateData(userId) {
     weeklyVelocityHours: 0.0,
     dailyActivity: {},
     routine: [],
+    tomorrowPlan: [],
     revisionQueue: [],
     exams: [],
     skills: []
@@ -606,6 +607,7 @@ export function getOrCreateZeroStateData(userId) {
     if (data.streak === undefined) data.streak = 0;
     if (data.todayLoggedHours === undefined) data.todayLoggedHours = 0.0;
     if (data.dailyActivity === undefined) data.dailyActivity = {};
+    if (data.tomorrowPlan === undefined) data.tomorrowPlan = [];
 
     return data;
   } catch (err) {

@@ -87,6 +87,7 @@ export function mergeUserData(existing = {}, updates = {}) {
   // Guard against accidental undefined values wiping existing section arrays
   if (updates.subjects === undefined && existing.subjects) updated.subjects = existing.subjects;
   if (updates.routine === undefined && existing.routine) updated.routine = existing.routine;
+  if (updates.tomorrowPlan === undefined && existing.tomorrowPlan) updated.tomorrowPlan = existing.tomorrowPlan;
   if (updates.skills === undefined && existing.skills) updated.skills = existing.skills;
   if (updates.exams === undefined && existing.exams) updated.exams = existing.exams;
   if (updates.notes === undefined && existing.notes) updated.notes = existing.notes;
@@ -206,6 +207,94 @@ export function saveNotes(userId, newNotes) {
   return patchUserData(userId, { notes: newNotes });
 }
 
+export function saveTomorrowPlan(userId, newPlans) {
+  return patchUserData(userId, { tomorrowPlan: newPlans });
+}
+
+/**
+ * NEXT-DAY AUTO-MERGE ENGINE:
+ * - On app initialization / page load across all views:
+ *   * Get todayStr = new Date().toLocaleDateString('en-CA') (YYYY-MM-DD).
+ *   * Check userData.tomorrowPlan || [].
+ *   * Identify items where plan.scheduledDate <= todayStr.
+ *   * For each matched item:
+ *     - Transform it into an active routine block:
+ *       { id: plan.id, title: plan.title, startTime: plan.startTime, endTime: plan.endTime, category: plan.category, syllabusLink: plan.syllabusLink, completed: false, linkType: "syllabus" }
+ *     - Append it to userData.routine.
+ *   * Remove the migrated items from userData.tomorrowPlan.
+ *   * If any items were merged, save via patchUserData(userId, { routine: updatedRoutine, tomorrowPlan: remainingPlans }) so streaks and previous logs remain completely untouched.
+ *   * Display a clean toast: "🌅 Tomorrow's planned topics have been merged into your Daily Routine for today!"
+ */
+export function autoMergeTomorrowPlans(userId) {
+  const targetUserId = userId || getActiveUserId();
+  if (!targetUserId || targetUserId === 'guest') {
+    return { merged: false, count: 0, updatedRoutine: [], remainingPlans: [] };
+  }
+
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const userData = getUserData(targetUserId);
+  const tomorrowPlan = Array.isArray(userData.tomorrowPlan) ? userData.tomorrowPlan : [];
+
+  if (tomorrowPlan.length === 0) {
+    return { merged: false, count: 0, updatedRoutine: userData.routine || [], remainingPlans: [] };
+  }
+
+  const toMerge = tomorrowPlan.filter(plan => plan && plan.scheduledDate && plan.scheduledDate <= todayStr);
+  if (toMerge.length === 0) {
+    return { merged: false, count: 0, updatedRoutine: userData.routine || [], remainingPlans: tomorrowPlan };
+  }
+
+  const remainingPlans = tomorrowPlan.filter(plan => !plan || !plan.scheduledDate || plan.scheduledDate > todayStr);
+  const existingRoutine = Array.isArray(userData.routine) ? [...userData.routine] : [];
+
+  const newBlocks = toMerge.map(plan => {
+    const startTime = plan.startTime || '08:00';
+    const endTime = plan.endTime || '10:00';
+    const hasSyllabus = Boolean(plan.syllabusLink && plan.syllabusLink.subjectId);
+    return {
+      id: plan.id || ('plan_' + Date.now()),
+      title: plan.title || 'Study Session',
+      startTime,
+      endTime,
+      timeRange: `${startTime} - ${endTime}`,
+      category: plan.category || 'Core Study',
+      syllabusLink: plan.syllabusLink || null,
+      completed: false,
+      linkType: hasSyllabus ? 'syllabus' : 'routine',
+      notified: Boolean(plan.notified)
+    };
+  });
+
+  const updatedRoutine = [...existingRoutine, ...newBlocks];
+
+  patchUserData(targetUserId, {
+    routine: updatedRoutine,
+    tomorrowPlan: remainingPlans
+  });
+
+  // Notify listeners across all views
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('studyflow-tomorrow-plan-merged', {
+        detail: {
+          count: toMerge.length,
+          mergedItems: toMerge,
+          message: "🌅 Tomorrow's planned topics have been merged into your Daily Routine for today!"
+        }
+      }));
+    } catch {}
+  }
+
+  return {
+    merged: true,
+    count: toMerge.length,
+    mergedItems: toMerge,
+    updatedRoutine,
+    remainingPlans,
+    message: "🌅 Tomorrow's planned topics have been merged into your Daily Routine for today!"
+  };
+}
+
 export default {
   getUserData,
   mergeUserData,
@@ -214,5 +303,7 @@ export default {
   saveSubjects,
   saveSkills,
   saveExams,
-  saveNotes
+  saveNotes,
+  saveTomorrowPlan,
+  autoMergeTomorrowPlans
 };

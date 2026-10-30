@@ -43,7 +43,7 @@ import { DataProvider, useData } from '../context/DataContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import RollingNumber from './RollingNumber';
 import { sanitizeUrl } from '../utils/security';
-import { isDemoUser, getDemoRemainingSeconds, clearDemoSession } from '../../auth-guard';
+import { isDemoUser, getDemoRemainingSeconds, clearDemoSession, getActiveUserId } from '../../auth-guard';
 import { formatRelativeSyncTime, getLastSyncedTimestamp, verifyOrRequestDriveToken } from '../services/cloud-sync';
 import ErrorBoundary from './ErrorBoundary';
 import { 
@@ -53,6 +53,11 @@ import {
   canAccessAdmin,
   ADMIN_STORAGE_KEYS 
 } from '../../admin-config';
+import { 
+  getNotificationPermission, 
+  requestNotificationPermission, 
+  startNotificationScheduler 
+} from '../../notifications.js';
 
 export { default as CollapsibleSidebar, StopwatchIcon, SIDEBAR_ITEMS } from './CollapsibleSidebar';
 
@@ -91,6 +96,20 @@ export function SharedHeader({
   const [relativeSyncTime, setRelativeSyncTime] = useState(() => {
     return formatRelativeSyncTime(getLastSyncedTimestamp());
   });
+  const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
+
+  useEffect(() => {
+    const handlePermissionChange = (e) => {
+      setNotifPermission(e.detail?.permission || getNotificationPermission());
+    };
+    window.addEventListener('studyflow-notification-permission-changed', handlePermissionChange);
+    return () => window.removeEventListener('studyflow-notification-permission-changed', handlePermissionChange);
+  }, []);
+
+  const handleToggleNotifications = async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPermission(perm);
+  };
 
   // Periodically refresh relative time for Drive Sync tooltip
   useEffect(() => {
@@ -210,6 +229,24 @@ export function SharedHeader({
               </span>
             </div>
           )}
+
+          {/* Study Reminder Notification Toggle */}
+          <button
+            id="notification-reminder-toggle"
+            type="button"
+            onClick={handleToggleNotifications}
+            title={notifPermission === 'granted' ? "🔔 Study reminders active (30 mins prior)" : "🔔 Enable Study Reminders"}
+            className={`top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-200 active:scale-95 shadow-sm cursor-pointer ${
+              notifPermission === 'granted'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
+                : 'bg-theme-surface hover:bg-theme-cardHover border-theme-border text-theme-muted hover:text-theme-text'
+            }`}
+          >
+            <Bell className={`w-3.5 h-3.5 ${notifPermission === 'granted' ? 'text-amber-500 fill-amber-500/20' : 'text-theme-muted'}`} />
+            <span className="hidden sm:inline">
+              {notifPermission === 'granted' ? "🔔 Reminders Active" : "🔔 Enable Study Reminders"}
+            </span>
+          </button>
 
           {/* Quick Links Hub Modal Launcher */}
           <button
@@ -694,6 +731,41 @@ export function AppLayout({ activeTabId, children }) {
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { isAuthenticated, isDemo } = useAuth();
+  const { mergeToastMessage, setMergeToastMessage } = useData();
+
+  // Background 30-min Reminder Scheduler
+  useEffect(() => {
+    const activeUserId = getActiveUserId();
+    if (!activeUserId || activeUserId === 'guest') return;
+    const scheduler = startNotificationScheduler(activeUserId, 60000);
+    return () => scheduler.stop();
+  }, []);
+
+  // Tomorrow Plan Auto-Merged Toast Listener
+  const [mergedToast, setMergedToast] = useState(null);
+
+  useEffect(() => {
+    const handleMerged = (e) => {
+      if (e.detail?.message) {
+        setMergedToast(e.detail.message);
+        const timer = setTimeout(() => setMergedToast(null), 6000);
+        return () => clearTimeout(timer);
+      }
+    };
+    window.addEventListener('studyflow-tomorrow-plan-merged', handleMerged);
+    return () => window.removeEventListener('studyflow-tomorrow-plan-merged', handleMerged);
+  }, []);
+
+  useEffect(() => {
+    if (mergeToastMessage) {
+      setMergedToast(mergeToastMessage);
+      const timer = setTimeout(() => {
+        setMergedToast(null);
+        if (setMergeToastMessage) setMergeToastMessage(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [mergeToastMessage, setMergeToastMessage]);
 
   const handleToggleSidebar = () => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -1001,6 +1073,36 @@ export function AppLayout({ activeTabId, children }) {
         isOpen={isDriveNotesDemoModalOpen}
         onClose={() => setIsDriveNotesDemoModalOpen(false)}
       />
+
+      {/* Next-Day Auto-Merge Success Toast */}
+      {mergedToast && (
+        <div 
+          id="tomorrow-plan-merged-toast"
+          className="fixed bottom-6 right-6 z-50 max-w-md bg-theme-surface/95 border border-amber-500/40 text-theme-text p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-slideUp backdrop-blur-md"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl shrink-0">🌅</span>
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-theme-text">
+                {mergedToast}
+              </p>
+              <p className="text-[11px] text-theme-muted mt-0.5">
+                Planned topics merged into your Daily Routine for today.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setMergedToast(null);
+              if (setMergeToastMessage) setMergeToastMessage(null);
+            }}
+            className="p-1.5 hover:bg-theme-cardHover rounded-lg text-theme-muted hover:text-theme-text transition-colors shrink-0 cursor-pointer"
+            aria-label="Dismiss toast"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
     </div>
   );

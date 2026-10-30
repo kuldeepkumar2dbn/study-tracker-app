@@ -10,13 +10,15 @@ import {
   Sparkles,
   Zap,
   Link2,
-  LogOut
+  LogOut,
+  Bell
 } from 'lucide-react';
 import Logo from './Logo';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 import { logout } from '../../auth-guard';
 import { formatRelativeSyncTime, getLastSyncedTimestamp, verifyOrRequestDriveToken } from '../services/cloud-sync';
+import { getNotificationPermission, requestNotificationPermission } from '../../notifications.js';
 
 export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
@@ -26,6 +28,20 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
     return formatRelativeSyncTime(getLastSyncedTimestamp());
   });
   const dropdownRef = useRef(null);
+  const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
+
+  useEffect(() => {
+    const handlePermissionChange = (e) => {
+      setNotifPermission(e.detail?.permission || getNotificationPermission());
+    };
+    window.addEventListener('studyflow-notification-permission-changed', handlePermissionChange);
+    return () => window.removeEventListener('studyflow-notification-permission-changed', handlePermissionChange);
+  }, []);
+
+  const handleToggleNotifications = async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPermission(perm);
+  };
 
   // Periodically refresh relative time for Drive Sync tooltip
   useEffect(() => {
@@ -121,6 +137,24 @@ export default function Navbar({ onOpenDriveModal, onLogoClick, onNavigateTab })
               )}
             </button>
           )}
+
+          {/* Study Reminder Notification Toggle */}
+          <button
+            id="notification-reminder-toggle"
+            type="button"
+            onClick={handleToggleNotifications}
+            title={notifPermission === 'granted' ? "🔔 Study reminders active (30 mins prior)" : "🔔 Enable Study Reminders"}
+            className={`top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-200 active:scale-95 shadow-sm cursor-pointer ${
+              notifPermission === 'granted'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
+                : 'bg-theme-surface hover:bg-theme-cardHover border-theme-border text-theme-muted hover:text-theme-text'
+            }`}
+          >
+            <Bell className={`w-3.5 h-3.5 ${notifPermission === 'granted' ? 'text-amber-500 fill-amber-500/20' : 'text-theme-muted'}`} />
+            <span className="hidden sm:inline">
+              {notifPermission === 'granted' ? "🔔 Reminders Active" : "🔔 Enable Study Reminders"}
+            </span>
+          </button>
 
           {/* Google Drive Status & "Drive Synced" Badge */}
           <div className="flex items-center gap-1.5">
