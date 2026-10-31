@@ -2097,6 +2097,16 @@ export function DataProvider({ children }) {
     // Dynamically increase todayLoggedHours, streak, weeklyVelocityHours, and record daily focus minutes
     logStudyHours(hours, currentSubjectObj?.id, session.durationMin);
 
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('focusTimerStateChanged', {
+          detail: { session: sessionObj, hours, durationMin: session.durationMin }
+        }));
+      }
+    } catch (e) {
+      console.warn('Error dispatching focusTimerStateChanged:', e);
+    }
+
     if (session.subjectId && session.chapterId) {
       logChapterStudyMinutes(session.subjectId, session.chapterId, session.durationMin);
     } else if (session.subject) {

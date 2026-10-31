@@ -28,11 +28,13 @@ import SyllabusRoutineChip from './SyllabusRoutineChip';
 import SyllabusSyncToast from './SyllabusSyncToast';
 import SkillRoutineChip from './SkillRoutineChip';
 import SkillSyncToast from './SkillSyncToast';
+import WeeklyVelocity from './WeeklyVelocity';
 
 export default function DailyRoutine() {
   const { 
     subjects,
     skills,
+    dailyActivity,
     streakData, 
     dailyTargetMinutes, 
     setDailyTargetMinutes, 
@@ -537,71 +539,13 @@ export default function DailyRoutine() {
           </div>
         </div>
 
-        {/* Weekly Target Progress & 7-Day Mini Bar Chart */}
-        <div className="rounded-2xl glass-panel p-6 border border-theme-border card-glow-hover flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <h3 className="font-display font-bold text-base text-theme-text">Weekly Velocity Benchmark</h3>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-theme-muted">Target:</span>
-                <InlineEdit
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={weeklyTargetHours}
-                  onSave={(val) => setWeeklyTargetHours(val)}
-                  suffix="h / week"
-                  className="text-xs font-bold text-theme-accent hover:underline"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-baseline justify-between text-xs text-theme-muted mb-1.5 font-mono-numbers">
-              <span>Monday – Sunday Accumulator</span>
-              <span>
-                <strong className="text-theme-text text-sm">
-                  <RollingNumber value={totalWeeklyHoursLogged} decimals={1} suffix="h" />
-                </strong> / {weeklyTargetHours}h (<RollingNumber value={weeklyProgressPct} suffix="%" />)
-              </span>
-            </div>
-
-            <div className="w-full h-2.5 rounded-full bg-theme-surface overflow-hidden border border-theme-border/40 mb-4">
-              <div 
-                className="h-full bg-gradient-to-r from-theme-accent to-emerald-400 rounded-full transition-all duration-500"
-                style={{ width: `${weeklyProgressPct}%` }}
-              />
-            </div>
-
-            {/* 7-Day Mini Bar Chart */}
-            <div className="flex items-end justify-between gap-2 h-20 pt-2 border-t border-theme-border/60">
-              {streakData.weeklyLog.map((dayItem, idx) => {
-                const maxBar = 6;
-                const hPct = Math.min(100, (dayItem.hours / maxBar) * 100);
-                const isMet = dayItem.hours >= (dailyTargetMinutes / 60);
-
-                return (
-                  <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group">
-                    <div className="w-full bg-theme-surface/70 rounded-t-md overflow-hidden h-14 flex flex-col justify-end">
-                      <div 
-                        className={`w-full rounded-t-md transition-all duration-300 ${
-                          isMet ? 'bg-emerald-400' : 'bg-theme-accent/70'
-                        }`}
-                        style={{ height: `${hPct}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-theme-muted mt-1 font-mono-numbers group-hover:text-theme-text">
-                      {dayItem.day}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        {/* Weekly Velocity Benchmark (Monday - Sunday Accumulator) */}
+        <WeeklyVelocity
+          dailyActivity={dailyActivity}
+          todayLoggedHours={streakData.todayHours}
+          weeklyTargetHours={weeklyTargetHours}
+          onTargetChange={setWeeklyTargetHours}
+        />
 
       </div>
 
