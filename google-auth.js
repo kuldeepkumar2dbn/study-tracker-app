@@ -201,6 +201,8 @@ export async function requestDriveScope({
 /**
  * Safe backward-compatibility stubs ensuring no calendar scopes are ever requested
  */
+export const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
 export function hasCalendarScope() {
   return false;
 }

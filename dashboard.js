@@ -1,25 +1,31 @@
 /**
  * StudyFlow Dashboard Core (dashboard.js)
- * Multi-Page Architecture & Consistency Radar Heatmap
+ * Multi-Page Architecture & Consistency Radar 30-Day Bar Graph
  *
  * Exports:
- * - ConsistencyRadar component (GitHub-Style Study Heatmap)
- * - formatHeatmapTooltip formatter
- * - getActivityColorClass color classifier
- * - calculateHeatmapMatrix matrix calculator
+ * - ConsistencyRadar component (30-Day Study Activity Bar Graph)
+ * - formatBarTooltip tooltip formatter
+ * - calculate30DayBarGraph 30-day calculator
+ * - formatHeatmapTooltip legacy formatter
+ * - getActivityColorClass legacy color classifier
+ * - calculateHeatmapMatrix legacy matrix calculator
  * - DashboardTab component
  */
 
 import ConsistencyRadar from './src/components/ConsistencyRadar.jsx';
-import { 
-  formatHeatmapTooltip, 
-  getActivityColorClass, 
-  calculateHeatmapMatrix 
+import {
+  formatBarTooltip,
+  calculate30DayBarGraph,
+  formatHeatmapTooltip,
+  getActivityColorClass,
+  calculateHeatmapMatrix
 } from './src/utils/consistencyRadar.js';
 import DashboardTab from './src/components/tabs/DashboardTab.jsx';
 
 export {
   ConsistencyRadar,
+  formatBarTooltip,
+  calculate30DayBarGraph,
   formatHeatmapTooltip,
   getActivityColorClass,
   calculateHeatmapMatrix,
@@ -28,9 +34,10 @@ export {
 
 export default {
   ConsistencyRadar,
+  formatBarTooltip,
+  calculate30DayBarGraph,
   formatHeatmapTooltip,
   getActivityColorClass,
   calculateHeatmapMatrix,
   DashboardTab
 };
-

@@ -263,17 +263,17 @@ test('Heatmap Zero-State: Hydrates correctly and calculates active days and tota
   assert.strictEqual(totalHours, '2.8');
 });
 
-test('Heatmap: ConsistencyRadar component file exists and contains required UI elements', () => {
+test('Consistency Radar: ConsistencyRadar component file exists and contains 30-Day Bar Graph UI elements', () => {
   const compPath = path.join(rootDir, 'src', 'components', 'ConsistencyRadar.jsx');
   assert(fs.existsSync(compPath), 'ConsistencyRadar.jsx exists');
 
   const content = fs.readFileSync(compPath, 'utf8');
   assert(content.includes('Consistency Radar'), 'Contains "Consistency Radar" title');
   assert(content.includes('Active Days:'), 'Contains "Active Days:" header summary');
-  assert(content.includes('/ 90'), 'Contains "/ 90" summary');
+  assert(content.includes('/ 30'), 'Contains "/ 30" summary');
   assert(content.includes('Current Streak:'), 'Contains "Current Streak:" header summary');
-  assert(content.includes('grid-rows-7'), 'Contains 7 rows for Mon-Sun');
-  assert(content.includes('Less') && content.includes('More'), 'Contains intensity scale legend');
+  assert(content.includes('bg-gradient-to-t from-emerald-600 to-emerald-400'), 'Contains emerald gradient bar');
+  assert(content.includes('bg-slate-800/30'), 'Contains 0 mins low muted baseline pill');
 });
 
 test('Heatmap: DashboardTab mounts ConsistencyRadar and DataContext tracks dailyActivity', () => {

@@ -1,21 +1,126 @@
 /**
- * Consistency Radar & Study Heatmap Utilities (src/utils/consistencyRadar.js)
+ * Consistency Radar & Study Activity Utilities (src/utils/consistencyRadar.js)
  * StudyFlow Zero-Backend Architecture
  *
  * Implements:
- * 1. Tooltip formatting:
- *    - Empty square: "[Date]: No study activity logged"
- *    - Active square: "[Day, Month Date]: X hours Y mins studied"
- * 2. Color classification for 5 intensity scales:
- *    - 0 mins: slate-800/40 (inactive square)
- *    - 1-45 mins: emerald-900/40
- *    - 46-90 mins: emerald-700/60
- *    - 91-180 mins: emerald-500
- *    - 180+ mins: emerald-400 (with glow accent)
- * 3. 90-Day matrix calculation (13 columns x 7 rows for Mon-Sun)
- * 4. Strictly ZERO dummy/mock data; true zero-state hydration directly from userData.dailyActivity
+ * 1. 30-Day Vertical Bar Graph calculation:
+ *    - 30 consecutive calendar days ending on today's current date
+ *    - Daily study hours (hours = minutes / 60)
+ *    - Dynamically scaled to user's highest study volume (minimum scale ceiling of 4h)
+ *    - 0 mins: low muted baseline pill (height: 3px, bg-slate-800/30)
+ *    - >0 mins: emerald gradient bar (bg-gradient-to-t from-emerald-600 to-emerald-400)
+ *    - Elevated Tooltips: "[X.X] Hours ([Y] mins) studied on [Day, Month Date]"
+ * 2. Top Metrics Strip:
+ *    - Active Days: Total count of days in the last 30 days where study minutes > 0 (e.g., "Active Days: 14 / 30")
+ *    - Current Streak: Pulled from userData.streak || 0
+ *    - 30-Day Total: Sum of hours logged over the last 30 days (e.g., "Total: 42.5h")
+ * 3. Backward-compatible helpers for legacy heatmap matrix and tooltip formatting
  */
 
+/**
+ * Format tooltip for 30-Day Bar Graph:
+ * "[X.X] Hours ([Y] mins) studied on [Day, Month Date]"
+ */
+export function formatBarTooltip(dateStr, minutes = 0) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dateObj = new Date(year, month - 1, day);
+  
+  const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(dateObj);
+  const monthName = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(dateObj);
+  const dateNum = dateObj.getDate();
+  const dateLabel = `${dayName}, ${monthName} ${dateNum}`;
+
+  const safeMins = Math.max(0, Number(minutes) || 0);
+  const hours = (safeMins / 60).toFixed(1);
+
+  return `${hours} Hours (${safeMins} mins) studied on ${dateLabel}`;
+}
+
+/**
+ * Calculates 30 consecutive calendar days ending on today (reference date).
+ * Reads strictly from userData.dailyActivity[YYYY-MM-DD].
+ */
+export function calculate30DayBarGraph(dailyActivity = {}, referenceDate = new Date()) {
+  const safeActivity = (dailyActivity && typeof dailyActivity === 'object') ? dailyActivity : {};
+  const today = new Date(referenceDate);
+  const refYear = today.getFullYear();
+  const refMonth = today.getMonth();
+  const refDate = today.getDate();
+
+  const days = [];
+  let activeDaysCount = 0;
+  let totalMinutes = 0;
+
+  // 30 consecutive calendar days ending on today (i = 29 down to 0)
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(refYear, refMonth, refDate - i);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    const minutes = Math.max(0, Number(safeActivity[dateStr]) || 0);
+    const hours = minutes / 60;
+    const hoursFormatted = (hours).toFixed(1);
+
+    if (minutes > 0) {
+      activeDaysCount++;
+      totalMinutes += minutes;
+    }
+
+    const isToday = (i === 0);
+    const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d);
+    const monthName = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(d);
+    const dateNum = d.getDate();
+    const dateLabel = `${dayName}, ${monthName} ${dateNum}`;
+    const tooltipText = formatBarTooltip(dateStr, minutes);
+
+    days.push({
+      dateStr,
+      dateObj: d,
+      dayNum: dateNum,
+      dayName,
+      monthName,
+      dateLabel,
+      minutes,
+      hours,
+      hoursFormatted,
+      isToday,
+      tooltipText
+    });
+  }
+
+  // Y-Axis dynamic scale: dynamically scaled to user's highest study volume, minimum ceiling of 4h
+  const maxHours = Math.max(0, ...days.map(d => d.hours));
+  const scaleCeiling = Math.max(4, maxHours > 4 ? Math.ceil(maxHours) : 4);
+
+  // Compute height percentage for each day
+  days.forEach(day => {
+    if (day.minutes === 0) {
+      day.heightPercent = 0; // low muted baseline pill
+    } else {
+      const pct = (day.hours / scaleCeiling) * 100;
+      day.heightPercent = Math.min(100, Math.max(4, Math.round(pct * 10) / 10));
+    }
+  });
+
+  const totalHours = totalMinutes / 60;
+  const totalHoursFormatted = totalHours.toFixed(1);
+
+  return {
+    days,
+    activeDaysCount,
+    totalMinutes,
+    totalHours,
+    totalHoursFormatted,
+    scaleCeiling,
+    maxHours
+  };
+}
+
+/**
+ * Backward compatibility: Legacy tooltip formatter
+ */
 export function formatHeatmapTooltip(dateStr, minutes = 0) {
   const [year, month, day] = dateStr.split('-').map(Number);
   const dateObj = new Date(year, month - 1, day);
@@ -44,6 +149,9 @@ export function formatHeatmapTooltip(dateStr, minutes = 0) {
   return `${dateLabel}: ${durationText} studied`;
 }
 
+/**
+ * Backward compatibility: Activity color classifier
+ */
 export function getActivityColorClass(minutes = 0) {
   if (!minutes || minutes <= 0) {
     return 'bg-slate-800/40 border-slate-700/30 hover:border-slate-500/50';
@@ -57,20 +165,18 @@ export function getActivityColorClass(minutes = 0) {
   if (minutes <= 180) {
     return 'bg-emerald-500 border-emerald-400/80 hover:border-emerald-300';
   }
-  // 180+ mins with vibrant emerald glow
   return 'bg-emerald-400 border-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.65)] hover:border-white hover:brightness-110';
 }
 
 /**
- * Calculates 90-day matrix data (13 columns x 7 rows for Mon-Sun)
- * Reads strictly from actual user data; zero synthetic seed values.
+ * Backward compatibility: Legacy 90-day matrix calculator
  */
 export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new Date()) {
   const safeActivity = (dailyActivity && typeof dailyActivity === 'object') ? dailyActivity : {};
   const today = new Date(referenceDate);
   const todayDayOfWeek = (today.getDay() + 6) % 7; // Monday = 0, ..., Sunday = 6
   
-  const totalSlots = 13 * 7; // 91 slots (13 weeks)
+  const totalSlots = 13 * 7;
   const startDate = new Date(today);
   startDate.setDate(today.getDate() - (12 * 7 + todayDayOfWeek));
 
@@ -133,7 +239,6 @@ export function calculateHeatmapMatrix(dailyActivity = {}, referenceDate = new D
     }
   }
 
-  // Calculate actual consecutive streak backwards from today
   let calculatedStreak = 0;
   for (let i = 0; i < 90; i++) {
     const checkDate = new Date(today);

@@ -724,6 +724,9 @@ export function DataProvider({ children }) {
           window.dispatchEvent(new CustomEvent('studyflow-activity-updated', {
             detail: { date: dateStr, minutes: currentVal + mins, dailyActivity: updated }
           }));
+          window.dispatchEvent(new CustomEvent('studyDataUpdated', {
+            detail: { date: dateStr, minutes: currentVal + mins, dailyActivity: updated }
+          }));
         }
       } catch (err) {
         console.warn('Error dispatching studyflow-activity-updated:', err);

@@ -375,7 +375,7 @@ export default function DashboardTab({ onNavigateTab }) {
         </div>
       </div>
 
-      {/* Consistency Radar: 90-Day GitHub-Style Study Activity Heatmap */}
+      {/* Consistency Radar: 30-Day Study Activity Vertical Bar Graph */}
       <ConsistencyRadar 
         dailyActivity={dailyActivity} 
         streak={safeStreakData.streakCount} 
