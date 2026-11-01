@@ -14,7 +14,9 @@ import {
   X,
   Zap,
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  MessageSquare,
+  CheckCircle2
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +24,8 @@ import { useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { soundEngine } from '../utils/audio';
 import { celebrateTaskCompletion } from '../utils/confetti';
 import { canAccessAdmin, AdminAuth } from '../../admin-config';
+import FeedbackModal from './FeedbackModal';
+import { logFeatureUse } from '../utils/telemetry';
 
 /**
  * Minimalist Stopwatch / Hourglass SVG icon for Focus Timer
@@ -140,6 +144,15 @@ export default function CollapsibleSidebar({
 
   const { isAuthenticated, openAuthModal, isDemo } = useAuth();
   const { isFeatureCoded } = useTheme();
+
+  // Feedback Modal and Toast State
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [feedbackToast, setFeedbackToast] = useState(null);
+
+  // Initial Website Mount Telemetry
+  useEffect(() => {
+    logFeatureUse('Page Visit');
+  }, []);
 
   // Dynamic Admin Portal navigation visibility check (Super Admin or Editor only)
   const [hasAdminAccess, setHasAdminAccess] = useState(() => {
@@ -365,6 +378,7 @@ export default function CollapsibleSidebar({
             } : undefined;
 
             const handleClick = (e) => {
+              logFeatureUse(item.name);
               if (isMobileOpen && onCloseMobile) {
                 onCloseMobile();
               }
@@ -527,6 +541,34 @@ export default function CollapsibleSidebar({
               </a>
             );
           })}
+
+          {/* Feedback Navigation Item directly below Focus Timer */}
+          <button
+            type="button"
+            id="sidebar-feedback-btn"
+            onClick={() => {
+              logFeatureUse('Feedback Modal');
+              setIsFeedbackModalOpen(true);
+            }}
+            title={!isDrawerExpanded ? "Send Feedback" : undefined}
+            className={`group relative flex items-center rounded-xl transition-all duration-200 w-full text-left cursor-pointer ${
+              isDrawerExpanded ? 'px-3 py-2.5 gap-3' : 'px-0 py-2.5 justify-center'
+            } text-theme-muted hover:text-theme-text hover:bg-theme-cardHover`}
+          >
+            <div className="relative shrink-0 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-theme-muted group-hover:text-theme-text transition-transform group-hover:scale-110" />
+            </div>
+            {isDrawerExpanded && (
+              <span className="text-xs font-medium tracking-tight truncate flex-1">
+                Feedback
+              </span>
+            )}
+            {!isDrawerExpanded && (
+              <div className="hidden lg:group-hover:flex absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-theme-surface/95 border border-theme-border shadow-xl text-xs font-medium text-theme-text whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
+                <span>Feedback</span>
+              </div>
+            )}
+          </button>
         </nav>
 
         {/* Dedicated Admin Portal Navigation Link at bottom above profile/footer section */}
@@ -582,6 +624,28 @@ export default function CollapsibleSidebar({
             </div>
           )}
         </div>
+
+        {/* Feedback Form Modal */}
+        <FeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+          currentUserEmail={AdminAuth.getUserEmail() || ''}
+          onSubmitSuccess={(msg) => {
+            setFeedbackToast(msg || "Thank you! Your feedback has been sent directly to the developer.");
+            setTimeout(() => setFeedbackToast(null), 4000);
+          }}
+        />
+
+        {/* Confirmation Toast Upon Feedback Submission */}
+        {feedbackToast && (
+          <div 
+            id="feedback-toast"
+            className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl glass-panel border border-emerald-500/30 bg-emerald-950/90 text-emerald-200 text-xs font-semibold shadow-2xl flex items-center gap-2 animate-slideUp backdrop-blur-md"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{feedbackToast}</span>
+          </div>
+        )}
       </aside>
     </>
   );

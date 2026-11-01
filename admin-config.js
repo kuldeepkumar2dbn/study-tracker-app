@@ -13,6 +13,41 @@
  * - Student Feedback & Bug Reports Drawer
  */
 
+export const TELEMETRY_URL = "https://script.google.com/macros/s/AKfycbwAlrIyhorIXumHyTSeNSlB5yBXH7AN16T5m-dHzt5YoOnrqL5o_lBXpDzgvN2X6Dml/exec";
+export const TELEMETRY_ENDPOINT = TELEMETRY_URL;
+
+if (typeof window !== 'undefined') {
+  window.TELEMETRY_URL = TELEMETRY_URL;
+  window.TELEMETRY_ENDPOINT = TELEMETRY_URL;
+}
+
+export function isTelemetryConfigured(endpoint = TELEMETRY_URL) {
+  if (!endpoint || typeof endpoint !== 'string') return false;
+  const trimmed = endpoint.trim();
+  if (!trimmed || trimmed === "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL" || trimmed === "YOUR_EXEC_URL_HERE") {
+    return false;
+  }
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://");
+}
+
+export async function safeSendTelemetry(payload, endpoint = TELEMETRY_URL) {
+  if (!isTelemetryConfigured(endpoint)) {
+    return { success: false, fallback: true, reason: 'unconfigured' };
+  }
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return { success: true, response: res };
+  } catch (err) {
+    console.warn("Telemetry request failed silently:", err);
+    return { success: false, error: err };
+  }
+}
+
 export const ROLE_CONFIG = {
   superAdmins: [
     "kuldeepkumarncc2dbn@gmail.com",
@@ -37,6 +72,8 @@ export const ADMIN_STORAGE_KEYS = {
   ANNOUNCEMENT: 'platform_announcement',
   ANNOUNCEMENT_DISMISSED_PREFIX: 'announcement_dismissed_',
   FEEDBACK_BUGS: 'admin_feedback_bugs',
+  FEEDBACK_INBOX: 'admin_feedback_inbox',
+  TELEMETRY_ANALYTICS: 'study_feature_analytics',
   SYLLABI_TEMPLATES: 'admin_syllabi_templates',
   SKILL_ROADMAPS: 'admin_skill_roadmaps',
   ACCESS_DENIED_ALERT: 'admin_access_denied_alert'
@@ -66,7 +103,7 @@ export const AdminAuth = {
           if (norm && !superList.map(e => e.toLowerCase()).includes(norm)) superList.push(norm);
         });
       }
-    } catch {}
+    } catch { }
 
     if (superList.map(e => e.toLowerCase()).includes(email)) return "super_admin";
 
@@ -80,7 +117,7 @@ export const AdminAuth = {
           if (norm && !editorList.map(e => e.toLowerCase()).includes(norm)) editorList.push(norm);
         });
       }
-    } catch {}
+    } catch { }
 
     if (editorList.map(e => e.toLowerCase()).includes(email)) return "editor";
     return "student";
@@ -133,8 +170,8 @@ if (typeof window !== 'undefined') {
 export function getLoggedInUserProfile() {
   if (typeof window === 'undefined') return null;
   try {
-    const rawStudyProfile = localStorage.getItem(ADMIN_STORAGE_KEYS.USER_PROFILE) || 
-                            sessionStorage.getItem(ADMIN_STORAGE_KEYS.USER_PROFILE);
+    const rawStudyProfile = localStorage.getItem(ADMIN_STORAGE_KEYS.USER_PROFILE) ||
+      sessionStorage.getItem(ADMIN_STORAGE_KEYS.USER_PROFILE);
     if (rawStudyProfile) {
       const parsed = JSON.parse(rawStudyProfile);
       if (parsed && (parsed.email || parsed.name || parsed.sub)) {
@@ -142,9 +179,9 @@ export function getLoggedInUserProfile() {
       }
     }
 
-    const rawUserProfile = localStorage.getItem('user_profile') || 
-                           sessionStorage.getItem('user_profile') ||
-                           localStorage.getItem('google_user_profile');
+    const rawUserProfile = localStorage.getItem('user_profile') ||
+      sessionStorage.getItem('user_profile') ||
+      localStorage.getItem('google_user_profile');
     if (rawUserProfile) {
       const parsed = JSON.parse(rawUserProfile);
       if (parsed && (parsed.email || parsed.name || parsed.sub)) {
@@ -176,7 +213,7 @@ export function getSuperAdmins() {
         });
       }
     }
-  } catch {}
+  } catch { }
   return list;
 }
 
@@ -196,7 +233,7 @@ export function getCollaborators() {
         });
       }
     }
-  } catch {}
+  } catch { }
   return list;
 }
 
@@ -229,7 +266,7 @@ export function getCollaboratorsDetailed() {
         });
       }
     }
-  } catch {}
+  } catch { }
   return base;
 }
 
@@ -318,7 +355,7 @@ export function canAccessAdmin(email = null) {
   if (email) {
     const norm = String(email).trim().toLowerCase();
     return getSuperAdmins().map(e => e.toLowerCase()).includes(norm) ||
-           getCollaborators().map(e => e.toLowerCase()).includes(norm);
+      getCollaborators().map(e => e.toLowerCase()).includes(norm);
   }
   return AdminAuth.canAccessAdmin();
 }
@@ -625,11 +662,11 @@ export function checkAdminAccess({ redirect = true } = {}) {
     const alertMessage = "Access Denied: Administrator privileges required.";
     try {
       sessionStorage.setItem(ADMIN_STORAGE_KEYS.ACCESS_DENIED_ALERT, alertMessage);
-    } catch {}
+    } catch { }
 
     try {
       window.alert(alertMessage);
-    } catch {}
+    } catch { }
 
     window.location.replace('/index.html?access_denied=admin');
     return false;

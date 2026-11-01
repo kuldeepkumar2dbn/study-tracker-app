@@ -32,9 +32,14 @@ import {
   Sliders,
   Radio,
   X,
-  AlertCircle
+  AlertCircle,
+  BarChart3,
+  TrendingUp,
+  Star,
+  MessageSquare
 } from 'lucide-react';
 import YouTubeIcon from './YouTubeIcon';
+import { getTelemetryAnalytics, getFeedbackInbox } from '../utils/telemetry.js';
 import { 
   getLoggedInUserProfile,
   getCurrentUserEmail,
@@ -116,11 +121,32 @@ const DEFAULT_SKILL_ROADMAPS = [
 ];
 
 export default function AdminPortal() {
-  const [activeModule, setActiveModule] = useState('templates'); // 'templates' | 'announcements' | 'feedback' | 'emergency' | 'banlist' | 'collaborators'
+  const [activeModule, setActiveModule] = useState('templates'); // 'templates' | 'announcements' | 'feedback' | 'analytics' | 'emergency' | 'banlist' | 'collaborators'
   const [userProfile, setUserProfile] = useState(() => getLoggedInUserProfile());
   const [userEmail, setUserEmail] = useState(() => getCurrentUserEmail());
   const [userRole, setUserRole] = useState(() => getUserRole());
-  const isSuper = userRole === 'SUPER_ADMIN';
+  const isSuper = userRole === 'SUPER_ADMIN' || (userEmail && userEmail.toLowerCase() === 'kuldeepkumarncc2dbn@gmail.com');
+
+  // Real-time Traffic & Student Feedback Inbox (Super Admin Only)
+  const [telemetryData, setTelemetryData] = useState(() => getTelemetryAnalytics());
+  const [feedbackList, setFeedbackList] = useState(() => getFeedbackInbox());
+
+  useEffect(() => {
+    const syncAnalytics = () => {
+      setTelemetryData(getTelemetryAnalytics());
+      setFeedbackList(getFeedbackInbox());
+    };
+
+    window.addEventListener('studyflow-telemetry-updated', syncAnalytics);
+    window.addEventListener('studyflow-feedback-received', syncAnalytics);
+    window.addEventListener('storage', syncAnalytics);
+
+    return () => {
+      window.removeEventListener('studyflow-telemetry-updated', syncAnalytics);
+      window.removeEventListener('studyflow-feedback-received', syncAnalytics);
+      window.removeEventListener('storage', syncAnalytics);
+    };
+  }, []);
 
   // State synchronization on simulated role change or storage changes
   useEffect(() => {
@@ -611,6 +637,7 @@ export default function AdminPortal() {
           { id: 'templates', label: 'Template Studio', icon: BookOpen, accent: 'text-indigo-400' },
           { id: 'announcements', label: 'Global Announcement', icon: Bell, accent: 'text-blue-400' },
           { id: 'feedback', label: 'Feedback & Bug Drawer', icon: AlertCircle, accent: 'text-emerald-400' },
+          { id: 'analytics', label: 'Traffic & Feature Popularity', icon: BarChart3, accent: 'text-teal-400', superOnly: true },
           { id: 'emergency', label: 'Emergency Controls', icon: Sliders, accent: 'text-amber-400', superOnly: true },
           { id: 'banlist', label: 'Ban List Manager', icon: UserX, accent: 'text-rose-400', superOnly: true },
           { id: 'collaborators', label: 'Collaborators', icon: Users, accent: 'text-purple-400', superOnly: true }
@@ -1078,6 +1105,173 @@ export default function AdminPortal() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* MODULE: REAL-TIME TRAFFIC & STUDENT FEEDBACK (Super Admin ONLY)   */}
+      {/* ----------------------------------------------------------------- */}
+      {(activeModule === 'analytics' || (activeModule === 'feedback' && isSuper)) && (
+        isSuper ? (
+          <div className="space-y-6 animate-fadeIn mb-6">
+            {/* Card A: Website Traffic & Feature Popularity */}
+            <div id="website-traffic-card" className="p-6 rounded-3xl glass-panel border border-theme-border shadow-xl backdrop-blur-xl bg-theme-surface/70 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-theme-border/60">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-teal-500/15 text-teal-400 border border-teal-500/30">
+                    <BarChart3 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-base text-theme-text tracking-tight">
+                        Website Traffic & Feature Popularity
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                        Real-Time
+                      </span>
+                    </div>
+                    <p className="text-xs text-theme-muted mt-0.5">
+                      Live visitor volume and ranked tool engagement across the platform
+                    </p>
+                  </div>
+                </div>
+
+                {/* Top stats: Total Visitors & Total Feature Interactions */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="px-3.5 py-1.5 rounded-2xl bg-theme-bg/80 border border-theme-border text-xs flex items-center gap-2 shadow-sm">
+                    <Users className="w-4 h-4 text-indigo-400" />
+                    <span className="text-theme-muted font-medium">Total Visitors:</span>
+                    <strong className="text-theme-text font-mono-numbers font-bold text-sm">
+                      {telemetryData.totalVisitors}
+                    </strong>
+                  </div>
+                  <div className="px-3.5 py-1.5 rounded-2xl bg-theme-bg/80 border border-theme-border text-xs flex items-center gap-2 shadow-sm">
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <span className="text-theme-muted font-medium">Total Feature Interactions:</span>
+                    <strong className="text-emerald-400 font-mono-numbers font-bold text-sm">
+                      {telemetryData.totalInteractions}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Horizontal Bar Graph ranking features by popularity */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-muted flex items-center gap-2">
+                  <span>Feature Engagement Ranking</span>
+                  <span className="text-[10px] lowercase text-theme-muted/70">(ranked by clicks & tool usage)</span>
+                </h4>
+
+                <div className="space-y-3.5">
+                  {telemetryData.rankedFeatures.map((item, idx) => (
+                    <div key={item.feature} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-theme-text flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-theme-muted w-4">#{idx + 1}</span>
+                          <span>{item.feature}</span>
+                        </span>
+                        <span className="font-mono-numbers text-xs text-theme-muted">
+                          <strong className="text-teal-400 font-semibold">{item.feature} — {item.percentage}%</strong> ({item.count} clicks)
+                        </span>
+                      </div>
+
+                      <div className="w-full h-3 rounded-full bg-theme-bg/80 border border-theme-border/40 overflow-hidden">
+                        <div 
+                          style={{ width: `${Math.max(4, item.percentage)}%` }}
+                          className="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-500 to-indigo-500 shadow-sm transition-all duration-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Card B: Student Feedback Inbox */}
+            <div id="student-feedback-inbox-card" className="p-6 rounded-3xl glass-panel border border-theme-border shadow-xl backdrop-blur-xl bg-theme-surface/70 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-theme-border/60">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-base text-theme-text tracking-tight">
+                        Student Feedback Inbox
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        {feedbackList.length} Messages
+                      </span>
+                    </div>
+                    <p className="text-xs text-theme-muted mt-0.5">
+                      Direct user feedback, ratings, and feature requests submitted from sidebar
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feedback Feed or Empty State */}
+              {feedbackList.length === 0 ? (
+                <div className="py-12 text-center flex flex-col items-center justify-center space-y-2 border border-dashed border-theme-border/60 rounded-2xl bg-theme-bg/40">
+                  <div className="p-3 rounded-full bg-theme-surface border border-theme-border text-theme-muted">
+                    <MessageSquare className="w-6 h-6" />
+                  </div>
+                  <p className="font-semibold text-sm text-theme-text">No feedback received yet.</p>
+                  <p className="text-xs text-theme-muted max-w-sm">
+                    When students submit feedback or feature ideas through the sidebar feedback button, their messages will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
+                  {feedbackList.map((item) => (
+                    <div 
+                      key={item.id} 
+                      className="p-4 rounded-2xl bg-theme-bg/70 border border-theme-border/60 hover:border-theme-border space-y-2.5 transition-all shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-theme-text">{item.email}</span>
+                          {/* Star Rating Pill */}
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-mono-numbers font-bold">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <span>{item.rating}/5</span>
+                          </span>
+                          {/* Category Badge */}
+                          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                            item.category?.includes('Bug') 
+                              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' 
+                              : item.category?.includes('Idea') 
+                                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' 
+                                : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          }`}>
+                            {item.category}
+                          </span>
+                        </div>
+
+                        <span className="text-[11px] text-theme-muted font-mono-numbers">
+                          {item.dateFormatted || item.createdAt?.split('T')[0]}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-theme-text/90 leading-relaxed bg-theme-surface/50 p-3 rounded-xl border border-theme-border/40 whitespace-pre-wrap">
+                        {item.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          activeModule === 'analytics' && (
+            <div className="p-8 rounded-3xl glass-panel border border-amber-500/30 bg-amber-500/5 text-center space-y-3 animate-fadeIn mb-6">
+              <Lock className="w-8 h-8 text-amber-400 mx-auto" />
+              <h3 className="text-base font-bold text-theme-text">Super Admin Access Required</h3>
+              <p className="text-xs text-theme-muted max-w-md mx-auto">
+                Real-time traffic telemetry and student feedback inbox are restricted strictly to Super Administrator accounts.
+              </p>
+            </div>
+          )
+        )
       )}
 
       {/* ----------------------------------------------------------------- */}

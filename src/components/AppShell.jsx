@@ -46,6 +46,7 @@ import { sanitizeUrl } from '../utils/security';
 import { isDemoUser, getDemoRemainingSeconds, clearDemoSession, getActiveUserId } from '../../auth-guard';
 import { formatRelativeSyncTime, getLastSyncedTimestamp, verifyOrRequestDriveToken } from '../services/cloud-sync';
 import ErrorBoundary from './ErrorBoundary';
+import { logFeatureUse } from '../utils/telemetry';
 import { 
   getPlatformAnnouncement, 
   getEmergencyKillswitches, 
@@ -802,6 +803,24 @@ export function AppLayout({ activeTabId, children }) {
 
   const isGuestLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
   const isDemoLockedNotes = isDemo && activeTabId === 'notes';
+
+  // Silent Telemetry tracking on initial mount and tab navigation
+  useEffect(() => {
+    logFeatureUse('Page Visit');
+    const tabFeatureMap = {
+      routine: 'Daily Routine',
+      calendar: 'Calendar',
+      syllabus: 'Subjects & Syllabus',
+      revision: 'Revision Queue',
+      radar: 'Exam Radar',
+      skills: 'Skill Tracker',
+      notes: 'Drive Notes',
+      timer: 'Focus Timer'
+    };
+    if (activeTabId && tabFeatureMap[activeTabId]) {
+      logFeatureUse(tabFeatureMap[activeTabId]);
+    }
+  }, [activeTabId]);
 
   // Global Announcement Banner State
   const [announcement, setAnnouncement] = useState(() => getPlatformAnnouncement());
