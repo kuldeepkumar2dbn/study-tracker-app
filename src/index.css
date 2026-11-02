@@ -31,6 +31,8 @@
   --text-muted: #9ca3af;
   --bar-filled: #10b981;
   --bar-filled-gradient: linear-gradient(to top, #059669, #34d399);
+  --primary-glow: rgba(99, 102, 241, 0.45);
+  --accent-glow: rgba(56, 189, 248, 0.4);
 }
 
 /* Clean Studio (Default Modern Light) */
@@ -147,6 +149,8 @@ html[data-theme='mocha-lavender'] {
   --bar-filled-gradient: linear-gradient(to top, #6F4E37, #E6E0F0);
   --bar-empty: rgba(43, 30, 22, 0.6);
   --bar-glow: rgba(230, 224, 240, 0.4);
+  --primary-glow: rgba(111, 78, 55, 0.5);
+  --accent-glow: rgba(230, 224, 240, 0.6);
 }
 
 /* Cyber Jet & Hot Pink Theme */
@@ -199,6 +203,8 @@ html[data-theme='cyber-jet'] {
   --bar-filled-gradient: linear-gradient(to top, #FF2DA3, #D4FF3F);
   --bar-empty: rgba(21, 21, 21, 0.6);
   --bar-glow: rgba(255, 45, 163, 0.5);
+  --primary-glow: rgba(255, 45, 163, 0.7);
+  --accent-glow: rgba(212, 255, 63, 0.7);
 }
 
 /* Feature Color Coded Sections for Chromatic Identity & Midnight Cyberpunk */
@@ -553,6 +559,182 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 10px 24px -4px rgba(168, 85, 247, 0.28);
   border-color: #A855F7;
+}
+
+/* ==========================================================================
+   Reactive Glow States, Theme Transition Smoothing & 60fps Optimization
+   ========================================================================== */
+
+/* 1. Theme Transition Smoothing across backgrounds, borders, and colors */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* 2. Primary Action Buttons Dynamic Glow */
+.btn-primary,
+.btn-primary-action,
+button[type="submit"],
+.sidebar-action-btn,
+.sidebar-action-button,
+#sidebar-action-btn {
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease !important;
+  will-change: transform, box-shadow;
+}
+
+.btn-primary:hover,
+.btn-primary-action:hover,
+button[type="submit"]:hover,
+.sidebar-action-btn:hover,
+.sidebar-action-button:hover,
+#sidebar-action-btn:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 0 20px -2px var(--primary-glow, rgba(99, 102, 241, 0.5)), 0 4px 14px 0 rgba(0, 0, 0, 0.25) !important;
+}
+
+.btn-primary:focus-visible,
+.btn-primary-action:focus-visible,
+button[type="submit"]:focus-visible,
+.sidebar-action-btn:focus-visible,
+.sidebar-action-button:focus-visible,
+#sidebar-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--primary), 0 0 24px 2px var(--primary-glow, rgba(99, 102, 241, 0.5)) !important;
+}
+
+.btn-primary:active,
+.btn-primary-action:active,
+button[type="submit"]:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 3. Custom Range Sliders with Expanding, Glowing Thumbs */
+input[type="range"],
+.theme-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--color-border);
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform, box-shadow;
+}
+
+input[type="range"]:focus,
+.theme-slider:focus {
+  box-shadow: 0 0 12px 1px var(--accent-glow, rgba(56, 189, 248, 0.45));
+}
+
+/* Webkit Range Thumb */
+input[type="range"]::-webkit-slider-thumb,
+.theme-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--secondary, var(--primary, #38bdf8));
+  border: 2px solid var(--color-surface, #ffffff);
+  box-shadow: 0 0 8px 1px var(--accent-glow, rgba(56, 189, 248, 0.45));
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease;
+  will-change: transform, box-shadow;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover,
+.theme-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 16px 3px var(--accent-glow, rgba(56, 189, 248, 0.65)), 0 0 4px 1px var(--secondary, #38bdf8);
+}
+
+input[type="range"]:active::-webkit-slider-thumb,
+.theme-slider:active::-webkit-slider-thumb {
+  transform: scale(1.5);
+  box-shadow: 0 0 22px 5px var(--accent-glow, rgba(56, 189, 248, 0.85)), 0 0 6px 2px var(--secondary, #38bdf8);
+}
+
+/* Firefox Range Thumb */
+input[type="range"]::-moz-range-thumb,
+.theme-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--secondary, var(--primary, #38bdf8));
+  border: 2px solid var(--color-surface, #ffffff);
+  box-shadow: 0 0 8px 1px var(--accent-glow, rgba(56, 189, 248, 0.45));
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease;
+  will-change: transform, box-shadow;
+}
+
+input[type="range"]::-moz-range-thumb:hover,
+.theme-slider::-moz-range-thumb:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 16px 3px var(--accent-glow, rgba(56, 189, 248, 0.65)), 0 0 4px 1px var(--secondary, #38bdf8);
+}
+
+input[type="range"]:active::-moz-range-thumb,
+.theme-slider:active::-moz-range-thumb {
+  transform: scale(1.5);
+  box-shadow: 0 0 22px 5px var(--accent-glow, rgba(56, 189, 248, 0.85)), 0 0 6px 2px var(--secondary, #38bdf8);
+}
+
+/* 4. 30-Day Velocity Bar Graph Columns with Reactive Glow */
+.chart-bar-glow {
+  background: var(--bar-filled-gradient, linear-gradient(to top, var(--primary, #10b981), var(--bar-filled, #34d399))) !important;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, filter 0.25s ease !important;
+  will-change: transform, box-shadow;
+}
+
+.chart-bar-glow:hover,
+.group:hover .chart-bar-glow,
+.group:focus-within .chart-bar-glow,
+.group:focus .chart-bar-glow {
+  transform: translateY(-2px) scaleY(1.02);
+  filter: brightness(1.2);
+  box-shadow: 0 0 20px 3px var(--accent-glow, rgba(52, 211, 153, 0.65)), 0 0 8px 1px var(--primary-glow, rgba(99, 102, 241, 0.5)) !important;
+}
+
+/* 5. Weekly Velocity Progress Bar Fill with Subtle Gradient & Glow */
+.theme-progress-fill,
+#weekly-velocity-bar,
+.weekly-velocity-bar {
+  background: linear-gradient(90deg, var(--primary, #6366f1) 0%, var(--secondary, var(--bar-filled, #10b981)) 100%) !important;
+  box-shadow: 0 0 14px 1px var(--primary-glow, rgba(99, 102, 241, 0.35)), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  position: relative;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+  will-change: width, box-shadow;
+}
+
+.theme-progress-fill::after,
+#weekly-velocity-bar::after,
+.weekly-velocity-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45));
+  border-radius: 9999px;
+  box-shadow: 0 0 8px 2px var(--accent-glow, rgba(255, 255, 255, 0.6));
+}
+
+/* 6. Performance Optimization for 60fps Smooth Transitions */
+.interactive-hoverable,
+.card-glow-hover,
+.top-action-link,
+.routine-block-item,
+.exam-card,
+.revision-card-hover,
+.skill-card-hover {
+  will-change: transform, box-shadow;
 }
 
 

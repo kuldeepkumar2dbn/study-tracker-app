@@ -152,7 +152,7 @@ export default function AmbientAudioControls({ compact = false, className = '' }
               value={isMuted ? 0 : volume}
               onChange={handleVolumeChange}
               disabled={isMuted}
-              className="w-full h-1.5 bg-theme-border rounded-lg appearance-none cursor-pointer accent-theme-accent focus:outline-none"
+              className="theme-slider w-full h-1.5 bg-theme-border rounded-lg appearance-none cursor-pointer accent-theme-accent focus:outline-none"
               title={`Ambient Volume: ${volumePercentage}%`}
             />
             <span className="text-[11px] font-mono-numbers font-semibold text-theme-muted w-10 text-right shrink-0">

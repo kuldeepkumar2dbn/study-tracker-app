@@ -158,6 +158,9 @@ export function updateWeeklyVelocityBenchmark(userData, targetHours = 20) {
     );
     barEls.forEach(el => {
       el.style.width = result.percent + '%';
+      if (el.classList && typeof el.classList.contains === 'function' && !el.classList.contains('theme-progress-fill')) {
+        el.classList.add('theme-progress-fill');
+      }
     });
   }
 

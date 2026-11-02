@@ -763,7 +763,7 @@ export default function SkillsTab() {
                       const lvl = Number(e.target.value);
                       updateSkillLevel(skill.id, lvl, Math.min(100, lvl * 20));
                     }}
-                    className="w-full accent-indigo-500 cursor-pointer h-2 bg-theme-surface rounded-lg appearance-none"
+                    className="theme-slider w-full accent-indigo-500 cursor-pointer h-2 bg-theme-surface rounded-lg appearance-none"
                   />
 
                   {/* Visual Gradient Progress Bar */}
@@ -975,7 +975,7 @@ export default function SkillsTab() {
                     setLevelNum(val);
                     setMasteryPct(val * 20);
                   }}
-                  className="w-full accent-indigo-500 cursor-pointer h-2 bg-theme-bg rounded-lg appearance-none"
+                  className="theme-slider w-full accent-indigo-500 cursor-pointer h-2 bg-theme-bg rounded-lg appearance-none"
                 />
                 <div className="flex justify-between text-[10px] text-theme-muted font-mono-numbers">
                   <span>1: Novice</span>

@@ -31,6 +31,9 @@ import {
 import DashboardTab from './src/components/tabs/DashboardTab.jsx';
 import { THEMES, getTheme, setTheme, toggleTheme } from './settings.js';
 
+export const CHART_BAR_GLOW_CLASS = 'chart-bar-glow';
+export const THEME_PROGRESS_FILL_CLASS = 'theme-progress-fill';
+
 // Browser global registration & event listening
 if (typeof window !== 'undefined') {
   window.updateWeeklyVelocityBenchmark = updateWeeklyVelocityBenchmark;
@@ -62,7 +65,9 @@ export {
   THEMES,
   getTheme,
   setTheme,
-  toggleTheme
+  toggleTheme,
+  CHART_BAR_GLOW_CLASS,
+  THEME_PROGRESS_FILL_CLASS
 };
 
 export default {
@@ -79,5 +84,7 @@ export default {
   THEMES,
   getTheme,
   setTheme,
-  toggleTheme
+  toggleTheme,
+  CHART_BAR_GLOW_CLASS,
+  THEME_PROGRESS_FILL_CLASS
 };

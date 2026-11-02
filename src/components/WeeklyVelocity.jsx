@@ -144,7 +144,7 @@ export default function WeeklyVelocity({
           <div 
             id="weekly-velocity-bar"
             data-weekly-velocity-bar
-            className="weekly-velocity-bar h-full bg-gradient-to-r from-theme-accent to-emerald-400 rounded-full transition-all duration-500"
+            className="weekly-velocity-bar theme-progress-fill h-full bg-gradient-to-r from-theme-accent to-emerald-400 rounded-full transition-all duration-500"
             style={{ width: `${percent}%` }}
           />
         </div>

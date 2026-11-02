@@ -283,7 +283,7 @@ export default function ConsistencyRadar({ dailyActivity, streak, className = ''
                         backgroundColor: 'var(--bar-filled, var(--primary, #10b981))',
                         backgroundImage: 'var(--bar-filled-gradient, linear-gradient(to top, var(--bar-filled, var(--primary, #059669)), var(--color-highlight, var(--accent, #34d399))))'
                       }}
-                      className={`w-full max-w-[14px] rounded-t-sm sm:rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-sm transition-all duration-300 group-hover:brightness-110 group-hover:shadow-[0_0_12px_var(--color-accent-glow,rgba(52,211,153,0.5))] ${
+                      className={`chart-bar-glow w-full max-w-[14px] rounded-t-sm sm:rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-sm transition-all duration-300 group-hover:brightness-110 group-hover:shadow-[0_0_12px_var(--color-accent-glow,rgba(52,211,153,0.5))] ${
                         day.isToday 
                           ? 'ring-2 ring-emerald-300/90 ring-offset-1 ring-offset-theme-bg shadow-[0_0_10px_var(--color-accent-glow,rgba(52,211,153,0.6))]' 
                           : ''
