@@ -1,6 +1,12 @@
 /* Centralized Stylesheet (style.css) for StudyFlow Multi-Page Web Application */
 @import './src/index.css';
 
+:root {
+  --mesh-blob-1: rgba(16, 185, 129, 0.16);
+  --mesh-blob-2: rgba(99, 102, 241, 0.16);
+  --mesh-blob-3: rgba(56, 189, 248, 0.14);
+}
+
 /* Direct Theme Style Variables Configurations */
 [data-theme="mocha-lavender"],
 html[data-theme="mocha-lavender"] {
@@ -45,6 +51,11 @@ html[data-theme="mocha-lavender"] {
   --bar-filled-gradient: linear-gradient(to top, #6F4E37, #E6E0F0);
   --primary-glow: rgba(111, 78, 55, 0.5);
   --accent-glow: rgba(230, 224, 240, 0.6);
+
+  /* Ambient Gradient Mesh Blobs (Mocha Brown, Pale Lavender, Platinum Silver tints) */
+  --mesh-blob-1: rgba(111, 78, 55, 0.32);
+  --mesh-blob-2: rgba(230, 224, 240, 0.22);
+  --mesh-blob-3: rgba(229, 228, 226, 0.18);
 }
 
 [data-theme="cyber-jet"],
@@ -90,6 +101,11 @@ html[data-theme="cyber-jet"] {
   --bar-filled-gradient: linear-gradient(to top, #FF2DA3, #D4FF3F);
   --primary-glow: rgba(255, 45, 163, 0.7);
   --accent-glow: rgba(212, 255, 63, 0.7);
+
+  /* Ambient Gradient Mesh Blobs (Hot Pink and Chartreuse radiant dark halos) */
+  --mesh-blob-1: rgba(255, 45, 163, 0.28);
+  --mesh-blob-2: rgba(212, 255, 63, 0.22);
+  --mesh-blob-3: rgba(255, 45, 163, 0.18);
 }
 
 /* ==========================================================================
@@ -251,13 +267,120 @@ input[type="range"]:active::-moz-range-thumb,
   box-shadow: 0 0 8px 2px var(--accent-glow, rgba(255, 255, 255, 0.6));
 }
 
-/* 6. Performance Optimization for 60fps Smooth Transitions */
-.interactive-hoverable,
-.card-glow-hover,
-.top-action-link,
-.routine-block-item,
-.exam-card,
-.revision-card-hover,
-.skill-card-hover {
-  will-change: transform, box-shadow;
+/* ==========================================================================
+   Animated Lightweight CSS Ambient Gradient Mesh
+   ========================================================================== */
+
+/* Fixed Ambient Mesh Container (Full viewport bounds, pointer-events none, z-index 0) */
+.ambient-mesh-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  contain: strict;
+}
+
+/* Three GPU-accelerated Mesh Blob Elements with 80px Gaussian Blur & 0.6s Theme Transition */
+.mesh-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  -webkit-filter: blur(80px);
+  opacity: 0.85;
+  pointer-events: none;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  transition: background 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mesh-blob.blob-1 {
+  width: 580px;
+  height: 580px;
+  top: -140px;
+  left: -90px;
+  background: radial-gradient(circle, var(--mesh-blob-1) 0%, transparent 70%);
+  animation: driftPrimary 24s ease-in-out infinite;
+}
+
+.mesh-blob.blob-2 {
+  width: 680px;
+  height: 680px;
+  top: 25%;
+  right: -160px;
+  background: radial-gradient(circle, var(--mesh-blob-2) 0%, transparent 70%);
+  animation: driftSecondary 28s ease-in-out infinite;
+}
+
+.mesh-blob.blob-3 {
+  width: 520px;
+  height: 520px;
+  bottom: -120px;
+  left: 20%;
+  background: radial-gradient(circle, var(--mesh-blob-3) 0%, transparent 70%);
+  animation: driftAccent 22s ease-in-out infinite;
+}
+
+/* Staggered GPU-accelerated Keyframe Drift Animations */
+@keyframes driftPrimary {
+  0% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate3d(85px, -65px, 0px) scale(1.15);
+  }
+  66% {
+    transform: translate3d(-55px, 75px, 0px) scale(0.92);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+}
+
+@keyframes driftSecondary {
+  0% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate3d(-95px, 75px, 0px) scale(1.12);
+  }
+  66% {
+    transform: translate3d(65px, -55px, 0px) scale(0.94);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+}
+
+@keyframes driftAccent {
+  0% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate3d(75px, 85px, 0px) scale(0.88);
+  }
+  66% {
+    transform: translate3d(-85px, -65px, 0px) scale(1.18);
+  }
+  100% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+}
+
+/* Elevated Layers: Ensures #app, main, and sidebar remain sharp, readable, and elevated */
+#app,
+#root,
+main,
+#main-content,
+#app-sidebar,
+aside,
+header,
+nav {
+  position: relative;
+  z-index: 1;
 }

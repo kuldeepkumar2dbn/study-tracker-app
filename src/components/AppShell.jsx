@@ -906,6 +906,14 @@ export function AppLayout({ activeTabId, children }) {
       className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200"
       data-active-feature={activeTabId || 'dashboard'}
     >
+      {/* Ambient Gradient Mesh Canvas (if not already injected at top of body in static HTML) */}
+      {typeof document !== 'undefined' && !document.querySelector('body > .ambient-mesh-canvas') && (
+        <div className="ambient-mesh-canvas" aria-hidden="true">
+          <div className="mesh-blob blob-1" />
+          <div className="mesh-blob blob-2" />
+          <div className="mesh-blob blob-3" />
+        </div>
+      )}
       
       {/* Top Utility Header */}
       <SharedHeader 
