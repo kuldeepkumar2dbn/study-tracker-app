@@ -18,6 +18,19 @@
   --color-highlight: #38bdf8;
   --color-accent-glow: rgba(99, 102, 241, 0.35);
   --color-card-shadow: rgba(0, 0, 0, 0.45);
+
+  /* Theme style variables & aliases */
+  --bg-app: #121316;
+  --bg-sidebar: #18191e;
+  --bg-card: #1e2026;
+  --border-glow: #2e323b;
+  --primary: #6366f1;
+  --secondary: #38bdf8;
+  --accent: #6366f1;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --bar-filled: #10b981;
+  --bar-filled-gradient: linear-gradient(to top, #059669, #34d399);
 }
 
 /* Clean Studio (Default Modern Light) */
@@ -82,6 +95,110 @@ html[data-theme='dark'] {
   --color-card-shadow: rgba(0, 0, 0, 0.75);
   --feature-theme-color: #6366f1;
   --feature-theme-glow: rgba(99, 102, 241, 0.4);
+}
+
+/* Mocha & Platinum Lavender Theme */
+[data-theme="mocha-lavender"],
+html[data-theme="mocha-lavender"],
+[data-theme='mocha-lavender'],
+html[data-theme='mocha-lavender'] {
+  /* Direct variables requested in prompt */
+  --bg-app: #1A130E;
+  --bg-sidebar: #241A13;
+  --bg-card: #2B1E16;
+  --border-glow: #422D21;
+  --primary: #6F4E37;
+  --secondary: #E5E4E2;
+  --accent: #E6E0F0;
+  --text-main: #E5E4E2;
+  --text-muted: #B3AAA4;
+
+  /* Aliases without leading hyphens for systems reading raw names */
+  bg-app: #1A130E;
+  bg-sidebar: #241A13;
+  bg-card: #2B1E16;
+  border-glow: #422D21;
+  primary: #6F4E37;
+  secondary: #E5E4E2;
+  accent: #E6E0F0;
+  text-main: #E5E4E2;
+  text-muted: #B3AAA4;
+
+  /* Standard Tailwind mapped variables used across the application */
+  --color-bg: #1A130E;
+  --color-surface: #241A13;
+  --color-card: #2B1E16;
+  --color-card-hover: #36271D;
+  --color-border: #422D21;
+  --color-text: #E5E4E2;
+  --color-muted: #B3AAA4;
+  --color-subtle: #150F0B;
+  --color-accent: #6F4E37;
+  --color-accent-hover: #855F43;
+  --color-accent-muted: rgba(111, 78, 55, 0.25);
+  --color-highlight: #E6E0F0;
+  --color-accent-glow: rgba(230, 224, 240, 0.35);
+  --color-card-shadow: rgba(0, 0, 0, 0.65);
+  --feature-theme-color: #6F4E37;
+  --feature-theme-glow: rgba(111, 78, 55, 0.4);
+
+  /* Velocity Bar Graph filled colors */
+  --bar-filled: #6F4E37;
+  --bar-filled-gradient: linear-gradient(to top, #6F4E37, #E6E0F0);
+  --bar-empty: rgba(43, 30, 22, 0.6);
+  --bar-glow: rgba(230, 224, 240, 0.4);
+}
+
+/* Cyber Jet & Hot Pink Theme */
+[data-theme="cyber-jet"],
+html[data-theme="cyber-jet"],
+[data-theme='cyber-jet'],
+html[data-theme='cyber-jet'] {
+  /* Direct variables requested in prompt */
+  --bg-app: #0B0B0B;
+  --bg-sidebar: #101010;
+  --bg-card: #151515;
+  --border-glow: #282828;
+  --primary: #FF2DA3;
+  --secondary: #D4FF3F;
+  --accent: #D4FF3F;
+  --text-main: #FFFFFF;
+  --text-muted: #8E8E8E;
+
+  /* Aliases without leading hyphens for systems reading raw names */
+  bg-app: #0B0B0B;
+  bg-sidebar: #101010;
+  bg-card: #151515;
+  border-glow: #282828;
+  primary: #FF2DA3;
+  secondary: #D4FF3F;
+  accent: #D4FF3F;
+  text-main: #FFFFFF;
+  text-muted: #8E8E8E;
+
+  /* Standard Tailwind mapped variables used across the application */
+  --color-bg: #0B0B0B;
+  --color-surface: #101010;
+  --color-card: #151515;
+  --color-card-hover: #1D1D1D;
+  --color-border: #282828;
+  --color-text: #FFFFFF;
+  --color-muted: #8E8E8E;
+  --color-subtle: #070707;
+  --color-accent: #FF2DA3;
+  --color-accent-hover: #FF4DAF;
+  --color-accent-muted: rgba(255, 45, 163, 0.25);
+  --color-highlight: #D4FF3F;
+  --color-accent-glow: rgba(255, 45, 163, 0.45);
+  --color-card-shadow: rgba(0, 0, 0, 0.85);
+  --feature-theme-color: #FF2DA3;
+  --feature-theme-glow: rgba(255, 45, 163, 0.45);
+
+  /* Velocity Bar Graph filled colors */
+  --bar-filled: #FF2DA3;
+  --bar-filled-gradient: linear-gradient(to top, #FF2DA3, #D4FF3F);
+  --bar-empty: rgba(21, 21, 21, 0.6);
+  --bar-glow: rgba(255, 45, 163, 0.5);
 }
 
 /* Feature Color Coded Sections for Chromatic Identity & Midnight Cyberpunk */

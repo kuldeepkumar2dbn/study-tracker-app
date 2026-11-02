@@ -16,9 +16,11 @@ import {
   ChevronRight, 
   Target, 
   Check, 
-  Calendar as CalendarIcon 
+  Calendar as CalendarIcon,
+  Sparkles 
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useTheme } from '../../context/ThemeContext';
 import RollingNumber from '../RollingNumber';
 import RadialProgressRing from '../RadialProgressRing';
 import { celebrateTaskCompletion } from '../../utils/confetti';
@@ -47,6 +49,8 @@ export default function DashboardTab({ onNavigateTab }) {
     markSyllabusTopicCompleted,
     markSkillVideoCompleted
   } = useData();
+
+  const { theme, setTheme, themes } = useTheme();
 
   const [isAddRoutineModalOpen, setIsAddRoutineModalOpen] = useState(false);
   const [syllabusPrompt, setSyllabusPrompt] = useState(null);
@@ -247,6 +251,37 @@ export default function DashboardTab({ onNavigateTab }) {
               <span>+ Log +30m Study</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Theme Switcher Controller Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl glass-panel border border-theme-border shadow-sm">
+        <div className="flex items-center gap-2 text-xs text-theme-muted font-medium">
+          <Sparkles className="w-3.5 h-3.5 text-theme-accent" />
+          <span className="font-semibold text-theme-text">Select Color Theme:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2" id="dashboard-theme-switcher">
+          {(themes || []).map((t) => {
+            const isSelected = theme === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                  isSelected
+                    ? 'bg-theme-accent text-white shadow-glow-accent'
+                    : 'bg-theme-surface/80 hover:bg-theme-cardHover text-theme-muted hover:text-theme-text border border-theme-border/60'
+                }`}
+                title={`Switch to ${t.name}`}
+              >
+                <span 
+                  className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" 
+                  style={{ backgroundColor: t.primaryColor }} 
+                />
+                <span>{t.name}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

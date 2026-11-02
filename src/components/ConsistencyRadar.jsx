@@ -276,12 +276,16 @@ export default function ConsistencyRadar({ dailyActivity, streak, className = ''
                       title={day.tooltipText}
                     />
                   ) : (
-                    // Emerald gradient bar scaled to hour value
+                    // Bar filled dynamically based on custom theme variable colors (--bar-filled / --primary)
                     <div 
-                      style={{ height: `${day.heightPercent}%` }}
-                      className={`w-full max-w-[14px] rounded-t-sm sm:rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-sm transition-all duration-300 group-hover:brightness-110 group-hover:shadow-[0_0_12px_rgba(52,211,153,0.5)] ${
+                      style={{ 
+                        height: `${day.heightPercent}%`,
+                        backgroundColor: 'var(--bar-filled, var(--primary, #10b981))',
+                        backgroundImage: 'var(--bar-filled-gradient, linear-gradient(to top, var(--bar-filled, var(--primary, #059669)), var(--color-highlight, var(--accent, #34d399))))'
+                      }}
+                      className={`w-full max-w-[14px] rounded-t-sm sm:rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-sm transition-all duration-300 group-hover:brightness-110 group-hover:shadow-[0_0_12px_var(--color-accent-glow,rgba(52,211,153,0.5))] ${
                         day.isToday 
-                          ? 'ring-2 ring-emerald-300/90 ring-offset-1 ring-offset-theme-bg shadow-[0_0_10px_rgba(52,211,153,0.6)]' 
+                          ? 'ring-2 ring-emerald-300/90 ring-offset-1 ring-offset-theme-bg shadow-[0_0_10px_var(--color-accent-glow,rgba(52,211,153,0.6))]' 
                           : ''
                       }`}
                       title={day.tooltipText}
@@ -349,8 +353,14 @@ export default function ConsistencyRadar({ dailyActivity, streak, className = ''
             <span>0h (Baseline)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-3.5 rounded-t-sm bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-sm" />
-            <span className="text-emerald-400 font-medium">Focus Hours (up to {scaleCeiling}h)</span>
+            <span 
+              className="w-2.5 h-3.5 rounded-t-sm bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-sm" 
+              style={{
+                backgroundColor: 'var(--bar-filled, var(--primary, #10b981))',
+                backgroundImage: 'var(--bar-filled-gradient, linear-gradient(to top, var(--bar-filled, var(--primary, #059669)), var(--color-highlight, var(--accent, #34d399))))'
+              }}
+            />
+            <span className="text-emerald-400 font-medium" style={{ color: 'var(--primary, #34d399)' }}>Focus Hours (up to {scaleCeiling}h)</span>
           </div>
         </div>
 

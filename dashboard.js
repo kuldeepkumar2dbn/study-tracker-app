@@ -29,6 +29,7 @@ import {
   updateWeeklyVelocityBenchmark
 } from './src/utils/weeklyVelocity.js';
 import DashboardTab from './src/components/tabs/DashboardTab.jsx';
+import { THEMES, getTheme, setTheme, toggleTheme } from './settings.js';
 
 // Browser global registration & event listening
 if (typeof window !== 'undefined') {
@@ -57,7 +58,11 @@ export {
   formatHeatmapTooltip,
   getActivityColorClass,
   calculateHeatmapMatrix,
-  DashboardTab
+  DashboardTab,
+  THEMES,
+  getTheme,
+  setTheme,
+  toggleTheme
 };
 
 export default {
@@ -70,5 +75,9 @@ export default {
   formatHeatmapTooltip,
   getActivityColorClass,
   calculateHeatmapMatrix,
-  DashboardTab
+  DashboardTab,
+  THEMES,
+  getTheme,
+  setTheme,
+  toggleTheme
 };
