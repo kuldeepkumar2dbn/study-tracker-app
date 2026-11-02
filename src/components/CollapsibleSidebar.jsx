@@ -300,7 +300,7 @@ export default function CollapsibleSidebar({
       <aside 
         id="app-sidebar"
         aria-label="Sidebar Navigation Rail"
-        className={`fixed top-16 bottom-0 left-0 z-40 border-r border-theme-border bg-theme-surface/90 backdrop-blur-xl transition-all duration-300 ease-in-out select-none flex flex-col ${
+        className={`fixed top-16 bottom-0 left-0 z-40 border-r border-theme-border bg-theme-surface/90 backdrop-blur-xl transition-all duration-300 ease-in-out select-none flex flex-col shrink-0 ${
           isMobileOpen 
             ? 'translate-x-0 shadow-2xl w-[250px]' 
             : '-translate-x-full md:translate-x-0'

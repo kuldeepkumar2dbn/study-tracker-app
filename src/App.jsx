@@ -56,7 +56,7 @@ export default function App() {
   const pendingRoutineSlots = routineSlots.filter(s => !s.completed).length;
 
   return (
-    <div className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200">
+    <div className="min-h-screen flex flex-col w-full bg-theme-bg text-theme-text transition-colors duration-200">
       
       {/* Top Navbar */}
       <Navbar 
@@ -66,10 +66,10 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-8">
+      <main id="main-content" className="flex-1 w-full max-w-none min-w-0 p-6 pt-5 pb-8">
 
         {/* Tab Content Display */}
-        <div key={activeTab} className="transition-all duration-300 animate-tab-enter">
+        <div key={activeTab} className="w-full transition-all duration-300 animate-tab-enter">
           {activeTab === 'dashboard' && <DashboardTab onNavigateTab={setActiveTab} />}
           {activeTab === 'routine' && <DailyRoutine />}
           {activeTab === 'calendar' && <CalendarView />}
@@ -85,8 +85,8 @@ export default function App() {
       </main>
 
       {/* Subtle Footer */}
-      <footer className="mt-auto border-t border-theme-border/60 py-4 text-center text-xs text-theme-muted">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <footer className="mt-auto border-t border-theme-border/60 py-4 text-center text-xs text-theme-muted w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="flex items-center gap-1.5">
             <span>StudyFlow</span>
             <span>•</span>

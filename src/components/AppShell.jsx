@@ -172,7 +172,7 @@ export function SharedHeader({
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Brand Logo & Sidebar Hamburger Toggle */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -568,8 +568,8 @@ export function SharedNavBar() {
 // Persistent Footer
 export function SharedFooter() {
   return (
-    <footer className="mt-auto border-t border-theme-border/60 py-4 text-center text-xs text-theme-muted">
-      <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+    <footer className="mt-auto border-t border-theme-border/60 py-4 text-center text-xs text-theme-muted w-full">
+      <div className="w-full px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
         <p className="flex items-center gap-1.5">
           <span>StudyFlow</span>
           <span>•</span>
@@ -903,7 +903,7 @@ export function AppLayout({ activeTabId, children }) {
 
   return (
     <div 
-      className="min-h-screen flex flex-col bg-theme-bg text-theme-text transition-colors duration-200"
+      className="min-h-screen flex flex-col w-full bg-theme-bg text-theme-text transition-colors duration-200"
       data-active-feature={activeTabId || 'dashboard'}
     >
       {/* Ambient Gradient Mesh Canvas (if not already injected at top of body in static HTML) */}
@@ -927,7 +927,7 @@ export function AppLayout({ activeTabId, children }) {
       {/* Access Denied Alert Toast */}
       {accessDeniedAlert && (
         <div className="w-full bg-rose-600 text-white py-2.5 px-4 shadow-lg flex items-center justify-between text-xs sm:text-sm font-semibold animate-fadeIn z-50">
-          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3">
+          <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <ShieldAlert className="w-4 h-4 shrink-0 text-white" />
               <span>{accessDeniedAlert}</span>
@@ -956,7 +956,7 @@ export function AppLayout({ activeTabId, children }) {
               : 'bg-gradient-to-r from-indigo-900/90 via-blue-900/80 to-indigo-900/90 border-indigo-500/40 text-indigo-100'
           }`}
         >
-          <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-3">
+          <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               {announcement.urgency === 'warning' ? (
                 <span className="p-1 rounded-lg bg-rose-500/25 text-rose-300 shrink-0"><AlertTriangle className="w-4 h-4" /></span>
@@ -999,7 +999,7 @@ export function AppLayout({ activeTabId, children }) {
       )}
 
       {/* Main Body with Left Collapsible Sidebar Navigation Rail and Main View */}
-      <div className="flex-1 flex w-full relative">
+      <div className="flex-1 flex w-full relative min-h-[calc(100vh-4rem)]">
         {/* Left Collapsible Sidebar Navigation Rail across all pages */}
         <CollapsibleSidebar 
           activeTabId={activeTabId} 
@@ -1016,16 +1016,16 @@ export function AppLayout({ activeTabId, children }) {
         {/* Main Content Area - Desktop margin matches sidebar state with smooth transition */}
         <div 
           id="main-layout-wrapper"
-          className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ease-in-out ${
+          className={`flex-1 min-w-0 w-full flex flex-col transition-all duration-300 ease-in-out ${
             isSidebarExpanded ? 'md:ml-[250px]' : 'md:ml-16'
           }`}
         >
           <main 
             id="main-content" 
-            className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-8"
+            className="flex-1 w-full max-w-none min-w-0 p-6 pt-5 pb-8"
           >
             {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
-            <div className="transition-all duration-300 animate-tab-enter">
+            <div className="w-full transition-all duration-300 animate-tab-enter">
               {isPlatformMaintenanceLocked ? (
                 <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-amber-500/40 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-rose-500/20 border border-amber-500/40 flex items-center justify-center mb-4 text-amber-400 shadow-inner">

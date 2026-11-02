@@ -189,10 +189,10 @@ export default function DashboardTab({ onNavigateTab }) {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn w-full">
       
       {/* Top Banner & Motivation */}
-      <div className="relative overflow-hidden rounded-2xl glass-panel p-6 sm:p-8 border border-theme-border shadow-glow-card card-glow-hover">
+      <div className="relative overflow-hidden rounded-2xl glass-panel p-6 sm:p-8 border border-theme-border shadow-glow-card card-glow-hover w-full">
         <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-theme-accent/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
@@ -255,19 +255,19 @@ export default function DashboardTab({ onNavigateTab }) {
       </div>
 
       {/* Theme Switcher Controller Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl glass-panel border border-theme-border shadow-sm">
+      <div className="flex flex-col gap-2.5 px-4 py-3 rounded-2xl glass-panel border border-theme-border shadow-sm w-full">
         <div className="flex items-center gap-2 text-xs text-theme-muted font-medium">
           <Sparkles className="w-3.5 h-3.5 text-theme-accent" />
           <span className="font-semibold text-theme-text">Select Color Theme:</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2" id="dashboard-theme-switcher">
+        <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5" id="dashboard-theme-switcher">
           {(themes || []).map((t) => {
             const isSelected = theme === t.id;
             return (
               <button
                 key={t.id}
                 onClick={() => setTheme(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                className={`w-full flex-1 flex items-center justify-center text-center truncate gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
                   isSelected
                     ? 'bg-theme-accent text-white shadow-glow-accent'
                     : 'bg-theme-surface/80 hover:bg-theme-cardHover text-theme-muted hover:text-theme-text border border-theme-border/60'
@@ -278,7 +278,7 @@ export default function DashboardTab({ onNavigateTab }) {
                   className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" 
                   style={{ backgroundColor: t.primaryColor }} 
                 />
-                <span>{t.name}</span>
+                <span className="truncate">{t.name}</span>
               </button>
             );
           })}
@@ -286,11 +286,11 @@ export default function DashboardTab({ onNavigateTab }) {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Today's Target Circular Mini Card with Interactive SVG Radial Progress Ring */}
         <div 
           onClick={() => onNavigateTab('routine')}
-          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-theme-accent/40 card-glow-hover transition-all cursor-pointer group"
+          className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-theme-accent/40 card-glow-hover transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Daily Target</span>
@@ -323,31 +323,33 @@ export default function DashboardTab({ onNavigateTab }) {
         </div>
 
         {/* Metric 2: Active Streak */}
-        <div className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-amber-500/40 card-glow-hover transition-all">
+        <div className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-amber-500/40 card-glow-hover transition-all">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Active Streak</span>
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
               <Flame className="w-4 h-4 fill-amber-500 animate-flame-flicker" />
             </div>
           </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="font-display font-extrabold text-2xl sm:text-3xl font-mono-numbers text-amber-500">
-              <RollingNumber value={safeStreakData.streakCount} />
-            </span>
-            <span className="text-xs text-theme-muted font-medium">
-              {safeStreakData.streakCount === 0 ? "0 days streak" : "consecutive days"}
-            </span>
+          <div>
+            <div className="flex items-baseline space-x-2">
+              <span className="font-display font-extrabold text-2xl sm:text-3xl font-mono-numbers text-amber-500">
+                <RollingNumber value={safeStreakData.streakCount} />
+              </span>
+              <span className="text-xs text-theme-muted font-medium">
+                {safeStreakData.streakCount === 0 ? "0 days streak" : "consecutive days"}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-theme-muted flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${safeStreakData.streakCount === 0 ? 'bg-amber-400/50' : 'bg-emerald-500'}`}></span>
+              <span>{safeStreakData.streakCount === 0 ? "Day 1 - Ready to start!" : "Study flame burning hot"}</span>
+            </p>
           </div>
-          <p className="mt-2 text-xs text-theme-muted flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${safeStreakData.streakCount === 0 ? 'bg-amber-400/50' : 'bg-emerald-500'}`}></span>
-            <span>{safeStreakData.streakCount === 0 ? "Day 1 - Ready to start!" : "Study flame burning hot"}</span>
-          </p>
         </div>
 
         {/* Metric 3: Next Exam or Assignment */}
         <div 
           onClick={() => onNavigateTab('exams')}
-          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-rose-500/40 card-glow-hover transition-all cursor-pointer"
+          className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-rose-500/40 card-glow-hover transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Next Deadline</span>
@@ -356,7 +358,7 @@ export default function DashboardTab({ onNavigateTab }) {
             </div>
           </div>
           {nearestDeadline ? (
-            <>
+            <div>
               <div className="flex items-baseline space-x-2">
                 <span className="font-display font-extrabold text-2xl font-mono-numbers text-rose-500">
                   <RollingNumber value={getDaysLeft(nearestDeadline.date)} suffix="d" />
@@ -366,7 +368,7 @@ export default function DashboardTab({ onNavigateTab }) {
               <p className="mt-2 text-xs font-medium text-theme-text truncate" title={nearestDeadline.title}>
                 {nearestDeadline.title}
               </p>
-            </>
+            </div>
           ) : (
             <div>
               <p className="text-xs font-semibold text-theme-text">No upcoming exams</p>
@@ -387,7 +389,7 @@ export default function DashboardTab({ onNavigateTab }) {
         {/* Metric 4: Spaced Repetition Due */}
         <div 
           onClick={() => onNavigateTab('revision')}
-          className="rounded-2xl glass-panel p-5 border border-theme-border hover:border-emerald-500/40 card-glow-hover transition-all cursor-pointer"
+          className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-emerald-500/40 card-glow-hover transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-theme-muted uppercase tracking-wider">Revision Queue</span>
@@ -395,18 +397,20 @@ export default function DashboardTab({ onNavigateTab }) {
               <Repeat className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="font-display font-extrabold text-2xl font-mono-numbers text-emerald-400">
-              <RollingNumber value={todayRevisionQueue.length} />
-            </span>
-            <span className="text-xs text-theme-muted font-mono-numbers">
-              {todayRevisionQueue.length === 0 ? "0 topics due today" : "topics due today"}
-            </span>
+          <div>
+            <div className="flex items-baseline space-x-2">
+              <span className="font-display font-extrabold text-2xl font-mono-numbers text-emerald-400">
+                <RollingNumber value={todayRevisionQueue.length} />
+              </span>
+              <span className="text-xs text-theme-muted font-mono-numbers">
+                {todayRevisionQueue.length === 0 ? "0 topics due today" : "topics due today"}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-theme-accent font-medium flex items-center justify-between">
+              <span>D+1 to D+30 intervals</span>
+              <span>Review &rarr;</span>
+            </p>
           </div>
-          <p className="mt-2 text-xs text-theme-accent font-medium flex items-center justify-between">
-            <span>D+1 to D+30 intervals</span>
-            <span>Review &rarr;</span>
-          </p>
         </div>
       </div>
 
@@ -417,7 +421,7 @@ export default function DashboardTab({ onNavigateTab }) {
       />
 
       {/* Middle Grid: Routine Time-Blocks Checklist + Today's Revision Queue */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
         
         {/* Daily Routine Time-Blocks Checklist (6 cols) */}
         <div className="lg:col-span-6 rounded-2xl glass-panel p-6 border border-theme-border flex flex-col justify-between">
@@ -591,7 +595,7 @@ export default function DashboardTab({ onNavigateTab }) {
       </div>
 
       {/* Bottom Grid: Deadline Radar Cards + Quick Calendar Access */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
         
         {/* Deadline Radar Preview */}
         <div className="rounded-2xl glass-panel p-6 border border-theme-border">

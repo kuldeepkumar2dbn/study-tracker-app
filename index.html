@@ -134,6 +134,21 @@
         position: relative;
         z-index: 1;
       }
+      #main-content, main {
+        flex: 1 1 0%;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        padding: 1.5rem;
+      }
+      #main-layout-wrapper {
+        flex: 1 1 0%;
+        width: 100%;
+        min-width: 0;
+      }
+      #app-sidebar {
+        flex-shrink: 0;
+      }
     </style>
     <!-- Immediate storage cleanup for legacy/expired tokens -->
     <script>

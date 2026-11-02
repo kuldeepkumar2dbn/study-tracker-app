@@ -150,7 +150,7 @@ export default function ConsistencyRadar({ dailyActivity, streak, className = ''
   return (
     <div 
       id="consistency-radar-card"
-      className={`consistency-radar-card rounded-2xl glass-panel p-6 border border-theme-border shadow-glow-card card-glow-hover relative overflow-hidden transition-all ${className}`}
+      className={`consistency-radar-card rounded-2xl glass-panel p-6 border border-theme-border shadow-glow-card card-glow-hover relative overflow-hidden transition-all w-full ${className}`}
     >
       {/* Background Emerald Accent Glow */}
       <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
