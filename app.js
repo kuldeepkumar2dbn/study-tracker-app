@@ -15,10 +15,12 @@ import {
   checkAndTriggerEndOfDayRollover, 
   patchUserData 
 } from './storage-helper.js';
+import { applySelectedTheme } from './src/components/tabs/DashboardTab.jsx';
 
 export {
   handleEndOfDayRollover,
-  checkAndTriggerEndOfDayRollover
+  checkAndTriggerEndOfDayRollover,
+  applySelectedTheme
 };
 
 /**
@@ -56,9 +58,20 @@ export function initAppHydration(userId = null, customTodayStr = null) {
   };
 }
 
-// Automatically run hydration check when loaded in browser window
+// Automatically run hydration check and theme pill activation when loaded in browser window
 if (typeof window !== 'undefined') {
   window.addEventListener('DOMContentLoaded', () => {
+    try {
+      const savedTheme = (typeof localStorage !== 'undefined' && (
+        localStorage.getItem('studyflow_app_theme') ||
+        localStorage.getItem('studyflow_theme') ||
+        localStorage.getItem('theme')
+      )) || 'cyberpunk';
+      applySelectedTheme(savedTheme);
+    } catch (err) {
+      console.warn('Error during DOMContentLoaded theme activation in app.js:', err);
+    }
+
     try {
       if (!isDemoUser()) {
         initAppHydration();

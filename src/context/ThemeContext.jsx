@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Sun, Sparkles, Moon, Zap, Sunset } from 'lucide-react';
+import { Sun, Sparkles, Moon, Zap, Sunset, Crown } from 'lucide-react';
 
 /**
  * Feature-Specific Vibrant Color Identity Mapping
@@ -163,6 +163,21 @@ export const THEMES = [
     tag: 'Cyber Jet',
     isDark: true,
     isFeatureCoded: false
+  },
+  {
+    id: 'black-gold',
+    name: '👑 Onyx & Gold',
+    description: 'Warm light-golden background with stark black text and pure white borders',
+    icon: Crown,
+    primaryColor: '#0F0F0F',
+    bgColor: '#E2C992',
+    surfaceColor: '#D8BC82',
+    cardColor: '#ECD9AE',
+    textColor: '#000000',
+    borderColor: '#FFFFFF',
+    tag: 'Onyx & Gold',
+    isDark: false,
+    isFeatureCoded: false
   }
 ];
 
@@ -179,6 +194,7 @@ function normalizeTheme(themeKey) {
   if (cleanKey === 'nord') return 'chromatic';
   if (cleanKey === 'mocha' || cleanKey === 'mocha-lavender' || cleanKey.includes('mocha')) return 'mocha-lavender';
   if (cleanKey === 'cyber-jet' || cleanKey === 'cyberjet' || cleanKey.includes('cyber jet') || cleanKey.includes('hot pink')) return 'cyber-jet';
+  if (cleanKey === 'black-gold' || cleanKey === 'onyx-gold' || cleanKey === 'onyx' || cleanKey === 'gold' || cleanKey.includes('onyx') || cleanKey.includes('black-gold')) return 'black-gold';
   if (THEMES.some(t => t.id === cleanKey)) return cleanKey;
   return 'cyberpunk';
 }
@@ -186,7 +202,7 @@ function normalizeTheme(themeKey) {
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('theme');
+      const saved = localStorage.getItem('studyflow_app_theme') || localStorage.getItem(STORAGE_KEY) || localStorage.getItem('theme');
       if (saved) {
         return normalizeTheme(saved);
       }
@@ -200,6 +216,7 @@ export function ThemeProvider({ children }) {
     const valid = normalizeTheme(newTheme);
     setThemeState(valid);
     try {
+      localStorage.setItem('studyflow_app_theme', valid);
       localStorage.setItem(STORAGE_KEY, valid);
       localStorage.setItem('theme', valid);
       document.documentElement.setAttribute('data-theme', valid);

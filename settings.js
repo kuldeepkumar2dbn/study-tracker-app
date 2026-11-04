@@ -75,6 +75,18 @@ export const THEMES = [
     textColor: '#FFFFFF',
     borderColor: '#282828',
     isDark: true
+  },
+  {
+    id: 'black-gold',
+    name: '👑 Onyx & Gold',
+    tag: 'Onyx & Gold',
+    primaryColor: '#0F0F0F',
+    bgColor: '#E2C992',
+    surfaceColor: '#D8BC82',
+    cardColor: '#ECD9AE',
+    textColor: '#000000',
+    borderColor: '#FFFFFF',
+    isDark: false
   }
 ];
 
@@ -88,6 +100,7 @@ export function normalizeTheme(themeKey) {
   if (cleanKey === 'nord') return 'chromatic';
   if (cleanKey === 'mocha' || cleanKey === 'mocha-lavender' || cleanKey.includes('mocha')) return 'mocha-lavender';
   if (cleanKey === 'cyber-jet' || cleanKey === 'cyberjet' || cleanKey.includes('cyber jet') || cleanKey.includes('hot pink')) return 'cyber-jet';
+  if (cleanKey === 'black-gold' || cleanKey === 'onyx-gold' || cleanKey === 'onyx' || cleanKey === 'gold' || cleanKey.includes('onyx') || cleanKey.includes('black-gold')) return 'black-gold';
   const matched = THEMES.find(t => t.id === cleanKey);
   if (matched) return matched.id;
   return 'cyberpunk';
@@ -96,11 +109,26 @@ export function normalizeTheme(themeKey) {
 export function getTheme() {
   if (typeof localStorage === 'undefined') return 'cyberpunk';
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('theme');
+    const saved = localStorage.getItem('studyflow_app_theme') || localStorage.getItem(STORAGE_KEY) || localStorage.getItem('theme');
     return normalizeTheme(saved);
   } catch {
     return 'cyberpunk';
   }
+}
+
+export function applySelectedTheme(themeId) {
+  const validTheme = setTheme(themeId);
+  if (typeof document !== 'undefined') {
+    const allButtons = document.querySelectorAll('.theme-pill, #dashboard-theme-switcher button, [data-theme-id]');
+    allButtons.forEach((btn) => {
+      btn.classList.remove('is-active');
+      const btnTheme = btn.getAttribute('data-theme-id') || btn.getAttribute('data-theme');
+      if (btnTheme === validTheme) {
+        btn.classList.add('is-active');
+      }
+    });
+  }
+  return validTheme;
 }
 
 export function setTheme(themeId) {
@@ -118,6 +146,7 @@ export function setTheme(themeId) {
 
   if (typeof localStorage !== 'undefined') {
     try {
+      localStorage.setItem('studyflow_app_theme', validTheme);
       localStorage.setItem(STORAGE_KEY, validTheme);
       localStorage.setItem('theme', validTheme);
     } catch (e) {
@@ -147,6 +176,7 @@ if (typeof window !== 'undefined') {
   window.setTheme = setTheme;
   window.getTheme = getTheme;
   window.toggleTheme = toggleTheme;
+  window.applySelectedTheme = applySelectedTheme;
   window.THEMES = THEMES;
 }
 
@@ -156,6 +186,7 @@ export default {
   normalizeTheme,
   getTheme,
   setTheme,
-  toggleTheme
+  toggleTheme,
+  applySelectedTheme
 };
 

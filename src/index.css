@@ -222,6 +222,61 @@ html[data-theme='cyber-jet'] {
   --mesh-blob-3: rgba(255, 45, 163, 0.18);
 }
 
+/* Onyx & Gold Theme (Warm Light-Golden Background, Stark Black Text, Crisp Pure White Borders) */
+[data-theme="black-gold"],
+html[data-theme="black-gold"],
+[data-theme='black-gold'],
+html[data-theme='black-gold'] {
+  --bg-app: #E2C992;
+  --bg-sidebar: #D8BC82;
+  --bg-card: #ECD9AE;
+  --border-glow: #FFFFFF;
+  --primary: #0F0F0F;
+  --secondary: #FFFFFF;
+  --accent: #0F0F0F;
+  --text-main: #000000;
+  --text-muted: #2E2414;
+
+  bg-app: #E2C992;
+  bg-sidebar: #D8BC82;
+  bg-card: #ECD9AE;
+  border-glow: #FFFFFF;
+  primary: #0F0F0F;
+  secondary: #FFFFFF;
+  accent: #0F0F0F;
+  text-main: #000000;
+  text-muted: #2E2414;
+
+  --color-bg: #E2C992;
+  --color-surface: #D8BC82;
+  --color-card: #ECD9AE;
+  --color-card-hover: #E5D1A2;
+  --color-border: #FFFFFF;
+  --color-text: #000000;
+  --color-muted: #2E2414;
+  --color-subtle: #D8BC82;
+  --color-accent: #0F0F0F;
+  --color-accent-hover: #262626;
+  --color-accent-muted: rgba(15, 15, 15, 0.15);
+  --color-highlight: #000000;
+  --color-accent-glow: rgba(255, 255, 255, 0.5);
+  --color-card-shadow: 0 1px 4px rgba(46, 36, 20, 0.1);
+  --feature-theme-color: #0F0F0F;
+  --feature-theme-glow: rgba(15, 15, 15, 0.25);
+
+  --bar-filled: #0F0F0F;
+  --bar-filled-gradient: linear-gradient(to top, #0F0F0F, #2E2414);
+  --bar-empty: rgba(216, 188, 130, 0.5);
+  --bar-glow: rgba(255, 255, 255, 0.4);
+  --primary-glow: rgba(15, 15, 15, 0.25);
+  --accent-glow: rgba(255, 255, 255, 0.8);
+
+  /* Ambient Gradient Mesh disabled/transparent */
+  --mesh-blob-1: transparent;
+  --mesh-blob-2: transparent;
+  --mesh-blob-3: transparent;
+}
+
 /* Feature Color Coded Sections for Chromatic Identity & Midnight Cyberpunk */
 /* Dashboard: Royal Indigo (#6366F1) */
 html[data-theme='chromatic'][data-active-feature='dashboard'],
@@ -741,6 +796,29 @@ input[type="range"]:active::-moz-range-thumb,
   box-shadow: 0 0 8px 2px var(--accent-glow, rgba(255, 255, 255, 0.6));
 }
 
+/* Animated Glowing Border Pulse for Active Theme Pill Button */
+@keyframes activeThemeBorderPulse {
+  0%, 100% {
+    border-color: var(--primary);
+    box-shadow: 0 0 10px 0 var(--primary-glow);
+  }
+  50% {
+    border-color: var(--secondary);
+    box-shadow: 0 0 20px 2px var(--accent-glow);
+  }
+}
+
+.theme-pill {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow, border-color;
+}
+
+.theme-pill.is-active {
+  animation: activeThemeBorderPulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 12px var(--primary-glow) !important;
+}
+
 /* 6. Performance Optimization for 60fps Smooth Transitions */
 .interactive-hoverable,
 .card-glow-hover,
@@ -889,6 +967,291 @@ main {
 #app-sidebar {
   flex-shrink: 0;
 }
+
+/* ==========================================================================
+   Onyx & Gold Warm Light-Golden, Stark Black & Pure White Overrides
+   ========================================================================== */
+
+/* 1. Disable ambient mesh canvas */
+html[data-theme="black-gold"] .ambient-mesh-canvas,
+[data-theme="black-gold"] .ambient-mesh-canvas {
+  display: none !important;
+}
+
+/* 2. Global View & Containers: Warm Muted Light-Golden Background (#E2C992) & Stark Black Text (#000000) */
+html[data-theme="black-gold"],
+html[data-theme="black-gold"] body,
+[data-theme="black-gold"] #app,
+[data-theme="black-gold"] #root,
+[data-theme="black-gold"] main,
+[data-theme="black-gold"] #main-content,
+[data-theme="black-gold"] #main-layout-wrapper {
+  background-color: #E2C992 !important;
+  color: #000000 !important;
+}
+
+/* 3. Sidebar & Top Header Background: Satin Medium-Light Gold (#D8BC82) & Pure White Border (#FFFFFF) */
+[data-theme="black-gold"] #app-sidebar,
+html[data-theme="black-gold"] #app-sidebar,
+[data-theme="black-gold"] aside,
+[data-theme="black-gold"] header,
+html[data-theme="black-gold"] header,
+[data-theme="black-gold"] .sticky.top-0 {
+  background-color: #D8BC82 !important;
+  color: #000000 !important;
+  border-color: #FFFFFF !important;
+  border-width: 1.5px !important;
+}
+
+/* 4. Cards, Modals, Dropdowns & Panels: Soft Champagne Gold (#ECD9AE) & 1.5px Pure White Borders (#FFFFFF) */
+[data-theme="black-gold"] .glass-panel,
+html[data-theme="black-gold"] .glass-panel,
+[data-theme="black-gold"] .glass-dropdown,
+html[data-theme="black-gold"] .glass-dropdown,
+[data-theme="black-gold"] .shadow-glow-card,
+html[data-theme="black-gold"] .shadow-glow-card,
+[data-theme="black-gold"] .card-glow-hover,
+html[data-theme="black-gold"] .card-glow-hover,
+[data-theme="black-gold"] .consistency-radar-card,
+html[data-theme="black-gold"] .consistency-radar-card,
+[data-theme="black-gold"] #consistency-radar-card {
+  background: #ECD9AE !important;
+  background-color: #ECD9AE !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1.5px solid #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  box-shadow: 0 1px 4px rgba(46, 36, 20, 0.1) !important;
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] .card-glow-hover:hover,
+html[data-theme="black-gold"] .card-glow-hover:hover {
+  border-color: #FFFFFF !important;
+  box-shadow: 0 3px 8px rgba(46, 36, 20, 0.16) !important;
+  transform: translateY(-1px);
+}
+
+/* 5. All Borders: 1.5px Solid Pure White (#FFFFFF) on all cards, dividers, pills, badges */
+[data-theme="black-gold"] *[class*="border-theme-border"],
+[data-theme="black-gold"] *[class*="border-slate-800"],
+[data-theme="black-gold"] *[class*="border-slate-700"],
+[data-theme="black-gold"] *[class*="border-slate-900"],
+[data-theme="black-gold"] *[class*="border-zinc-800"],
+[data-theme="black-gold"] *[class*="border-zinc-700"],
+[data-theme="black-gold"] *[class*="border-gray-800"],
+[data-theme="black-gold"] *[class*="border-gray-700"],
+[data-theme="black-gold"] #app-sidebar div[class*="border"],
+[data-theme="black-gold"] header div[class*="border"],
+[data-theme="black-gold"] .border-t,
+[data-theme="black-gold"] .border-b,
+[data-theme="black-gold"] .border-l,
+[data-theme="black-gold"] .border-r {
+  border-color: #FFFFFF !important;
+}
+
+/* Badges & Status Pills */
+[data-theme="black-gold"] span.rounded-full,
+[data-theme="black-gold"] div.rounded-full,
+[data-theme="black-gold"] .badge,
+[data-theme="black-gold"] span[class*="rounded-xl"],
+[data-theme="black-gold"] div[class*="rounded-xl"]:not(.glass-panel):not(#app-sidebar) {
+  border-color: #FFFFFF !important;
+}
+
+/* 6. Text Hierarchy: Stark Black (#000000) for Headings, Numbers, Timers, Body Text; Espresso-Black (#2E2414) for Secondary Text */
+[data-theme="black-gold"] h1,
+[data-theme="black-gold"] h2,
+[data-theme="black-gold"] h3,
+[data-theme="black-gold"] h4,
+[data-theme="black-gold"] h5,
+[data-theme="black-gold"] h6,
+[data-theme="black-gold"] strong,
+[data-theme="black-gold"] b,
+[data-theme="black-gold"] .font-mono-numbers,
+[data-theme="black-gold"] [class*="font-mono-numbers"],
+[data-theme="black-gold"] .font-display,
+[data-theme="black-gold"] [class*="font-display"],
+[data-theme="black-gold"] [class*="font-bold"],
+[data-theme="black-gold"] [class*="font-extrabold"],
+[data-theme="black-gold"] .text-theme-text,
+[data-theme="black-gold"] span.letter-fade-in {
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] p,
+[data-theme="black-gold"] label,
+[data-theme="black-gold"] .text-theme-muted,
+[data-theme="black-gold"] span.text-theme-muted,
+[data-theme="black-gold"] [class*="text-theme-muted"] {
+  color: #2E2414 !important;
+}
+
+/* 7. Override Hardcoded Dark Classes: Backgrounds, Light Text, Dark Borders */
+[data-theme="black-gold"] [class*="bg-[#0b0b0b]"],
+[data-theme="black-gold"] [class*="bg-[#12141a]"],
+[data-theme="black-gold"] [class*="bg-[#080808]"],
+[data-theme="black-gold"] [class*="bg-[#050508]"],
+[data-theme="black-gold"] [class*="bg-[#101010]"],
+[data-theme="black-gold"] [class*="bg-[#151515]"],
+[data-theme="black-gold"] [class*="bg-[#121320]"],
+[data-theme="black-gold"] [class*="bg-slate-900"],
+[data-theme="black-gold"] [class*="bg-slate-950"],
+[data-theme="black-gold"] [class*="bg-slate-800"],
+[data-theme="black-gold"] [class*="bg-zinc-900"],
+[data-theme="black-gold"] [class*="bg-zinc-950"],
+[data-theme="black-gold"] [class*="bg-gray-900"],
+[data-theme="black-gold"] [class*="bg-gray-950"] {
+  background-color: #ECD9AE !important;
+}
+
+/* Light Text Overrides to Black/Espresso (excluding primary black action buttons) */
+[data-theme="black-gold"] .text-white:not(.btn-primary):not(.btn-primary-action):not(.theme-pill.is-active):not(#app-sidebar a[style*="background"]):not(#app-sidebar a.text-white):not(#app-sidebar a.shadow-lg),
+[data-theme="black-gold"] [class*="text-slate-100"]:not(.btn-primary):not(.btn-primary-action),
+[data-theme="black-gold"] [class*="text-slate-200"]:not(.btn-primary):not(.btn-primary-action),
+[data-theme="black-gold"] [class*="text-slate-300"]:not(.btn-primary):not(.btn-primary-action),
+[data-theme="black-gold"] [class*="text-zinc-100"]:not(.btn-primary):not(.btn-primary-action),
+[data-theme="black-gold"] [class*="text-zinc-200"]:not(.btn-primary):not(.btn-primary-action),
+[data-theme="black-gold"] [class*="text-gray-100"]:not(.btn-primary):not(.btn-primary-action),
+[data-theme="black-gold"] [class*="text-gray-200"]:not(.btn-primary):not(.btn-primary-action) {
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] [class*="text-slate-400"],
+[data-theme="black-gold"] [class*="text-slate-500"],
+[data-theme="black-gold"] [class*="text-zinc-400"],
+[data-theme="black-gold"] [class*="text-zinc-500"],
+[data-theme="black-gold"] [class*="text-gray-400"],
+[data-theme="black-gold"] [class*="text-gray-500"] {
+  color: #2E2414 !important;
+}
+
+/* 8. Primary Action Buttons: #0F0F0F Black Background, #FFFFFF Text, and 1.5px Solid #FFFFFF Border */
+[data-theme="black-gold"] .btn-primary,
+html[data-theme="black-gold"] .btn-primary,
+[data-theme="black-gold"] .btn-primary-action,
+html[data-theme="black-gold"] .btn-primary-action,
+[data-theme="black-gold"] button[type="submit"],
+[data-theme="black-gold"] .sidebar-action-btn,
+[data-theme="black-gold"] #sidebar-action-btn {
+  background: #0F0F0F !important;
+  background-color: #0F0F0F !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #FFFFFF !important;
+  box-shadow: 0 2px 8px rgba(15, 15, 15, 0.3) !important;
+}
+
+[data-theme="black-gold"] .btn-primary *,
+html[data-theme="black-gold"] .btn-primary *,
+[data-theme="black-gold"] .btn-primary-action *,
+html[data-theme="black-gold"] .btn-primary-action *,
+[data-theme="black-gold"] .btn-primary svg,
+[data-theme="black-gold"] .btn-primary-action svg {
+  color: #FFFFFF !important;
+  fill: #FFFFFF !important;
+}
+
+/* Active Sidebar Navigation Item */
+[data-theme="black-gold"] #app-sidebar nav a[style*="background"],
+[data-theme="black-gold"] #app-sidebar nav a.shadow-lg,
+[data-theme="black-gold"] #app-sidebar nav a.text-white,
+[data-theme="black-gold"] #app-sidebar nav a.group.border {
+  background: #0F0F0F !important;
+  background-color: #0F0F0F !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #FFFFFF !important;
+  box-shadow: 0 2px 8px rgba(15, 15, 15, 0.4) !important;
+}
+
+[data-theme="black-gold"] #app-sidebar nav a[style*="background"] *,
+[data-theme="black-gold"] #app-sidebar nav a.shadow-lg *,
+[data-theme="black-gold"] #app-sidebar nav a.text-white * {
+  color: #FFFFFF !important;
+}
+
+/* Inactive Sidebar Navigation Items */
+[data-theme="black-gold"] #app-sidebar nav a:not([style*="background"]):not(.shadow-lg) {
+  color: #2E2414 !important;
+  border: 1.5px solid transparent !important;
+}
+
+[data-theme="black-gold"] #app-sidebar nav a:not([style*="background"]):not(.shadow-lg):hover {
+  background-color: rgba(236, 217, 174, 0.8) !important;
+  color: #000000 !important;
+  border: 1.5px solid #FFFFFF !important;
+}
+
+[data-theme="black-gold"] #app-sidebar nav a:not([style*="background"]):not(.shadow-lg) * {
+  color: #2E2414 !important;
+}
+
+[data-theme="black-gold"] #app-sidebar nav a:not([style*="background"]):not(.shadow-lg):hover * {
+  color: #000000 !important;
+}
+
+/* Active Theme Pill */
+[data-theme="black-gold"] .theme-pill.is-active,
+[data-theme="black-gold"] #dashboard-theme-switcher .theme-pill.is-active,
+html[data-theme="black-gold"] .theme-pill.is-active {
+  animation: none !important;
+  background: #0F0F0F !important;
+  background-color: #0F0F0F !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #FFFFFF !important;
+  box-shadow: 0 2px 8px rgba(15, 15, 15, 0.35) !important;
+}
+
+[data-theme="black-gold"] .theme-pill.is-active *,
+html[data-theme="black-gold"] .theme-pill.is-active * {
+  color: #FFFFFF !important;
+}
+
+/* Inactive Theme Pills */
+[data-theme="black-gold"] .theme-pill:not(.is-active),
+[data-theme="black-gold"] #dashboard-theme-switcher .theme-pill:not(.is-active) {
+  background: rgba(236, 217, 174, 0.6) !important;
+  color: #2E2414 !important;
+  border: 1.5px solid #FFFFFF !important;
+}
+
+[data-theme="black-gold"] .theme-pill:not(.is-active) * {
+  color: #2E2414 !important;
+}
+
+[data-theme="black-gold"] .theme-pill:not(.is-active):hover {
+  background: rgba(236, 217, 174, 0.95) !important;
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] .theme-pill:not(.is-active):hover * {
+  color: #000000 !important;
+}
+
+/* Secondary Action Buttons (e.g. "+ Log +30m Study") */
+[data-theme="black-gold"] button:not(.btn-primary):not(.btn-primary-action):not(.theme-pill):not(#app-sidebar a):not(#sidebar-toggle-btn) {
+  background: #ECD9AE !important;
+  border: 1.5px solid #FFFFFF !important;
+  color: #000000 !important;
+}
+
+/* 9. 30-Day Velocity Bar Graph Solid Fill */
+[data-theme="black-gold"] .chart-bar-glow,
+html[data-theme="black-gold"] .chart-bar-glow {
+  background: #0F0F0F !important;
+  background-image: none !important;
+  border: 1px solid #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+[data-theme="black-gold"] .chart-bar-glow:hover,
+html[data-theme="black-gold"] .chart-bar-glow:hover,
+[data-theme="black-gold"] .group:hover .chart-bar-glow,
+html[data-theme="black-gold"] .group:hover .chart-bar-glow {
+  background: #2E2414 !important;
+  background-image: none !important;
+  border-color: #FFFFFF !important;
+}
+
 
 
 

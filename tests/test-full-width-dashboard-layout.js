@@ -150,8 +150,9 @@ console.log('✓ 4. GRID ADAPTABILITY: All 4 KPI cards stretch proportionally wi
 console.log('5. Checking "Select Color Theme" bar layout & button styles...');
 
 assert(
+  dashboardTabCode.includes('w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5') ||
   dashboardTabCode.includes('w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5'),
-  'dashboard-theme-switcher must use w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5'
+  'dashboard-theme-switcher must use w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5'
 );
 
 assert(

@@ -66,6 +66,31 @@
         --mesh-blob-2: rgba(212, 255, 63, 0.22);
         --mesh-blob-3: rgba(255, 45, 163, 0.18);
       }
+      [data-theme="black-gold"] {
+        --bg-app: #E2C992;
+        --bg-sidebar: #D8BC82;
+        --bg-card: #ECD9AE;
+        --border-glow: #FFFFFF;
+        --primary: #0F0F0F;
+        --secondary: #FFFFFF;
+        --accent: #0F0F0F;
+        --text-main: #000000;
+        --text-muted: #2E2414;
+
+        bg-app: #E2C992;
+        bg-sidebar: #D8BC82;
+        bg-card: #ECD9AE;
+        border-glow: #FFFFFF;
+        primary: #0F0F0F;
+        secondary: #FFFFFF;
+        accent: #0F0F0F;
+        text-main: #000000;
+        text-muted: #2E2414;
+
+        --mesh-blob-1: transparent;
+        --mesh-blob-2: transparent;
+        --mesh-blob-3: transparent;
+      }
 
       /* Ambient Gradient Mesh Canvas & Blobs */
       .ambient-mesh-canvas {
@@ -148,6 +173,104 @@
       }
       #app-sidebar {
         flex-shrink: 0;
+      }
+      @keyframes activeThemeBorderPulse {
+        0%, 100% {
+          border-color: var(--primary);
+          box-shadow: 0 0 10px 0 var(--primary-glow);
+        }
+        50% {
+          border-color: var(--secondary);
+          box-shadow: 0 0 20px 2px var(--accent-glow);
+        }
+      }
+      .theme-pill {
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform, box-shadow, border-color;
+      }
+      .theme-pill.is-active {
+        animation: activeThemeBorderPulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        border-color: var(--primary) !important;
+        box-shadow: 0 0 12px var(--primary-glow) !important;
+      }
+      html[data-theme="black-gold"] .ambient-mesh-canvas,
+      [data-theme="black-gold"] .ambient-mesh-canvas {
+        display: none !important;
+      }
+      html[data-theme="black-gold"],
+      html[data-theme="black-gold"] body,
+      [data-theme="black-gold"] #app,
+      [data-theme="black-gold"] #root,
+      [data-theme="black-gold"] main,
+      [data-theme="black-gold"] #main-content,
+      [data-theme="black-gold"] #main-layout-wrapper {
+        background-color: #E2C992 !important;
+        color: #000000 !important;
+      }
+      [data-theme="black-gold"] #app-sidebar,
+      html[data-theme="black-gold"] #app-sidebar,
+      [data-theme="black-gold"] aside,
+      [data-theme="black-gold"] header,
+      html[data-theme="black-gold"] header,
+      [data-theme="black-gold"] .sticky.top-0 {
+        background-color: #D8BC82 !important;
+        color: #000000 !important;
+        border-color: #FFFFFF !important;
+      }
+      html[data-theme="black-gold"] .glass-panel,
+      [data-theme="black-gold"] .glass-panel,
+      html[data-theme="black-gold"] .glass-dropdown,
+      [data-theme="black-gold"] .glass-dropdown,
+      html[data-theme="black-gold"] .shadow-glow-card,
+      [data-theme="black-gold"] .shadow-glow-card,
+      html[data-theme="black-gold"] .card-glow-hover,
+      [data-theme="black-gold"] .card-glow-hover,
+      [data-theme="black-gold"] .consistency-radar-card,
+      html[data-theme="black-gold"] .consistency-radar-card,
+      [data-theme="black-gold"] #consistency-radar-card {
+        background: #ECD9AE !important;
+        background-color: #ECD9AE !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        border: 1.5px solid #FFFFFF !important;
+        border-color: #FFFFFF !important;
+        box-shadow: 0 1px 4px rgba(46, 36, 20, 0.1) !important;
+        color: #000000 !important;
+      }
+      [data-theme="black-gold"] h1, [data-theme="black-gold"] h2, [data-theme="black-gold"] h3,
+      [data-theme="black-gold"] .font-mono-numbers, [data-theme="black-gold"] .text-theme-text {
+        color: #000000 !important;
+      }
+      [data-theme="black-gold"] p, [data-theme="black-gold"] .text-theme-muted, [data-theme="black-gold"] label {
+        color: #2E2414 !important;
+      }
+      [data-theme="black-gold"] .btn-primary,
+      html[data-theme="black-gold"] .btn-primary,
+      [data-theme="black-gold"] .btn-primary-action,
+      html[data-theme="black-gold"] .btn-primary-action,
+      [data-theme="black-gold"] #app-sidebar nav a[style*="background"],
+      [data-theme="black-gold"] #app-sidebar nav a.shadow-lg,
+      [data-theme="black-gold"] #app-sidebar nav a.text-white,
+      [data-theme="black-gold"] .theme-pill.is-active,
+      html[data-theme="black-gold"] .theme-pill.is-active {
+        animation: none !important;
+        background: #0F0F0F !important;
+        background-color: #0F0F0F !important;
+        color: #FFFFFF !important;
+        border: 1.5px solid #FFFFFF !important;
+        box-shadow: 0 2px 8px rgba(15, 15, 15, 0.3) !important;
+      }
+      [data-theme="black-gold"] .theme-pill.is-active *,
+      [data-theme="black-gold"] .btn-primary-action *,
+      [data-theme="black-gold"] #app-sidebar nav a.text-white * {
+        color: #FFFFFF !important;
+      }
+      html[data-theme="black-gold"] .chart-bar-glow,
+      [data-theme="black-gold"] .chart-bar-glow {
+        background: #0F0F0F !important;
+        background-image: none !important;
+        border: 1px solid #FFFFFF !important;
+        box-shadow: none !important;
       }
     </style>
     <!-- Immediate storage cleanup for legacy/expired tokens -->

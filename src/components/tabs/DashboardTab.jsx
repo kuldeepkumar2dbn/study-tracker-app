@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   Flame, 
   Clock, 
@@ -31,6 +31,54 @@ import SkillRoutineChip from '../SkillRoutineChip';
 import SkillSyncToast from '../SkillSyncToast';
 import ConsistencyRadar from '../ConsistencyRadar';
 
+/**
+ * Applies the selected theme and updates .is-active state on theme selector buttons
+ * @param {string} themeId - ID of theme to activate (e.g. 'mocha-lavender', 'cyber-jet')
+ * @returns {string} active theme id
+ */
+export function applySelectedTheme(themeId) {
+  if (!themeId) return 'cyberpunk';
+  const validTheme = String(themeId).trim();
+
+  // Save to studyflow_app_theme as specified, plus backwards compatible keys
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem('studyflow_app_theme', validTheme);
+      localStorage.setItem('studyflow_theme', validTheme);
+      localStorage.setItem('theme', validTheme);
+    } catch (e) {
+      console.warn('Could not save theme to localStorage:', e);
+    }
+  }
+
+  // Update data-theme on root element
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-theme', validTheme);
+
+    // Remove .is-active from all theme buttons
+    const allButtons = document.querySelectorAll('.theme-pill, #dashboard-theme-switcher button, [data-theme-id]');
+    allButtons.forEach((btn) => {
+      btn.classList.remove('is-active');
+      const btnTheme = btn.getAttribute('data-theme-id') || btn.getAttribute('data-theme');
+      if (btnTheme === validTheme) {
+        btn.classList.add('is-active');
+      }
+    });
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('studyflow-theme-changed', {
+      detail: { theme: validTheme }
+    }));
+  }
+
+  return validTheme;
+}
+
+if (typeof window !== 'undefined') {
+  window.applySelectedTheme = applySelectedTheme;
+}
+
 export default function DashboardTab({ onNavigateTab }) {
   const { 
     subjects, 
@@ -55,6 +103,16 @@ export default function DashboardTab({ onNavigateTab }) {
   const [isAddRoutineModalOpen, setIsAddRoutineModalOpen] = useState(false);
   const [syllabusPrompt, setSyllabusPrompt] = useState(null);
   const [skillPrompt, setSkillPrompt] = useState(null);
+
+  // Ensure on component mount / theme update, currently saved theme in localStorage receives .is-active immediately
+  useEffect(() => {
+    let activeTheme = theme;
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('studyflow_app_theme') || localStorage.getItem('studyflow_theme');
+      if (saved) activeTheme = saved;
+    }
+    applySelectedTheme(activeTheme);
+  }, [theme]);
 
   const safeSubjects = subjects || [];
   const safeExams = exams || [];
@@ -260,16 +318,20 @@ export default function DashboardTab({ onNavigateTab }) {
           <Sparkles className="w-3.5 h-3.5 text-theme-accent" />
           <span className="font-semibold text-theme-text">Select Color Theme:</span>
         </div>
-        <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5" id="dashboard-theme-switcher">
+        <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="dashboard-theme-switcher">
           {(themes || []).map((t) => {
             const isSelected = theme === t.id;
             return (
               <button
                 key={t.id}
-                onClick={() => setTheme(t.id)}
-                className={`w-full flex-1 flex items-center justify-center text-center truncate gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
+                data-theme-id={t.id}
+                onClick={() => {
+                  setTheme(t.id);
+                  applySelectedTheme(t.id);
+                }}
+                className={`theme-pill w-full flex-1 flex items-center justify-center text-center truncate gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
                   isSelected
-                    ? 'bg-theme-accent text-white shadow-glow-accent'
+                    ? 'is-active bg-theme-accent text-white shadow-glow-accent'
                     : 'bg-theme-surface/80 hover:bg-theme-cardHover text-theme-muted hover:text-theme-text border border-theme-border/60'
                 }`}
                 title={`Switch to ${t.name}`}

@@ -28,7 +28,7 @@ import {
   calculateWeeklyVelocityBenchmark,
   updateWeeklyVelocityBenchmark
 } from './src/utils/weeklyVelocity.js';
-import DashboardTab from './src/components/tabs/DashboardTab.jsx';
+import DashboardTab, { applySelectedTheme } from './src/components/tabs/DashboardTab.jsx';
 import { THEMES, getTheme, setTheme, toggleTheme } from './settings.js';
 
 export const CHART_BAR_GLOW_CLASS = 'chart-bar-glow';
@@ -38,6 +38,7 @@ export const THEME_PROGRESS_FILL_CLASS = 'theme-progress-fill';
 if (typeof window !== 'undefined') {
   window.updateWeeklyVelocityBenchmark = updateWeeklyVelocityBenchmark;
   window.calculateWeeklyVelocityBenchmark = calculateWeeklyVelocityBenchmark;
+  window.applySelectedTheme = applySelectedTheme;
 
   const handleVelocityRefresh = (e) => {
     try {
@@ -66,6 +67,7 @@ export {
   getTheme,
   setTheme,
   toggleTheme,
+  applySelectedTheme,
   CHART_BAR_GLOW_CLASS,
   THEME_PROGRESS_FILL_CLASS
 };
@@ -85,6 +87,7 @@ export default {
   getTheme,
   setTheme,
   toggleTheme,
+  applySelectedTheme,
   CHART_BAR_GLOW_CLASS,
   THEME_PROGRESS_FILL_CLASS
 };
