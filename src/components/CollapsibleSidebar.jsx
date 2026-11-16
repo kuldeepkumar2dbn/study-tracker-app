@@ -132,7 +132,8 @@ export default function CollapsibleSidebar({
   isMobileOpen = false,
   onCloseMobile,
   onToggle,
-  onOpenDriveNotesDemoModal
+  onOpenDriveNotesDemoModal,
+  onSelectTab
 }) {
   const { 
     exams = [], 
@@ -378,6 +379,7 @@ export default function CollapsibleSidebar({
             } : undefined;
 
             const handleClick = (e) => {
+              e.preventDefault();
               logFeatureUse(item.name);
               if (isMobileOpen && onCloseMobile) {
                 onCloseMobile();
@@ -386,21 +388,31 @@ export default function CollapsibleSidebar({
                 document.body.style.overflow = '';
               }
               if (isDemoLockedNotes) {
-                e.preventDefault();
                 if (onOpenDriveNotesDemoModal) onOpenDriveNotesDemoModal();
                 return;
               }
               if (isGuestLocked) {
-                e.preventDefault();
-                openAuthModal(item.id, item.href);
+                openAuthModal(item.id, `#${item.id}`);
                 return;
+              }
+
+              if (onSelectTab) {
+                onSelectTab(item.id);
+              }
+              if (typeof window !== 'undefined') {
+                if (window.switchView) {
+                  window.switchView(item.id);
+                } else {
+                  window.location.hash = item.id;
+                }
               }
             };
 
             return (
               <a
                 key={item.id}
-                href={item.href}
+                href={`#${item.id}`}
+                data-target-view={item.id}
                 onClick={handleClick}
                 title={!isDrawerExpanded ? item.tooltip : undefined}
                 style={itemActiveStyle}
@@ -408,7 +420,7 @@ export default function CollapsibleSidebar({
                   isDrawerExpanded ? 'px-3 py-2.5 gap-3' : 'px-0 py-2.5 justify-center'
                 } ${
                   isActive
-                    ? 'text-white font-semibold border shadow-lg'
+                    ? 'text-white font-semibold border shadow-lg is-active active-sidebar-item'
                     : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
                 } ${
                   isTimer && isTimerRunning && !isActive

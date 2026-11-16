@@ -80,6 +80,16 @@ if (typeof window !== 'undefined') {
 }
 
 export default function DashboardTab({ onNavigateTab }) {
+  const navigate = (tab) => {
+    if (onNavigateTab) {
+      onNavigateTab(tab);
+    } else if (typeof window !== 'undefined' && window.switchView) {
+      window.switchView(tab);
+    } else if (typeof window !== 'undefined') {
+      window.location.hash = tab;
+    }
+  };
+
   const { 
     subjects, 
     exams, 
@@ -294,7 +304,7 @@ export default function DashboardTab({ onNavigateTab }) {
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={() => onNavigateTab('timer')}
+              onClick={() => navigate('timer')}
               className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all duration-200 hover:brightness-110 active:scale-95"
             >
               <Play className="w-3.5 h-3.5 fill-white" />
@@ -351,7 +361,7 @@ export default function DashboardTab({ onNavigateTab }) {
       <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Today's Target Circular Mini Card with Interactive SVG Radial Progress Ring */}
         <div 
-          onClick={() => onNavigateTab('routine')}
+          onClick={() => navigate('routine')}
           className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-theme-accent/40 card-glow-hover transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-2">
@@ -410,7 +420,7 @@ export default function DashboardTab({ onNavigateTab }) {
 
         {/* Metric 3: Next Exam or Assignment */}
         <div 
-          onClick={() => onNavigateTab('exams')}
+          onClick={() => navigate('exams')}
           className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-rose-500/40 card-glow-hover transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
@@ -437,7 +447,7 @@ export default function DashboardTab({ onNavigateTab }) {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onNavigateTab('exams');
+                  navigate('exams');
                 }}
                 className="mt-2 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95"
               >
@@ -450,7 +460,7 @@ export default function DashboardTab({ onNavigateTab }) {
 
         {/* Metric 4: Spaced Repetition Due */}
         <div 
-          onClick={() => onNavigateTab('revision')}
+          onClick={() => navigate('revision')}
           className="w-full min-w-0 flex flex-col justify-between rounded-2xl glass-panel p-5 border border-theme-border hover:border-emerald-500/40 card-glow-hover transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-2">
@@ -579,7 +589,7 @@ export default function DashboardTab({ onNavigateTab }) {
 
           <div className="mt-4 pt-3 border-t border-theme-border/60">
             <button
-              onClick={() => onNavigateTab('routine')}
+              onClick={() => navigate('routine')}
               className="w-full py-2 px-3 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-colors flex items-center justify-center gap-1.5"
             >
               <span>Manage Daily Routine & Weekly Targets</span>
@@ -645,7 +655,7 @@ export default function DashboardTab({ onNavigateTab }) {
 
           <div className="mt-4 pt-3 border-t border-theme-border/60">
             <button
-              onClick={() => onNavigateTab('revision')}
+              onClick={() => navigate('revision')}
               className="w-full py-2 px-3 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-colors flex items-center justify-center gap-1.5"
             >
               <span>View Full Spaced Repetition Schedule</span>
@@ -668,7 +678,7 @@ export default function DashboardTab({ onNavigateTab }) {
             </h2>
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => onNavigateTab('exams')}
+                onClick={() => navigate('exams')}
                 className="btn-schedule-exam flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold transition-all active:scale-95 cursor-pointer"
                 title="Schedule an upcoming test or assignment"
               >
@@ -676,7 +686,7 @@ export default function DashboardTab({ onNavigateTab }) {
                 <span>+ Schedule Exam</span>
               </button>
               <button 
-                onClick={() => onNavigateTab('exams')}
+                onClick={() => navigate('exams')}
                 className="text-xs text-theme-accent hover:underline font-medium"
               >
                 View radar ({upcomingDeadlines.length})
@@ -691,7 +701,7 @@ export default function DashboardTab({ onNavigateTab }) {
               return (
                 <div 
                   key={item.id}
-                  onClick={() => onNavigateTab('exams')}
+                  onClick={() => navigate('exams')}
                   className="exam-card p-3.5 rounded-xl bg-theme-surface/70 border border-theme-border flex items-center justify-between gap-3 hover:border-theme-accent/30 cursor-pointer"
                 >
                   <div className="min-w-0 flex-1">
@@ -722,7 +732,7 @@ export default function DashboardTab({ onNavigateTab }) {
                 <Calendar className="w-8 h-8 mx-auto mb-2 text-theme-border opacity-50" />
                 <p className="font-semibold text-theme-text">Radar clear. No pending tests or assignments.</p>
                 <button
-                  onClick={() => onNavigateTab('exams')}
+                  onClick={() => navigate('exams')}
                   className="mt-3 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs font-semibold inline-flex items-center gap-1 transition-all"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -742,7 +752,7 @@ export default function DashboardTab({ onNavigateTab }) {
                 Monthly Schedule & Agenda
               </h2>
               <button 
-                onClick={() => onNavigateTab('calendar')}
+                onClick={() => navigate('calendar')}
                 className="text-xs text-theme-accent hover:underline font-medium"
               >
                 Open Calendar &rarr;
@@ -766,7 +776,7 @@ export default function DashboardTab({ onNavigateTab }) {
 
           <div className="mt-4 pt-3 border-t border-theme-border/60">
             <button
-              onClick={() => onNavigateTab('calendar')}
+              onClick={() => navigate('calendar')}
               className="w-full py-2.5 px-3 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-colors flex items-center justify-center gap-1.5"
             >
               <CalendarIcon className="w-3.5 h-3.5 text-theme-accent" />

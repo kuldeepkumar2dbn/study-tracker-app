@@ -16,11 +16,21 @@ import {
   patchUserData 
 } from './storage-helper.js';
 import { applySelectedTheme } from './src/components/tabs/DashboardTab.jsx';
+import { switchView, navigateTo, getCurrentView, initRouter, VIEW_IDS } from './router.js';
+import { SIDEBAR_ITEMS, setupSidebarNav, updateActiveSidebarItem } from './sidebar.js';
 
 export {
   handleEndOfDayRollover,
   checkAndTriggerEndOfDayRollover,
-  applySelectedTheme
+  applySelectedTheme,
+  switchView,
+  navigateTo,
+  getCurrentView,
+  initRouter,
+  VIEW_IDS,
+  SIDEBAR_ITEMS,
+  setupSidebarNav,
+  updateActiveSidebarItem
 };
 
 /**
@@ -78,6 +88,13 @@ if (typeof window !== 'undefined') {
       }
     } catch (err) {
       console.warn('Error during app.js hydration check:', err);
+    }
+
+    try {
+      initRouter();
+      setupSidebarNav();
+    } catch (err) {
+      console.warn('Error during router setup in app.js:', err);
     }
   });
 }

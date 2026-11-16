@@ -719,6 +719,34 @@ export function QuickLinksModal({ isOpen, onClose }) {
 
 // Master Application Layout Wrapper
 export function AppLayout({ activeTabId, children }) {
+  const [currentTabId, setCurrentTabId] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const h = window.location.hash.replace(/^#\/?/, '');
+      if (h) return h;
+    }
+    return activeTabId || 'dashboard';
+  });
+
+  useEffect(() => {
+    const handleViewChange = (e) => {
+      if (e.detail?.view) {
+        setCurrentTabId(e.detail.view);
+      }
+    };
+    window.addEventListener('studyflow-view-changed', handleViewChange);
+    const handleHash = () => {
+      if (typeof window !== 'undefined') {
+        const h = window.location.hash.replace(/^#\/?/, '');
+        if (h) setCurrentTabId(h);
+      }
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => {
+      window.removeEventListener('studyflow-view-changed', handleViewChange);
+      window.removeEventListener('hashchange', handleHash);
+    };
+  }, []);
+
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [isDriveNotesDemoModalOpen, setIsDriveNotesDemoModalOpen] = useState(false);
@@ -801,8 +829,8 @@ export function AppLayout({ activeTabId, children }) {
     }
   };
 
-  const isGuestLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(activeTabId);
-  const isDemoLockedNotes = isDemo && activeTabId === 'notes';
+  const isGuestLockedTab = !isAuthenticated && LOCKED_TAB_IDS.includes(currentTabId);
+  const isDemoLockedNotes = isDemo && currentTabId === 'notes';
 
   // Silent Telemetry tracking on initial mount and tab navigation
   useEffect(() => {
@@ -889,22 +917,22 @@ export function AppLayout({ activeTabId, children }) {
   }, []);
 
   useEffect(() => {
-    if (isDemo && activeTabId === 'notes') {
+    if (isDemo && currentTabId === 'notes') {
       setIsDriveNotesDemoModalOpen(true);
     }
-  }, [isDemo, activeTabId]);
+  }, [isDemo, currentTabId]);
 
   useEffect(() => {
-    const feature = activeTabId || 'dashboard';
+    const feature = currentTabId || 'dashboard';
     document.documentElement.setAttribute('data-active-feature', feature);
-  }, [activeTabId]);
+  }, [currentTabId]);
 
   const isPlatformMaintenanceLocked = killswitches.maintenanceMode && !isAdminUser;
 
   return (
     <div 
       className="min-h-screen flex flex-col w-full bg-theme-bg text-theme-text transition-colors duration-200"
-      data-active-feature={activeTabId || 'dashboard'}
+      data-active-feature={currentTabId || 'dashboard'}
     >
       {/* Ambient Gradient Mesh Canvas (if not already injected at top of body in static HTML) */}
       {typeof document !== 'undefined' && !document.querySelector('body > .ambient-mesh-canvas') && (
@@ -1002,7 +1030,7 @@ export function AppLayout({ activeTabId, children }) {
       <div className="flex-1 flex w-full relative min-h-[calc(100vh-4rem)]">
         {/* Left Collapsible Sidebar Navigation Rail across all pages */}
         <CollapsibleSidebar 
-          activeTabId={activeTabId} 
+          activeTabId={currentTabId} 
           isExpanded={isSidebarExpanded} 
           isMobileOpen={isMobileSidebarOpen}
           onCloseMobile={() => {
@@ -1011,6 +1039,7 @@ export function AppLayout({ activeTabId, children }) {
           }}
           onToggle={handleToggleSidebar}
           onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
+          onSelectTab={(tab) => setCurrentTabId(tab)}
         />
 
         {/* Main Content Area - Desktop margin matches sidebar state with smooth transition */}
@@ -1079,7 +1108,7 @@ export function AppLayout({ activeTabId, children }) {
                   </div>
                 </div>
               ) : isGuestLockedTab ? (
-                <LockedFeatureOverlay featureKey={activeTabId}>
+                <LockedFeatureOverlay featureKey={currentTabId}>
                   <ErrorBoundary>
                     {children}
                   </ErrorBoundary>
