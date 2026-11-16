@@ -257,10 +257,10 @@ export default function DashboardTab({ onNavigateTab }) {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn w-full">
+    <div className="space-y-6 animate-fadeIn w-full max-w-none mx-0">
       
       {/* Top Banner & Motivation */}
-      <div className="relative overflow-hidden rounded-2xl glass-panel p-6 sm:p-8 border border-theme-border shadow-glow-card card-glow-hover w-full">
+      <div className="relative overflow-hidden rounded-2xl glass-panel p-6 sm:p-8 border border-theme-border shadow-glow-card card-glow-hover w-full max-w-none mx-0">
         <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-theme-accent/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
@@ -323,7 +323,7 @@ export default function DashboardTab({ onNavigateTab }) {
       </div>
 
       {/* Theme Switcher Controller Bar */}
-      <div className="flex flex-col gap-2.5 px-4 py-3 rounded-2xl glass-panel border border-theme-border shadow-sm w-full">
+      <div className="flex flex-col gap-2.5 px-4 py-3 rounded-2xl glass-panel border border-theme-border shadow-sm w-full mx-0">
         <div className="flex items-center gap-2 text-xs text-theme-muted font-medium">
           <Sparkles className="w-3.5 h-3.5 text-theme-accent" />
           <span className="font-semibold text-theme-text">Select Color Theme:</span>
@@ -358,7 +358,7 @@ export default function DashboardTab({ onNavigateTab }) {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-none mx-0">
         {/* Metric 1: Today's Target Circular Mini Card with Interactive SVG Radial Progress Ring */}
         <div 
           onClick={() => navigate('routine')}
@@ -488,12 +488,13 @@ export default function DashboardTab({ onNavigateTab }) {
 
       {/* Consistency Radar: 30-Day Study Activity Vertical Bar Graph */}
       <ConsistencyRadar 
+        className="w-full max-w-none mx-0"
         dailyActivity={dailyActivity} 
         streak={safeStreakData.streakCount} 
       />
 
       {/* Middle Grid: Routine Time-Blocks Checklist + Today's Revision Queue */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-none mx-0">
         
         {/* Daily Routine Time-Blocks Checklist (6 cols) */}
         <div className="lg:col-span-6 rounded-2xl glass-panel p-6 border border-theme-border flex flex-col justify-between">
@@ -667,7 +668,7 @@ export default function DashboardTab({ onNavigateTab }) {
       </div>
 
       {/* Bottom Grid: Deadline Radar Cards + Quick Calendar Access */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-none mx-0">
         
         {/* Deadline Radar Preview */}
         <div className="rounded-2xl glass-panel p-6 border border-theme-border">
