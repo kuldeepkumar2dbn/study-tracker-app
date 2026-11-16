@@ -23,9 +23,11 @@ import {
 import RollingNumber from '../RollingNumber';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { patchUserData, getUserData } from '../../../storage-helper.js';
 import { getActiveUserId, getLocalDateString } from '../../../auth-guard.js';
 import { logFeatureUse } from '../../utils/telemetry.js';
+import { getRecentMockTrend, Y_TICKS } from '../../../mock-logbook.js';
 
 export const MISTAKE_CATEGORIES = [
   { id: 'conceptual', label: 'Conceptual Gap', icon: '🧠', color: 'from-amber-500/20 to-orange-500/20 text-amber-400 border-amber-500/30' },
@@ -87,10 +89,27 @@ function getInitialMockTests() {
 export default function MockLogbookTab({ onNavigateTab }) {
   const { subjects, addTopic } = useData();
   const { isAuthenticated } = useAuth();
+  const { theme } = useTheme();
 
   const [tests, setTests] = useState(() => getInitialMockTests());
   const [toastMessage, setToastMessage] = useState(null);
   const [expandedTestId, setExpandedTestId] = useState(null);
+  const [hoveredTrendItem, setHoveredTrendItem] = useState(null);
+
+  // Re-render when themeChanged or studyflow-theme-changed fires
+  const [, setForceThemeRerender] = useState(0);
+  useEffect(() => {
+    const handleThemeChange = () => setForceThemeRerender((v) => v + 1);
+    window.addEventListener('themeChanged', handleThemeChange);
+    window.addEventListener('studyflow-theme-changed', handleThemeChange);
+    return () => {
+      window.removeEventListener('themeChanged', handleThemeChange);
+      window.removeEventListener('studyflow-theme-changed', handleThemeChange);
+    };
+  }, []);
+
+  // Compute 10 most recent tests in chronological order (oldest on left, latest on right)
+  const trendData = useMemo(() => getRecentMockTrend(tests, 10), [tests]);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -459,6 +478,178 @@ export default function MockLogbookTab({ onNavigateTab }) {
           </div>
         </div>
 
+      </div>
+
+      {/* DUAL-BAR COMPARISON CHART: Score % vs. Accuracy % Trend (Last 10 Mock Tests) */}
+      <div 
+        id="mock-score-accuracy-trend-card"
+        className="w-full rounded-2xl border border-[var(--border-glow)] bg-[var(--bg-card)] p-6 glass-panel shadow-glow-card card-glow-hover max-w-none mx-0"
+      >
+        {/* Card Header: Title & Dual Color Legend */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-3 border-b border-theme-border/60">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-theme-accent/10 text-theme-accent border border-theme-accent/20">
+              <BarChart2 className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-display font-bold text-base text-theme-text tracking-tight">
+                  Score % vs. Accuracy % Trend
+                </h2>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-theme-surface border border-theme-border text-theme-muted uppercase tracking-wider font-mono-numbers">
+                  Last 10 Mocks
+                </span>
+              </div>
+              <p className="text-xs text-theme-muted mt-0.5">
+                Paired dual-bar trend comparison in chronological sequence (oldest &rarr; latest)
+              </p>
+            </div>
+          </div>
+
+          {/* Color Legend Distinguishing Net Score % (var(--primary)) and Accuracy % (var(--secondary)) */}
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <div className="flex items-center gap-2">
+              <span 
+                className="w-3.5 h-3.5 rounded-md border shadow-sm"
+                style={{ 
+                  backgroundColor: 'var(--primary)', 
+                  borderColor: 'var(--border-glow)' 
+                }} 
+              />
+              <span className="text-theme-text font-medium">Net Score %</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span 
+                className="w-3.5 h-3.5 rounded-md border shadow-sm"
+                style={{ 
+                  backgroundColor: 'var(--secondary)', 
+                  borderColor: 'var(--border-glow)' 
+                }} 
+              />
+              <span className="text-theme-text font-medium">Accuracy %</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Dual-Bar Visualization or Clean Empty State */}
+        {trendData.length > 0 ? (
+          <div className="relative w-full">
+            <div className="relative h-64 sm:h-72 w-full pt-2 pb-6 pl-10 sm:pl-12 pr-2">
+              
+              {/* Y-Axis Scale (0% to 100%) */}
+              <div className="absolute left-0 top-2 bottom-6 w-8 sm:w-10 flex flex-col justify-between items-end pr-2 text-[10px] font-mono text-theme-muted select-none pointer-events-none">
+                {Y_TICKS.map((tick) => (
+                  <span key={tick} className="leading-none font-medium">
+                    {tick}%
+                  </span>
+                ))}
+              </div>
+
+              {/* Horizontal Gridlines */}
+              <div className="absolute left-10 sm:left-12 right-2 top-2 bottom-6 flex flex-col justify-between pointer-events-none z-0">
+                {Y_TICKS.map((tick) => (
+                  <div key={tick} className="w-full border-b border-theme-border/25" />
+                ))}
+              </div>
+
+              {/* Paired Dual-Bar Columns (Up to 10 Recent Tests) */}
+              <div className="relative z-10 w-full h-full flex items-end justify-around gap-2 sm:gap-4">
+                {trendData.map((test) => {
+                  const isHovered = hoveredTrendItem?.id === test.id;
+                  return (
+                    <div
+                      key={test.id}
+                      tabIndex={0}
+                      onMouseEnter={() => setHoveredTrendItem(test)}
+                      onMouseLeave={() => setHoveredTrendItem(null)}
+                      onFocus={() => setHoveredTrendItem(test)}
+                      onBlur={() => setHoveredTrendItem(null)}
+                      className="flex-1 max-w-[76px] h-full flex flex-col items-center justify-end relative group cursor-pointer focus:outline-none"
+                    >
+                      {/* Floating Elevated Hover Tooltip Card */}
+                      {isHovered && (
+                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 pointer-events-none min-w-[210px] p-3 rounded-xl bg-slate-900/95 border border-theme-border text-white text-xs shadow-2xl backdrop-blur-md animate-fadeIn">
+                          <p className="font-bold text-white truncate">{test.title}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{test.date} • {test.subject}</p>
+                          <div className="mt-2 pt-2 border-t border-slate-800 space-y-1 font-mono-numbers">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="flex items-center gap-1.5 text-slate-300">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--primary)' }} />
+                                <span>Net Score %:</span>
+                              </span>
+                              <strong className="font-bold" style={{ color: 'var(--primary)' }}>
+                                {test.scorePct}% ({test.netScore}/{test.maxMarks})
+                              </strong>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="flex items-center gap-1.5 text-slate-300">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--secondary)' }} />
+                                <span>Accuracy %:</span>
+                              </span>
+                              <strong className="font-bold" style={{ color: 'var(--secondary)' }}>
+                                {test.accuracyPct}%
+                              </strong>
+                            </div>
+                            {test.penaltyMarks > 0 && (
+                              <div className="flex items-center justify-between gap-3 text-rose-400">
+                                <span>Penalty Lost:</span>
+                                <span>-{test.penaltyMarks} pts</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Paired Vertical Bars */}
+                      <div className="w-full h-full flex items-end justify-center gap-1 sm:gap-1.5 pb-1">
+                        {/* Bar 1: Net Score Percentage (var(--primary)) */}
+                        <div 
+                          className="flex-1 max-w-[22px] rounded-t-md transition-all duration-300 relative group-hover:brightness-110 shadow-sm"
+                          style={{
+                            height: `${Math.max(3, test.scorePct)}%`,
+                            backgroundColor: 'var(--primary)',
+                            border: '1px solid var(--border-glow)'
+                          }}
+                          title={`Score: ${test.scorePct}%`}
+                        />
+
+                        {/* Bar 2: Accuracy Percentage (var(--secondary)) */}
+                        <div 
+                          className="flex-1 max-w-[22px] rounded-t-md transition-all duration-300 relative group-hover:brightness-110 shadow-sm"
+                          style={{
+                            height: `${Math.max(3, test.accuracyPct)}%`,
+                            backgroundColor: 'var(--secondary)',
+                            border: '1px solid var(--border-glow)'
+                          }}
+                          title={`Accuracy: ${test.accuracyPct}%`}
+                        />
+                      </div>
+
+                      {/* X-Axis Label */}
+                      <div className="w-full text-center mt-1 truncate">
+                        <span className="block text-[10px] font-semibold text-theme-text truncate leading-tight">
+                          {test.shortTitle}
+                        </span>
+                        {test.shortDate && (
+                          <span className="block text-[9px] text-theme-muted font-mono-numbers leading-tight">
+                            {test.shortDate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+          </div>
+        ) : (
+          <div className="py-12 text-center text-xs text-theme-muted rounded-xl border border-dashed border-theme-border/70 p-4">
+            <BarChart2 className="w-8 h-8 mx-auto mb-2 text-theme-border opacity-50" />
+            <p className="font-semibold text-theme-text">No mock test trend data available yet.</p>
+            <p className="mt-1">Log at least 1 mock test below to visualize your Score % vs. Accuracy % trend over time.</p>
+          </div>
+        )}
       </div>
 
       {/* INTERACTIVE MOCK ENTRY FORM & LIVE CALCULATOR (2 Columns) */}
