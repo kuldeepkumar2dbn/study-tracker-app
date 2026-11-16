@@ -30,7 +30,8 @@ import {
   Sparkles,
   Bell,
   Wrench,
-  ShieldAlert
+  ShieldAlert,
+  Target
 } from 'lucide-react';
 import Logo from './Logo';
 import DriveModal from './DriveModal';
@@ -72,6 +73,7 @@ export const NAV_TABS = [
   { id: 'syllabus', name: 'Subjects & Syllabus', icon: BookOpen, href: '/syllabus.html', pathRegex: /\/syllabus\.html$/, isProtected: true },
   { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', pathRegex: /\/revision\.html$/, isProtected: true },
   { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', pathRegex: /\/radar\.html$/, isProtected: true },
+  { id: 'mock-logbook', name: 'Mock Logbook', icon: Target, href: '/mock-logbook.html', pathRegex: /\/mock-logbook\.html$/ },
   { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', pathRegex: /\/skills\.html$/, isProtected: true },
   { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', pathRegex: /\/notes\.html$/, isProtected: true },
   { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', pathRegex: /\/timer\.html$/, tooltip: 'Focus Timer & Deep Work' },
@@ -841,6 +843,7 @@ export function AppLayout({ activeTabId, children }) {
       syllabus: 'Subjects & Syllabus',
       revision: 'Revision Queue',
       radar: 'Exam Radar',
+      'mock-logbook': 'Mock Logbook',
       skills: 'Skill Tracker',
       notes: 'Drive Notes',
       timer: 'Focus Timer'

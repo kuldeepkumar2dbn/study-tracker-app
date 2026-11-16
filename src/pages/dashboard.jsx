@@ -6,6 +6,7 @@ import CalendarView from '../components/CalendarView';
 import SubjectsTab from '../components/tabs/SubjectsTab';
 import RevisionTab from '../components/tabs/RevisionTab';
 import ExamsTab from '../components/tabs/ExamsTab';
+import MockLogbookTab from '../components/tabs/MockLogbookTab';
 import SkillsTab from '../components/tabs/SkillsTab';
 import NotesTab from '../components/tabs/NotesTab';
 import TimerTab from '../components/tabs/TimerTab';
@@ -107,6 +108,15 @@ export function SPAApp() {
         data-view="radar"
       >
         <ExamsTab />
+      </div>
+
+      {/* Mock Test & Mistake Logbook View */}
+      <div 
+        id="view-mock-logbook" 
+        className={`app-view w-full max-w-none mx-0 ${activeView === 'mock-logbook' ? 'active-view' : ''}`}
+        data-view="mock-logbook"
+      >
+        <MockLogbookTab onNavigateTab={handleNavigate} />
       </div>
 
       {/* 7. Skill Tracker View */}

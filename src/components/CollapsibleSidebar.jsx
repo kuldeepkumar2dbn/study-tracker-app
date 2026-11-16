@@ -16,7 +16,8 @@ import {
   Sparkles,
   ShieldCheck,
   MessageSquare,
-  CheckCircle2
+  CheckCircle2,
+  Target
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -62,6 +63,7 @@ export const SIDEBAR_ITEMS = [
   { id: 'syllabus', name: 'Subjects & Syllabus', icon: BookOpen, href: '/syllabus.html', isProtected: true, tooltip: 'Course Syllabus & Subjects' },
   { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', isProtected: true, tooltip: 'Spaced Repetition Queue' },
   { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', isProtected: true, tooltip: 'Exam Radar & Deadlines' },
+  { id: 'mock-logbook', name: 'Mock Logbook', icon: Target, href: '/mock-logbook.html', isProtected: false, tooltip: 'Mock Test & Mistake Logbook' },
   { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
   { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', isProtected: true, tooltip: 'Google Drive Notes Vault' },
   { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', tooltip: 'Focus Timer & Deep Work' }
@@ -103,6 +105,11 @@ export const ACTIVE_PILL_STYLES = {
     bg: 'linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)',
     shadow: '0 0 22px -2px rgba(244, 63, 94, 0.65), 0 4px 14px rgba(225, 29, 72, 0.45)',
     border: 'rgba(254, 205, 211, 0.4)'
+  },
+  'mock-logbook': {
+    bg: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)',
+    shadow: '0 0 22px -2px rgba(14, 165, 233, 0.65), 0 4px 14px rgba(2, 132, 199, 0.45)',
+    border: 'rgba(186, 230, 253, 0.4)'
   },
   skills: {
     bg: 'linear-gradient(135deg, #9333ea 0%, #a855f7 100%)',

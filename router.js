@@ -19,6 +19,7 @@ export const VIEW_IDS = [
   'syllabus',
   'revision',
   'radar',
+  'mock-logbook',
   'skills',
   'notes',
   'timer'
@@ -31,6 +32,7 @@ export const FEATURE_NAME_MAP = {
   syllabus: 'Subjects & Syllabus',
   revision: 'Revision Queue',
   radar: 'Exam Radar',
+  'mock-logbook': 'Mock Logbook',
   skills: 'Skill Tracker',
   notes: 'Drive Notes',
   timer: 'Focus Timer'
@@ -39,6 +41,11 @@ export const FEATURE_NAME_MAP = {
 const VIEW_ALIASES = {
   subjects: 'syllabus',
   exams: 'radar',
+  mock: 'mock-logbook',
+  logbook: 'mock-logbook',
+  'mock-test': 'mock-logbook',
+  'mock-tests': 'mock-logbook',
+  'mocklogbook': 'mock-logbook',
   index: 'dashboard',
   overview: 'dashboard'
 };
