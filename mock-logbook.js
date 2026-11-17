@@ -9,6 +9,9 @@
  * 4. Reactive trend updates on test save/delete & theme switches
  */
 
+import { sanitizeText, stripHtmlTags } from './security-privacy.js';
+
+export { sanitizeText };
 export const STORAGE_KEY = 'studytracker_mock_tests';
 
 export const Y_TICKS = [100, 75, 50, 25, 0];
@@ -45,12 +48,15 @@ export function getRecentMockTrend(tests = [], limit = 10) {
     const scorePct = Math.max(0, Math.min(100, Number(rawScorePct.toFixed(1))));
     const accuracyPct = Math.max(0, Math.min(100, Number(rawAccuracyPct.toFixed(1))));
 
+    const safeTitle = stripHtmlTags(t.title || `Mock Test #${idx + 1}`) || `Mock Test #${idx + 1}`;
+    const safeSubject = stripHtmlTags(t.subject || 'Full Syllabus') || 'Full Syllabus';
+
     return {
       id: t.id || `mock-trend-${idx}`,
       index: idx + 1,
-      title: t.title || `Mock Test #${idx + 1}`,
-      shortTitle: (t.title || `M#${idx + 1}`).length > 14 ? (t.title.substring(0, 12) + '…') : (t.title || `M#${idx + 1}`),
-      subject: t.subject || 'Full Syllabus',
+      title: safeTitle,
+      shortTitle: safeTitle.length > 14 ? (safeTitle.substring(0, 12) + '…') : safeTitle,
+      subject: safeSubject,
       date: t.date || '',
       shortDate: t.date ? t.date.split('-').slice(1).join('/') : '',
       scorePct,
@@ -61,7 +67,7 @@ export function getRecentMockTrend(tests = [], limit = 10) {
       incorrectCount: incorrect,
       attempted,
       penaltyMarks: Number((t.penaltyMarks || 0).toFixed(2)),
-      tooltipText: formatTrendTooltip(t, scorePct, accuracyPct)
+      tooltipText: formatTrendTooltip({ ...t, title: safeTitle }, scorePct, accuracyPct)
     };
   });
 }

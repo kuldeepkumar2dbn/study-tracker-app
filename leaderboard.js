@@ -7,8 +7,9 @@
  */
 
 import { TELEMETRY_URL, isTelemetryConfigured, getLoggedInUserProfile } from './admin-config.js';
+import { sanitizeText, stripHtmlTags, getOrCreateUserSecret } from './security-privacy.js';
 
-export { TELEMETRY_URL };
+export { TELEMETRY_URL, sanitizeText, getOrCreateUserSecret };
 
 export const LEADERBOARD_SETTINGS_KEY = 'studytracker_leaderboard_settings';
 export const LEADERBOARD_CACHE_KEY = 'studytracker_leaderboard_cache';
@@ -214,20 +215,23 @@ export function buildStudentLeaderboardPayload(userData = {}, options = {}) {
   const studentProfile = options.studentProfile || userData.studentProfile || getStoredStudentProfile();
 
   const rawUsername = options.username || userData.username || studentProfile?.username || '';
-  const cleanUsername = String(rawUsername || '').trim().replace(/^@+/, '');
+  const cleanUsername = stripHtmlTags(String(rawUsername || '')).trim().replace(/^@+/, '').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
   const profileHandle = cleanUsername ? `@${cleanUsername}` : '';
-  const targetExam = String(
+  const targetExam = stripHtmlTags(String(
     options.targetExam ||
     userData.targetExam ||
     studentProfile?.resolvedTargetExam ||
     studentProfile?.targetExam ||
     ''
-  ).trim();
+  )).trim();
 
   const studentId = options.studentId || userData.studentId || getStudentId(profile);
-  const displayName = (options.displayName !== undefined && String(options.displayName).trim())
-    ? String(options.displayName).trim()
-    : (profileHandle || (userData.displayName !== undefined && String(userData.displayName).trim()) || settings.displayName);
+  const userSecret = options.userSecret || userData.userSecret || getOrCreateUserSecret();
+  const displayName = stripHtmlTags(
+    (options.displayName !== undefined && String(options.displayName).trim())
+      ? String(options.displayName).trim()
+      : (profileHandle || (userData.displayName !== undefined && String(userData.displayName).trim()) || settings.displayName)
+  );
   const optedIn = options.optedIn !== undefined
     ? Boolean(options.optedIn)
     : (userData.optedIn !== undefined
@@ -284,12 +288,12 @@ export function buildStudentLeaderboardPayload(userData = {}, options = {}) {
     : (userData.isLiveNow !== undefined ? Boolean(userData.isLiveNow) : timerRunning);
 
   const firstSubjectName = Object.keys(subjectHours)[0] || COMMON_LEADERBOARD_SUBJECTS[0];
-  const activeSubject = String(
+  const activeSubject = stripHtmlTags(String(
     options.activeSubject ||
     userData.activeSubject ||
     timerSubject ||
     firstSubjectName
-  ).trim();
+  )).trim() || COMMON_LEADERBOARD_SUBJECTS[0];
 
   // Ensure activeSubject has at least today's hours reflected if not already present
   if (activeSubject && subjectHours[activeSubject] === undefined) {
@@ -300,6 +304,7 @@ export function buildStudentLeaderboardPayload(userData = {}, options = {}) {
     type: 'leaderboard_sync',
     action: 'leaderboard_sync',
     studentId,
+    userSecret,
     username: cleanUsername || undefined,
     displayName,
     targetExam: targetExam || undefined,
@@ -484,11 +489,11 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
   const studentId = String(raw.studentId || raw.id || raw.userId || raw.email || raw.displayName || '').trim();
   if (!studentId) return null;
 
-  const rawUsername = raw.username ? String(raw.username).trim().replace(/^@+/, '') : '';
-  const displayName = String(
+  const rawUsername = raw.username ? stripHtmlTags(String(raw.username)).trim().replace(/^@+/, '') : '';
+  const displayName = stripHtmlTags(String(
     raw.displayName || (rawUsername ? `@${rawUsername}` : '') || raw.name || 'Student'
-  ).trim();
-  const targetExam = String(raw.targetExam || raw.resolvedTargetExam || '').trim();
+  )).trim() || 'Student';
+  const targetExam = stripHtmlTags(String(raw.targetExam || raw.resolvedTargetExam || '')).trim();
   const subjectHours = (raw.subjectHours && typeof raw.subjectHours === 'object') ? raw.subjectHours : {};
 
   let hours = 0;
@@ -517,7 +522,7 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
   }
 
   const streak = Math.max(0, Number(raw.streak ?? raw.streakCount ?? 0) || 0);
-  const activeSubject = String(raw.activeSubject || raw.currentSubject || raw.lastSubject || subject || 'General Studies').trim();
+  const activeSubject = stripHtmlTags(String(raw.activeSubject || raw.currentSubject || raw.lastSubject || subject || 'General Studies')).trim() || 'General Studies';
 
   // Check if updated recently (within last 45 mins) when considering isLiveNow
   let isLiveNow = Boolean(raw.isLiveNow);

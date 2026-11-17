@@ -7,17 +7,15 @@
  * - Card and item sanitization for tasks, routine slots, exams, and notes
  */
 
+import { sanitizeText, stripHtmlTags } from '../../security-privacy.js';
+
+export { sanitizeText, stripHtmlTags };
+
 /**
  * Escapes HTML entities in a string to guarantee safe rendering
  */
 export function escapeHtml(str) {
-  if (typeof str !== 'string') return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return sanitizeText(str);
 }
 
 /**
@@ -57,9 +55,9 @@ export function sanitizeRoutineSlot(slot) {
   if (!slot) return slot;
   return {
     ...slot,
-    title: String(slot.title || '').trim(),
-    timeRange: String(slot.timeRange || '').trim(),
-    category: String(slot.category || 'Core Study').trim()
+    title: stripHtmlTags(String(slot.title || '')).trim(),
+    timeRange: stripHtmlTags(String(slot.timeRange || '')).trim(),
+    category: stripHtmlTags(String(slot.category || 'Core Study')).trim()
   };
 }
 
@@ -70,10 +68,10 @@ export function sanitizeExam(exam) {
   if (!exam) return exam;
   return {
     ...exam,
-    title: String(exam.title || '').trim(),
-    subject: String(exam.subject || '').trim(),
-    room: String(exam.room || '').trim(),
-    notes: String(exam.notes || '').trim(),
+    title: stripHtmlTags(String(exam.title || '')).trim(),
+    subject: stripHtmlTags(String(exam.subject || '')).trim(),
+    room: stripHtmlTags(String(exam.room || '')).trim(),
+    notes: stripHtmlTags(String(exam.notes || '')).trim(),
     submissionLink: sanitizeUrl(exam.submissionLink)
   };
 }

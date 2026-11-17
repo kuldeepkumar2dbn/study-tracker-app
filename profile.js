@@ -11,6 +11,9 @@
 
 import { patchUserData } from './storage-helper.js';
 import { getActiveUserId } from './auth-guard.js';
+import { sanitizeText, stripHtmlTags } from './security-privacy.js';
+
+export { sanitizeText };
 
 export const STUDENT_PROFILE_KEY = 'studytracker_student_profile';
 export const MOCK_TESTS_STORAGE_KEY = 'studytracker_mock_tests';
@@ -186,21 +189,21 @@ export function saveStudentProfile(input = {}, { userId = null } = {}) {
   }
 
   const dailyGoalHours = Math.max(0.5, Math.min(24, Number(input.dailyGoalHours) || 4));
-  const targetExam = String(input.targetExam || 'GATE').trim() || 'GATE';
-  const customTargetExam = String(input.customTargetExam || '').trim().slice(0, 40);
+  const targetExam = stripHtmlTags(String(input.targetExam || 'GATE')).trim() || 'GATE';
+  const customTargetExam = stripHtmlTags(String(input.customTargetExam || '')).trim().slice(0, 40);
   const { label: resolvedTargetExam } = resolveTargetExamDisplay(targetExam, customTargetExam);
 
   const savedProfile = {
     username: check.cleaned,
     handle: check.handle,
-    fullName: String(input.fullName || '').trim().slice(0, 60),
+    fullName: stripHtmlTags(String(input.fullName || '')).trim().slice(0, 60),
     age: parsedAge,
-    city: String(input.city || '').trim().slice(0, 40),
+    city: stripHtmlTags(String(input.city || '')).trim().slice(0, 40),
     targetExam,
     customTargetExam,
-    resolvedTargetExam,
+    resolvedTargetExam: stripHtmlTags(resolvedTargetExam),
     dailyGoalHours: Number(dailyGoalHours.toFixed(1)),
-    bio: String(input.bio || '').trim().slice(0, 120),
+    bio: stripHtmlTags(String(input.bio || '')).trim().slice(0, 120),
     showOnLeaderboard: input.showOnLeaderboard !== undefined ? Boolean(input.showOnLeaderboard) : true,
     updatedAt: new Date().toISOString()
   };

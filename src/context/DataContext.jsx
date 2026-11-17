@@ -43,6 +43,7 @@ import {
 } from '../../storage-helper.js';
 import { TELEMETRY_URL } from '../../admin-config.js';
 import { syncStudentToLeaderboard } from '../../leaderboard.js';
+import { sanitizeText, stripHtmlTags } from '../../security-privacy.js';
 
 const DataContext = createContext();
 
@@ -1271,17 +1272,17 @@ export function DataProvider({ children }) {
     }));
   };
 
-  // Subjects & Topics Actions
+  // Subjects & Topics Actions (XSS-sanitized inputs)
   const addSubject = (newSubject) => {
     const subjectObj = {
       id: 'sub-' + Date.now(),
-      name: newSubject.name,
-      code: newSubject.code || 'SUB-101',
+      name: stripHtmlTags(newSubject.name || '').trim() || 'Untitled Subject',
+      code: stripHtmlTags(newSubject.code || 'SUB-101').trim(),
       color: newSubject.color || '#6366f1',
       targetWeeklyHours: Number(newSubject.targetWeeklyHours) || 10,
       completedHours: 0,
       examDate: newSubject.examDate || addDaysDateStr(30),
-      category: newSubject.category || 'General',
+      category: stripHtmlTags(newSubject.category || 'General').trim(),
       topics: [],
       driveAttachments: []
     };
@@ -1293,9 +1294,10 @@ export function DataProvider({ children }) {
   };
 
   const updateSubjectName = (subjectId, newName) => {
-    if (!newName || !newName.trim()) return;
+    const cleanName = stripHtmlTags(newName || '').trim();
+    if (!cleanName) return;
     setSubjects(prev => prev.map(s => 
-      s.id === subjectId ? { ...s, name: newName.trim() } : s
+      s.id === subjectId ? { ...s, name: cleanName } : s
     ));
   };
 
@@ -1393,9 +1395,9 @@ export function DataProvider({ children }) {
   const addTopic = (subjectId, title, status = 'Not Started', notes = '') => {
     const newTopic = {
       id: 'top-' + Date.now(),
-      title,
+      title: stripHtmlTags(title || '').trim() || 'Untitled Chapter',
       status,
-      notes,
+      notes: stripHtmlTags(notes || '').trim(),
       studiedMinutes: 0,
       subtopics: [],
       youtubeLinks: [],
@@ -1666,11 +1668,11 @@ export function DataProvider({ children }) {
 
     const newSlot = {
       id: slot.id || ('block_' + Date.now()),
-      title: (slot.title || '').trim(),
+      title: stripHtmlTags(slot.title || '').trim(),
       startTime,
       endTime,
       timeRange: formattedRange,
-      category: slot.category || 'Core Study',
+      category: stripHtmlTags(slot.category || 'Core Study').trim(),
       completed: Boolean(slot.completed),
       syllabusLink: slot.syllabusLink || null,
       skillLink: slot.skillLink || null,

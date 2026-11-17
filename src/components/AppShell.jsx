@@ -39,6 +39,7 @@ import DriveModal from './DriveModal';
 import AuthModal from './AuthModal';
 import LockedFeatureOverlay from './LockedFeatureOverlay';
 import DriveNotesDemoModal from './DriveNotesDemoModal';
+import PinLockOverlay from './PinLockOverlay';
 import CollapsibleSidebar, { StopwatchIcon, SIDEBAR_ITEMS } from './CollapsibleSidebar';
 import { ThemeProvider, useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { DataProvider, useData } from '../context/DataContext';
@@ -1034,6 +1035,9 @@ export function AppLayout({ activeTabId, children }) {
       className="min-h-screen flex flex-col w-full bg-theme-bg text-theme-text transition-colors duration-200"
       data-active-feature={currentTabId || 'dashboard'}
     >
+      {/* SHA-256 App PIN Lock-Screen Overlay (blocks workspace on load when PIN is enabled) */}
+      <PinLockOverlay />
+
       {/* Ambient Gradient Mesh Canvas (if not already injected at top of body in static HTML) */}
       {typeof document !== 'undefined' && !document.querySelector('body > .ambient-mesh-canvas') && (
         <div className="ambient-mesh-canvas" aria-hidden="true">

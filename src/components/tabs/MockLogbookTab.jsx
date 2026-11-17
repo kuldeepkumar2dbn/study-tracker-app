@@ -28,6 +28,7 @@ import { patchUserData, getUserData } from '../../../storage-helper.js';
 import { getActiveUserId, getLocalDateString } from '../../../auth-guard.js';
 import { logFeatureUse } from '../../utils/telemetry.js';
 import { getRecentMockTrend, Y_TICKS } from '../../../mock-logbook.js';
+import { sanitizeText, stripHtmlTags } from '../../../security-privacy.js';
 
 export const MISTAKE_CATEGORIES = [
   { id: 'conceptual', label: 'Conceptual Gap', icon: '🧠', color: 'from-amber-500/20 to-orange-500/20 text-amber-400 border-amber-500/30' },
@@ -269,13 +270,20 @@ export default function MockLogbookTab({ onNavigateTab }) {
     setMistakes((prev) => prev.map((m) => (m.id === id ? { ...m, [field]: value } : m)));
   };
 
-  // Save Mock Test Submission
+  // Save Mock Test Submission (all text inputs XSS-sanitized via stripHtmlTags / sanitizeText)
   const handleSubmitMock = (e) => {
     e.preventDefault();
-    const cleanTitle = (title || 'Mock Test #' + (tests.length + 1)).trim();
-    const cleanSubject = (subject || 'General / Full Syllabus').trim();
+    const cleanTitle = stripHtmlTags(title || 'Mock Test #' + (tests.length + 1)).trim() || ('Mock Test #' + (tests.length + 1));
+    const cleanSubject = stripHtmlTags(subject || 'General / Full Syllabus').trim() || 'General / Full Syllabus';
 
-    const filteredMistakes = mistakes.filter((m) => m.topicNote && m.topicNote.trim().length > 0);
+    const filteredMistakes = mistakes
+      .filter((m) => m.topicNote && m.topicNote.trim().length > 0)
+      .map((m) => ({
+        ...m,
+        topicNote: stripHtmlTags(m.topicNote).trim(),
+        category: stripHtmlTags(m.category || 'Conceptual Gap').trim()
+      }))
+      .filter((m) => m.topicNote.length > 0);
 
     const newTest = {
       id: 'mock-' + Date.now(),

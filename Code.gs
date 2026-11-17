@@ -25,8 +25,22 @@ var LEADERBOARD_HEADERS = [
   'isLiveNow',
   'subjectHoursJson',
   'optedIn',
-  'updatedAt'
+  'updatedAt',
+  'userSecret'
 ];
+
+function sanitizeSheetText_(val) {
+  var str = String(val === null || val === undefined ? '' : val)
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\b(?:javascript|vbscript)\s*:/gi, '')
+    .trim();
+  // Prevent spreadsheet formula injection
+  if (/^[=+\-@]/.test(str) && str.charAt(0) !== '@') {
+    str = "'" + str;
+  }
+  return str;
+}
 
 function getOrCreateSheet_(name, headers) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -67,6 +81,10 @@ function doPost(e) {
       return handleLeaderboardSync_(payload);
     }
 
+    if (type === 'delete_leaderboard_entry') {
+      return handleDeleteLeaderboardEntry_(payload);
+    }
+
     if (type === 'feedback') {
       var fbSheet = getOrCreateSheet_(FEEDBACK_SHEET, [
         'timestamp', 'email', 'rating', 'category', 'message'
@@ -98,23 +116,49 @@ function doPost(e) {
 
 function handleLeaderboardSync_(payload) {
   var sheet = getOrCreateSheet_(LEADERBOARD_SHEET, LEADERBOARD_HEADERS);
-  var studentId = String(payload.studentId || '').trim();
+  var studentId = sanitizeSheetText_(payload.studentId || '');
   if (!studentId) {
     return jsonResponse_({ success: false, error: 'Missing studentId' });
   }
 
-  var displayName = formatDisplayName_(payload);
-  var username = String(payload.username || '').trim().replace(/^@+/, '') ||
+  var incomingSecret = String(payload.userSecret || '').trim();
+  if (!incomingSecret) {
+    return jsonResponse_({ success: false, error: 'Unauthorized: missing userSecret ownership token' });
+  }
+
+  var displayName = sanitizeSheetText_(formatDisplayName_(payload));
+  var username = sanitizeSheetText_(payload.username || '').replace(/^@+/, '').replace(/[^a-zA-Z0-9_]/g, '') ||
     (displayName.charAt(0) === '@' ? displayName.slice(1) : '');
-  var targetExam = String(payload.targetExam || '').trim();
-  var weeklyHours = Number(payload.weeklyHours || 0);
-  var totalHours = Number(payload.totalHours || weeklyHours || 0);
-  var streak = Number(payload.streak || 0);
-  var activeSubject = String(payload.activeSubject || 'General Studies').trim();
+  var targetExam = sanitizeSheetText_(payload.targetExam || '');
+  var weeklyHours = Math.max(0, Number(payload.weeklyHours || 0));
+  var totalHours = Math.max(0, Number(payload.totalHours || weeklyHours || 0));
+  var streak = Math.max(0, Number(payload.streak || 0));
+  var activeSubject = sanitizeSheetText_(payload.activeSubject || 'General Studies') || 'General Studies';
   var isLiveNow = Boolean(payload.isLiveNow);
   var subjectHoursJson = JSON.stringify(payload.subjectHours || {});
   var optedIn = payload.optedIn !== false;
   var updatedAt = String(payload.updatedAt || new Date().toISOString());
+
+  var data = sheet.getDataRange().getValues();
+  var existingRowIdx = -1;
+  var storedSecret = '';
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === studentId) {
+      existingRowIdx = i + 1;
+      storedSecret = String(data[i][12] || '').trim();
+      break;
+    }
+  }
+
+  // Enforce ownership token verification: reject spoofed updates from unauthorized callers
+  if (existingRowIdx !== -1 && storedSecret && storedSecret !== incomingSecret) {
+    return jsonResponse_({
+      success: false,
+      error: 'Unauthorized: invalid userSecret ownership token'
+    });
+  }
+
+  var finalSecret = storedSecret || incomingSecret;
 
   var rowValues = [
     studentId,
@@ -128,17 +172,9 @@ function handleLeaderboardSync_(payload) {
     isLiveNow,
     subjectHoursJson,
     optedIn,
-    updatedAt
+    updatedAt,
+    finalSecret
   ];
-
-  var data = sheet.getDataRange().getValues();
-  var existingRowIdx = -1;
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === studentId) {
-      existingRowIdx = i + 1;
-      break;
-    }
-  }
 
   if (existingRowIdx !== -1) {
     sheet.getRange(existingRowIdx, 1, 1, rowValues.length).setValues([rowValues]);
@@ -152,6 +188,44 @@ function handleLeaderboardSync_(payload) {
     displayName: displayName,
     targetExam: targetExam,
     updatedAt: updatedAt
+  });
+}
+
+function handleDeleteLeaderboardEntry_(payload) {
+  var sheet = getOrCreateSheet_(LEADERBOARD_SHEET, LEADERBOARD_HEADERS);
+  var studentId = sanitizeSheetText_(payload.studentId || '');
+  var incomingSecret = String(payload.userSecret || '').trim();
+
+  if (!studentId || !incomingSecret) {
+    return jsonResponse_({
+      success: false,
+      error: 'Unauthorized: studentId and userSecret are required for deletion'
+    });
+  }
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === studentId) {
+      var storedSecret = String(data[i][12] || '').trim();
+      if (storedSecret && storedSecret !== incomingSecret) {
+        return jsonResponse_({
+          success: false,
+          error: 'Unauthorized: userSecret mismatch for delete_leaderboard_entry'
+        });
+      }
+      sheet.deleteRow(i + 1);
+      return jsonResponse_({
+        success: true,
+        deleted: true,
+        studentId: studentId
+      });
+    }
+  }
+
+  return jsonResponse_({
+    success: true,
+    deleted: false,
+    reason: 'Entry not found'
   });
 }
 
