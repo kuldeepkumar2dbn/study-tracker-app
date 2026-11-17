@@ -21,6 +21,11 @@ import { sanitizeUrl } from '../../utils/security';
 import { celebrateTaskCompletion } from '../../utils/confetti';
 import AnimatedHeadline from '../AnimatedHeadline';
 import RollingNumber from '../RollingNumber';
+import {
+  filterActiveExamDeadlines,
+  purgeExpiredExamDeadlines,
+  getDaysUntilExam
+} from '../../../exam-radar.js';
 
 export default function ExamsTab() {
   const { exams, addExam, updateAssignmentStatus, toggleExamCompleted, deleteExam, subjects } = useData();
@@ -42,19 +47,22 @@ export default function ExamsTab() {
   const [assignmentStatus, setAssignmentStatus] = useState('Pending');
   const [notes, setNotes] = useState('');
 
-  // Live countdown tick every second
+  // Auto-purge expired deadlines on mount and tick countdown every second
   useEffect(() => {
+    purgeExpiredExamDeadlines();
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
+  const activeExamsList = filterActiveExamDeadlines(exams || []).activeExams;
+
   const calculateCountdownDetails = (targetDateIso) => {
     const target = new Date(targetDateIso).getTime();
     const diff = target - currentTime;
 
-    const totalDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    const totalDays = getDaysUntilExam(targetDateIso);
     const hours = Math.floor((Math.max(0, diff) / (1000 * 60 * 60)) % 24);
     const minutes = Math.floor((Math.max(0, diff) / 1000 / 60) % 60);
     const seconds = Math.floor((Math.max(0, diff) / 1000) % 60);
@@ -62,13 +70,10 @@ export default function ExamsTab() {
     let badgeText = '';
     let badgeClass = '';
 
-    if (diff <= 0) {
-      badgeText = 'Completed / Passed';
-      badgeClass = 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30';
-    } else if (totalDays <= 1) {
-      badgeText = 'Urgent! (Today)';
+    if (totalDays === 0) {
+      badgeText = 'Today • 0d remaining';
       badgeClass = 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse';
-    } else if (totalDays === 2) {
+    } else if (totalDays === 1) {
       badgeText = 'Tomorrow';
       badgeClass = 'bg-rose-500/20 text-rose-400 border-rose-500/40';
     } else if (totalDays <= 3) {
@@ -83,11 +88,11 @@ export default function ExamsTab() {
     }
 
     return {
-      days: Math.max(0, totalDays),
+      days: totalDays,
       hours,
       minutes,
       seconds,
-      isPast: diff <= 0,
+      isPast: false,
       badgeText,
       badgeClass
     };
@@ -120,8 +125,8 @@ export default function ExamsTab() {
     setIsAddModalOpen(false);
   };
 
-  // Sort upcoming deadlines strictly by date
-  const sortedDeadlines = [...exams].sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Sort upcoming active deadlines strictly by date (expired < today local midnight auto-purged)
+  const sortedDeadlines = [...activeExamsList].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const filteredDeadlines = sortedDeadlines.filter(item => {
     const matchesSubject = selectedSubjectFilter === 'All' || item.subject === selectedSubjectFilter;
@@ -136,9 +141,9 @@ export default function ExamsTab() {
   });
 
   const allSubjectsOptions = ['All', ...new Set(subjects.map(s => s.name))];
-  const examsCount = exams.filter(e => (!e.type || e.type === 'exam') && !e.isCompleted).length;
-  const assignmentsCount = exams.filter(e => e.type === 'assignment' && !e.isCompleted).length;
-  const submittedCount = exams.filter(e => e.isCompleted).length;
+  const examsCount = activeExamsList.filter(e => (!e.type || e.type === 'exam') && !e.isCompleted).length;
+  const assignmentsCount = activeExamsList.filter(e => e.type === 'assignment' && !e.isCompleted).length;
+  const submittedCount = activeExamsList.filter(e => e.isCompleted).length;
 
   return (
     <div className="space-y-6 animate-fadeIn">

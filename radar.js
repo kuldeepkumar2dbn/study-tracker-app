@@ -10,15 +10,35 @@
 
 import ExamsTab from './src/components/tabs/ExamsTab.jsx';
 import { patchUserData, saveExams } from './storage-helper.js';
+import {
+  purgeExpiredExamDeadlines,
+  filterActiveExamDeadlines,
+  isExamExpired,
+  getDaysUntilExam,
+  startMidnightExamPurgeScheduler,
+  stopMidnightExamPurgeScheduler
+} from './exam-radar.js';
 
 export {
   ExamsTab,
   saveExams,
-  patchUserData
+  patchUserData,
+  purgeExpiredExamDeadlines,
+  filterActiveExamDeadlines,
+  isExamExpired,
+  getDaysUntilExam,
+  startMidnightExamPurgeScheduler,
+  stopMidnightExamPurgeScheduler
 };
 
 export default {
   ExamsTab,
   saveExams,
-  patchUserData
+  patchUserData,
+  purgeExpiredExamDeadlines,
+  filterActiveExamDeadlines,
+  isExamExpired,
+  getDaysUntilExam,
+  startMidnightExamPurgeScheduler,
+  stopMidnightExamPurgeScheduler
 };

@@ -27,6 +27,14 @@ import {
   fetchLeaderboard,
   filterLeaderboardEntries
 } from './leaderboard.js';
+import {
+  purgeExpiredExamDeadlines,
+  filterActiveExamDeadlines,
+  isExamExpired,
+  getDaysUntilExam,
+  startMidnightExamPurgeScheduler,
+  stopMidnightExamPurgeScheduler
+} from './exam-radar.js';
 
 export {
   handleEndOfDayRollover,
@@ -45,7 +53,13 @@ export {
   isLivePresenceHeartbeatRunning,
   syncStudentToLeaderboard,
   fetchLeaderboard,
-  filterLeaderboardEntries
+  filterLeaderboardEntries,
+  purgeExpiredExamDeadlines,
+  filterActiveExamDeadlines,
+  isExamExpired,
+  getDaysUntilExam,
+  startMidnightExamPurgeScheduler,
+  stopMidnightExamPurgeScheduler
 };
 
 /**
@@ -110,6 +124,23 @@ if (typeof window !== 'undefined') {
       setupSidebarNav();
     } catch (err) {
       console.warn('Error during router setup in app.js:', err);
+    }
+
+    // Auto-purge expired exam deadlines on initial page load, view switches, and midnight interval
+    try {
+      purgeExpiredExamDeadlines();
+      startMidnightExamPurgeScheduler();
+
+      const handleExamPurgeOnViewSwitch = (e) => {
+        const view = String(e?.detail?.view || getCurrentView() || '').toLowerCase();
+        if (view === 'radar' || view === 'exam-radar' || view === 'dashboard') {
+          purgeExpiredExamDeadlines();
+        }
+      };
+      window.addEventListener('studyflow-view-changed', handleExamPurgeOnViewSwitch);
+      window.addEventListener('hashchange', handleExamPurgeOnViewSwitch);
+    } catch (err) {
+      console.warn('Error initializing expired exam deadline auto-purge in app.js:', err);
     }
 
     // Resume Focus Timer 3-minute Live Presence Heartbeat if timer is running across reloads

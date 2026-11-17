@@ -32,6 +32,7 @@ import SkillSyncToast from '../SkillSyncToast';
 import ConsistencyRadar from '../ConsistencyRadar';
 import { TELEMETRY_URL } from '../../../admin-config.js';
 import { syncStudentToLeaderboard } from '../../../leaderboard.js';
+import { filterActiveExamDeadlines, getDaysUntilExam } from '../../../exam-radar.js';
 
 /**
  * Applies the selected theme and updates .is-active state on theme selector buttons
@@ -144,22 +145,23 @@ export default function DashboardTab({ onNavigateTab }) {
   }, 0);
   const overallMasteryPct = totalTopics > 0 ? Math.round(totalScore / totalTopics) : 0;
 
-  // Upcoming non-completed deadlines sorted by date
-  const upcomingDeadlines = safeExams
-    .filter(e => !e.isCompleted)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Upcoming non-completed active deadlines (strictly >= today local midnight) sorted by date
+  const upcomingDeadlines = useMemo(() => {
+    const { activeExams } = filterActiveExamDeadlines(safeExams);
+    return activeExams
+      .filter(e => !e.isCompleted)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [safeExams]);
   const nearestDeadline = upcomingDeadlines[0];
 
   const getDaysLeft = (targetDate) => {
-    const diffMs = new Date(targetDate) - new Date();
-    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    return days > 0 ? days : 0;
+    return getDaysUntilExam(targetDate);
   };
 
   const getDynamicBadge = (targetDate, type) => {
     const days = getDaysLeft(targetDate);
-    if (days <= 1) return { text: 'Urgent! (Today)', class: 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse' };
-    if (days === 2) return { text: 'Tomorrow', class: 'bg-rose-500/20 text-rose-400 border-rose-500/40' };
+    if (days === 0) return { text: 'Today • 0d remaining', class: 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse' };
+    if (days === 1) return { text: 'Tomorrow', class: 'bg-rose-500/20 text-rose-400 border-rose-500/40' };
     if (days <= 3) return { text: `Urgent! (${days}d)`, class: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     if (days <= 7) return { text: `In ${days} Days`, class: 'bg-amber-500/15 text-amber-400 border-amber-500/30' };
     return { text: `In ${days} Days`, class: 'bg-sky-500/15 text-sky-400 border-sky-500/30' };
@@ -472,9 +474,15 @@ export default function DashboardTab({ onNavigateTab }) {
             <div>
               <div className="flex items-baseline space-x-2">
                 <span className="font-display font-extrabold text-2xl font-mono-numbers text-rose-500">
-                  <RollingNumber value={getDaysLeft(nearestDeadline.date)} suffix="d" />
+                  {getDaysLeft(nearestDeadline.date) === 0 ? (
+                    'Today'
+                  ) : (
+                    <RollingNumber value={getDaysLeft(nearestDeadline.date)} suffix="d" />
+                  )}
                 </span>
-                <span className="text-xs text-theme-muted font-medium">remaining</span>
+                <span className="text-xs text-theme-muted font-medium">
+                  {getDaysLeft(nearestDeadline.date) === 0 ? '0d remaining' : 'remaining'}
+                </span>
               </div>
               <p className="mt-2 text-xs font-medium text-theme-text truncate" title={nearestDeadline.title}>
                 {nearestDeadline.title}
@@ -482,16 +490,16 @@ export default function DashboardTab({ onNavigateTab }) {
             </div>
           ) : (
             <div>
-              <p className="text-xs font-semibold text-theme-text">No deadlines set</p>
+              <p className="text-xs font-semibold text-theme-text">No upcoming deadlines</p>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   navigate('exams');
                 }}
-                className="mt-2 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95"
+                className="mt-2 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
               >
                 <Plus className="w-3 h-3" />
-                <span>+ Add Deadline</span>
+                <span>+ Add Exam</span>
               </button>
             </div>
           )}

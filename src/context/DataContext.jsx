@@ -44,6 +44,12 @@ import {
 import { TELEMETRY_URL } from '../../admin-config.js';
 import { syncStudentToLeaderboard } from '../../leaderboard.js';
 import { sanitizeText, stripHtmlTags } from '../../security-privacy.js';
+import {
+  filterActiveExamDeadlines,
+  purgeExpiredExamDeadlines,
+  startMidnightExamPurgeScheduler,
+  stopMidnightExamPurgeScheduler
+} from '../../exam-radar.js';
 
 const DataContext = createContext();
 
@@ -172,16 +178,61 @@ export function DataProvider({ children }) {
     return readScoped('subjects', []);
   });
 
-  // State: Exams & Assignment Deadlines
+  // State: Exams & Assignment Deadlines (auto-purges expired deadlines < today local midnight)
   const [exams, setExams] = useState(() => {
+    let loaded = [];
     if (isDemo) {
-      return readScoped('exams', initialDeadlines);
+      loaded = readScoped('exams', initialDeadlines);
+    } else if (initialUserData && Array.isArray(initialUserData.exams)) {
+      loaded = initialUserData.exams;
+    } else {
+      loaded = readScoped('exams', []);
     }
-    if (initialUserData && Array.isArray(initialUserData.exams)) {
-      return initialUserData.exams;
-    }
-    return readScoped('exams', []);
+    return filterActiveExamDeadlines(loaded).activeExams;
   });
+
+  // Auto-purge expired exams on mount, on switching to #view-radar / #view-dashboard, and across midnight
+  useEffect(() => {
+    const runPurge = () => {
+      const res = purgeExpiredExamDeadlines({ userId: activeId });
+      if (res && res.purged) {
+        setExams(res.activeExams);
+      } else {
+        setExams((prev) => {
+          const filtered = filterActiveExamDeadlines(prev);
+          return filtered.removedCount > 0 ? filtered.activeExams : prev;
+        });
+      }
+    };
+
+    runPurge();
+    startMidnightExamPurgeScheduler({
+      onPurge: (res) => {
+        if (res && res.purged) setExams(res.activeExams);
+      }
+    });
+
+    const handlePurgedEvent = (e) => {
+      if (Array.isArray(e?.detail?.activeExams)) {
+        setExams(e.detail.activeExams);
+      }
+    };
+    const handleViewChange = (e) => {
+      const v = String(e?.detail?.view || '').toLowerCase();
+      if (v === 'radar' || v === 'exam-radar' || v === 'dashboard') {
+        runPurge();
+      }
+    };
+
+    window.addEventListener('studyflow-exams-purged', handlePurgedEvent);
+    window.addEventListener('studyflow-view-changed', handleViewChange);
+
+    return () => {
+      stopMidnightExamPurgeScheduler();
+      window.removeEventListener('studyflow-exams-purged', handlePurgedEvent);
+      window.removeEventListener('studyflow-view-changed', handleViewChange);
+    };
+  }, [activeId]);
 
   // State: Daily Routine Slots
   const [routineSlots, setRoutineSlots] = useState(() => {
@@ -564,7 +615,11 @@ export function DataProvider({ children }) {
         setRoutineSlots(remoteData.routine);
       }
       if (Array.isArray(remoteData.exams)) {
-        setExams(remoteData.exams);
+        const purgedHydrated = filterActiveExamDeadlines(remoteData.exams);
+        setExams(purgedHydrated.activeExams);
+        if (purgedHydrated.removedCount > 0) {
+          purgeExpiredExamDeadlines({ userId: activeId, examsOverride: remoteData.exams });
+        }
       }
       if (Array.isArray(remoteData.skills)) {
         setSkills(remoteData.skills);

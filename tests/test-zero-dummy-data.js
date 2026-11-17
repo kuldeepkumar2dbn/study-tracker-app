@@ -96,7 +96,7 @@ console.log('✔ Test 2.1: 30-Day Consistency Radar renders 0.0h across all 30 d
 console.log('\n--- SECTION 3: Clean Empty-State UI Placeholders & Action CTAs ---');
 
 const dashboardTab = fs.readFileSync(path.join(rootDir, 'src', 'components', 'tabs', 'DashboardTab.jsx'), 'utf8');
-assert(dashboardTab.includes('No deadlines set'), 'Dashboard Next Deadline card must display "No deadlines set" when empty');
+assert(dashboardTab.includes('No upcoming deadlines'), 'Dashboard Next Deadline card must display "No upcoming deadlines" when empty');
 assert(dashboardTab.includes('+ Add Your First Routine Block'), 'Dashboard routine empty state must include "+ Add Your First Routine Block" CTA');
 
 const dailyRoutine = fs.readFileSync(path.join(rootDir, 'src', 'components', 'DailyRoutine.jsx'), 'utf8');

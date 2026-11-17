@@ -141,8 +141,16 @@ export function patchUserData(userId, updates = {}) {
     console.warn(`Error reading existing data before patch for ${targetUserId}:`, err);
   }
 
-  // Guard: never overwrite populated real user data with a blank zero-state payload
-  if (!isBlankZeroState(existing) && isBlankZeroState(updates)) {
+  // Guard: never overwrite populated real user data with a full blank zero-state payload
+  // while still allowing targeted single-section updates (such as purging expired exams to [])
+  const isFullBlankOverwrite =
+    updates &&
+    typeof updates === 'object' &&
+    'subjects' in updates &&
+    'routine' in updates &&
+    isBlankZeroState(updates);
+
+  if (!isBlankZeroState(existing) && isFullBlankOverwrite) {
     return existing;
   }
 

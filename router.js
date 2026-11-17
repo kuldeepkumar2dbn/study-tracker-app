@@ -45,6 +45,7 @@ export const FEATURE_NAME_MAP = {
 const VIEW_ALIASES = {
   subjects: 'syllabus',
   exams: 'radar',
+  'exam-radar': 'radar',
   mock: 'mock-logbook',
   logbook: 'mock-logbook',
   'mock-test': 'mock-logbook',
