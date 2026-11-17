@@ -13,9 +13,11 @@ export const SIDEBAR_ITEMS = [
   { id: 'revision', name: 'Revision Queue', href: '#revision', targetView: 'revision', isProtected: true, tooltip: 'Spaced Repetition Queue' },
   { id: 'radar', name: 'Exam Radar', href: '#radar', targetView: 'radar', isProtected: true, tooltip: 'Exam Radar & Deadlines' },
   { id: 'mock-logbook', name: 'Mock Logbook', href: '#mock-logbook', targetView: 'mock-logbook', tooltip: 'Mock Test & Mistake Logbook' },
+  { id: 'leaderboard', name: 'Leaderboard', href: '#leaderboard', targetView: 'leaderboard', tooltip: 'Real-Time Student Leaderboard' },
   { id: 'skills', name: 'Skill Tracker', href: '#skills', targetView: 'skills', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
   { id: 'notes', name: 'Drive Notes', href: '#notes', targetView: 'notes', isProtected: true, tooltip: 'Google Drive Notes Vault' },
-  { id: 'timer', name: 'Focus Timer', href: '#timer', targetView: 'timer', tooltip: 'Focus Timer & Deep Work' }
+  { id: 'timer', name: 'Focus Timer', href: '#timer', targetView: 'timer', tooltip: 'Focus Timer & Deep Work' },
+  { id: 'profile', name: 'My Profile', href: '#profile', targetView: 'profile', tooltip: 'My Student Profile & ID Card' }
 ];
 
 export function setupSidebarNav(container = document) {

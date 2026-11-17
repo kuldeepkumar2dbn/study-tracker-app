@@ -18,6 +18,12 @@ import { ambientAudioEngine } from '../../utils/ambientAudio';
 import AmbientAudioControls from '../AmbientAudioControls';
 import AnimatedHeadline from '../AnimatedHeadline';
 import RollingNumber from '../RollingNumber';
+import { TELEMETRY_URL } from '../../../admin-config.js';
+import {
+  syncStudentToLeaderboard,
+  startLivePresenceHeartbeat,
+  stopLivePresenceHeartbeat
+} from '../../../leaderboard.js';
 
 const PRESETS = [
   { id: 'pomo', name: '25m Focus', durationSec: 25 * 60, label: '25m' },
@@ -26,7 +32,7 @@ const PRESETS = [
 ];
 
 export default function TimerTab() {
-  const { subjects, addTimerSession, timerHistory } = useData();
+  const { subjects, addTimerSession, timerHistory, streakData, dailyActivity } = useData();
 
   const [activePreset, setActivePreset] = useState(PRESETS[0]);
   const [totalSeconds, setTotalSeconds] = useState(PRESETS[0].durationSec);
@@ -38,6 +44,25 @@ export default function TimerTab() {
   const [sessionCompletedNotice, setSessionCompletedNotice] = useState(null);
 
   const timerRef = useRef(null);
+  const statsPayloadRef = useRef({
+    subjectsList: subjects,
+    subjects,
+    streakData,
+    dailyActivity,
+    activeSubject: selectedSubject
+  });
+
+  useEffect(() => {
+    statsPayloadRef.current = {
+      subjectsList: subjects,
+      subjects,
+      streakData,
+      dailyActivity,
+      activeSubject: selectedSubject
+    };
+  }, [subjects, streakData, dailyActivity, selectedSubject]);
+
+  const getCurrentStatsPayload = () => statsPayloadRef.current;
 
   // Restore active timer state from localStorage on mount
   useEffect(() => {
@@ -50,6 +75,7 @@ export default function TimerTab() {
 
       if (savedSubject && subjects.some(s => s.name === savedSubject)) {
         setSelectedSubject(savedSubject);
+        statsPayloadRef.current = { ...statsPayloadRef.current, activeSubject: savedSubject };
       }
 
       if (savedTotal) {
@@ -63,6 +89,8 @@ export default function TimerTab() {
         if (remaining > 0) {
           setTimeLeft(remaining);
           setIsRunning(true);
+          // Resume 3-minute live presence heartbeat if timer is actively running
+          startLivePresenceHeartbeat(TELEMETRY_URL, getCurrentStatsPayload);
         } else {
           setTimeLeft(0);
           setIsRunning(false);
@@ -134,6 +162,9 @@ export default function TimerTab() {
       // ignore
     }
 
+    // Stop 3-minute presence heartbeat upon session completion
+    stopLivePresenceHeartbeat({ sendIdlePing: activePreset.id === 'short' });
+
     // Crucial requirement: Automatically add logged minutes to that subject's total studied hours!
     if (activePreset.id !== 'short') {
       const minutes = Math.round(totalSeconds / 60);
@@ -151,11 +182,38 @@ export default function TimerTab() {
         subject: selectedSubject
       });
       setTimeout(() => setSessionCompletedNotice(null), 6000);
+
+      // Automatically sync completed Focus Timer hours to real-time Leaderboard
+      const addedHours = Number((minutes / 60).toFixed(1));
+      const updatedSubjects = (subjects || []).map((s) =>
+        s.name === selectedSubject
+          ? { ...s, completedHours: Number(((s.completedHours || 0) + addedHours).toFixed(1)) }
+          : s
+      );
+      syncStudentToLeaderboard(
+        TELEMETRY_URL,
+        {
+          subjectsList: updatedSubjects,
+          subjects: updatedSubjects,
+          dailyActivity,
+          streakData: {
+            ...(streakData || {}),
+            todayHours: Number(((streakData?.todayHours || 0) + addedHours).toFixed(1)),
+            weeklyVelocityHours: Number(((streakData?.weeklyVelocityHours || 0) + addedHours).toFixed(1)),
+            streakCount: (streakData?.streakCount || 0) === 0 ? 1 : streakData.streakCount
+          }
+        },
+        {
+          activeSubject: selectedSubject,
+          isLiveNow: false
+        }
+      );
     }
   };
 
   const handleSelectPreset = (preset) => {
     setIsRunning(false);
+    stopLivePresenceHeartbeat();
     setActivePreset(preset);
     setTotalSeconds(preset.durationSec);
     setTimeLeft(preset.durationSec);
@@ -179,12 +237,25 @@ export default function TimerTab() {
       localStorage.setItem('focus_seconds_left', String(timeLeft));
       localStorage.setItem('focus_timer_total_seconds', String(totalSeconds));
       localStorage.setItem('focus_timer_subject', selectedSubject);
+      statsPayloadRef.current = {
+        subjectsList: subjects,
+        subjects,
+        streakData,
+        dailyActivity,
+        activeSubject: selectedSubject
+      };
+
+      // Trigger 3-minute live presence heartbeat so student immediately appears as 🟢 Studying [Active Subject]
+      startLivePresenceHeartbeat(TELEMETRY_URL, getCurrentStatsPayload);
     } else {
       // Gently fade out sound over 2 seconds when pausing
       ambientAudioEngine.fadeOut(2.0);
       localStorage.setItem('is_timer_running', 'false');
       localStorage.setItem('focus_seconds_left', String(timeLeft));
       localStorage.removeItem('focus_timer_end');
+
+      // Stop 3-minute presence heartbeat and transition to idle status
+      stopLivePresenceHeartbeat();
     }
     setIsRunning(nextRunning);
     window.dispatchEvent(new Event('studyflow-timer-sync'));
@@ -192,6 +263,7 @@ export default function TimerTab() {
 
   const handleReset = () => {
     setIsRunning(false);
+    stopLivePresenceHeartbeat();
     setTimeLeft(totalSeconds);
     ambientAudioEngine.fadeOut(2.0);
     localStorage.setItem('is_timer_running', 'false');

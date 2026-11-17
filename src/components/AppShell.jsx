@@ -31,7 +31,8 @@ import {
   Bell,
   Wrench,
   ShieldAlert,
-  Target
+  Target,
+  Trophy
 } from 'lucide-react';
 import Logo from './Logo';
 import DriveModal from './DriveModal';
@@ -53,8 +54,11 @@ import {
   getEmergencyKillswitches, 
   isSuperAdmin, 
   canAccessAdmin,
-  ADMIN_STORAGE_KEYS 
+  ADMIN_STORAGE_KEYS,
+  TELEMETRY_URL
 } from '../../admin-config';
+import { syncStudentToLeaderboard } from '../../leaderboard.js';
+import { getStudentProfile, getUsernameMonogram } from '../../profile.js';
 import { 
   getNotificationPermission, 
   requestNotificationPermission, 
@@ -74,9 +78,11 @@ export const NAV_TABS = [
   { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', pathRegex: /\/revision\.html$/, isProtected: true },
   { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', pathRegex: /\/radar\.html$/, isProtected: true },
   { id: 'mock-logbook', name: 'Mock Logbook', icon: Target, href: '/mock-logbook.html', pathRegex: /\/mock-logbook\.html$/ },
+  { id: 'leaderboard', name: 'Leaderboard', icon: Trophy, href: '/leaderboard.html', pathRegex: /\/leaderboard\.html$/ },
   { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', pathRegex: /\/skills\.html$/, isProtected: true },
   { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', pathRegex: /\/notes\.html$/, isProtected: true },
   { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', pathRegex: /\/timer\.html$/, tooltip: 'Focus Timer & Deep Work' },
+  { id: 'profile', name: 'My Profile', icon: User, href: '/profile.html', pathRegex: /\/profile\.html$/, tooltip: 'My Student Profile & ID Card' },
 ];
 
 export const LOCKED_TAB_IDS = ['syllabus', 'revision', 'radar', 'skills', 'notes'];
@@ -90,7 +96,7 @@ export function SharedHeader({
   isSidebarExpanded = true
 }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
-  const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks } = useData();
+  const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks, subjects, dailyActivity } = useData();
   const { isAuthenticated, userProfile, signOut, openAuthModal, isDemo } = useAuth();
   
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
@@ -100,6 +106,32 @@ export function SharedHeader({
     return formatRelativeSyncTime(getLastSyncedTimestamp());
   });
   const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
+  const [studentProfile, setStudentProfile] = useState(() => getStudentProfile(userProfile));
+
+  useEffect(() => {
+    setStudentProfile(getStudentProfile(userProfile));
+    const handleProfileUpdated = (e) => {
+      setStudentProfile(e.detail || getStudentProfile(userProfile));
+    };
+    window.addEventListener('studyflow-student-profile-updated', handleProfileUpdated);
+    window.addEventListener('storage', handleProfileUpdated);
+    return () => {
+      window.removeEventListener('studyflow-student-profile-updated', handleProfileUpdated);
+      window.removeEventListener('storage', handleProfileUpdated);
+    };
+  }, [userProfile]);
+
+  const handleOpenProfileView = (e) => {
+    if (e) e.preventDefault();
+    setProfileDropdownOpen(false);
+    if (typeof window !== 'undefined') {
+      if (window.switchView) {
+        window.switchView('profile');
+      } else {
+        window.location.hash = 'profile';
+      }
+    }
+  };
 
   useEffect(() => {
     const handlePermissionChange = (e) => {
@@ -330,7 +362,16 @@ export function SharedHeader({
                 {/* Explicit "Sync Cloud Data" Button in Header */}
                 <button
                   id="header-sync-now-btn"
-                  onClick={syncNowToDrive}
+                  onClick={() => {
+                    if (syncNowToDrive) syncNowToDrive();
+                    syncStudentToLeaderboard(TELEMETRY_URL, {
+                      userProfile,
+                      subjectsList: subjects,
+                      subjects,
+                      streakData,
+                      dailyActivity
+                    });
+                  }}
                   title="Bidirectional Cloud Sync: uploads laptop data if newer, or downloads cloud data if phone is missing data"
                   className="top-action-link flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border hover:border-theme-accent/40 text-xs font-semibold text-theme-text hover:text-theme-accent transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
                 >
@@ -357,37 +398,57 @@ export function SharedHeader({
             </div>
           )}
 
-          {/* User Profile OR Clean Sign-In Button */}
+          {/* User Profile (@username Pill -> opens #view-profile) OR Clean Sign-In Button */}
           {isAuthenticated && userProfile ? (
             <div className="flex items-center gap-1.5">
-              {/* Profile Dropdown Launcher */}
-              <div className="relative" ref={profileDropdownRef}>
+              {/* Top-Right @username Profile Pill (opens #view-profile when clicked) */}
+              <div className="relative flex items-center gap-1" ref={profileDropdownRef}>
                 <button
-                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="flex items-center space-x-2 px-2 sm:px-2.5 py-1 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none"
-                  title={`Signed in as ${userProfile.name} (${userProfile.email})`}
+                  id="header-profile-pill"
+                  type="button"
+                  data-target-view="profile"
+                  onClick={handleOpenProfileView}
+                  className="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
+                  title={`Open My Profile (${studentProfile?.handle || '@scholar'})`}
                 >
                   {userProfile.picture ? (
                     <img 
                       src={userProfile.picture} 
-                      alt={userProfile.name} 
+                      alt={studentProfile?.handle || userProfile.name} 
                       referrerPolicy="no-referrer"
                       className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
                     />
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-[10px]">
-                      {(userProfile.name || 'S').charAt(0).toUpperCase()}
+                    <div
+                      className="w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px]"
+                      style={{
+                        backgroundColor: 'var(--primary)',
+                        color: '#FFFFFF',
+                        border: '1px solid var(--border-glow)'
+                      }}
+                    >
+                      {getUsernameMonogram(studentProfile?.username, userProfile.name)}
                     </div>
                   )}
-                  <span className="hidden md:inline font-semibold text-theme-text truncate max-w-[100px]">
-                    {userProfile.name?.split(' ')[0] || 'Student'}
+                  <span className="font-bold text-theme-text font-mono-numbers truncate max-w-[120px]">
+                    {studentProfile?.handle || `@${(userProfile.name || 'student').toLowerCase().replace(/\s+/g, '_')}`}
                   </span>
-                  <ChevronDown className={`w-3 h-3 text-theme-muted transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Account Menu Dropdown Trigger */}
+                <button
+                  type="button"
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  aria-label="Account menu"
+                  title="Account options"
+                  className="p-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 text-theme-muted transition-transform duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {/* Profile & Sign Out Dropdown Menu */}
                 {profileDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-2xl glass-dropdown p-3 shadow-2xl z-50 animate-fadeIn border border-theme-border">
+                  <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl glass-dropdown p-3 shadow-2xl z-50 animate-fadeIn border border-theme-border">
                     {/* User Info Header */}
                     <div className="flex items-center gap-2.5 pb-2.5 mb-2 border-b border-theme-border/60">
                       {userProfile.picture ? (
@@ -399,14 +460,24 @@ export function SharedHeader({
                         />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-emerald-500 text-white font-bold flex items-center justify-center text-xs">
-                          {(userProfile.name || 'S').charAt(0).toUpperCase()}
+                          {getUsernameMonogram(studentProfile?.username, userProfile.name)}
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-xs text-theme-text truncate">{userProfile.name}</p>
+                        <p className="font-bold text-xs text-theme-text truncate font-mono-numbers">{studentProfile?.handle || userProfile.name}</p>
                         <p className="text-[11px] text-theme-muted truncate">{userProfile.email}</p>
                       </div>
                     </div>
+
+                    {/* Open My Profile Action */}
+                    <button
+                      type="button"
+                      onClick={handleOpenProfileView}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors mb-1 cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 text-theme-accent" />
+                      <span>My Student Profile</span>
+                    </button>
 
                     {/* Session Indicator */}
                     <div className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-medium mb-2 flex items-center gap-1.5 ${
@@ -464,15 +535,41 @@ export function SharedHeader({
               </button>
             </div>
           ) : (
-            /* Clean Sign-In Button for Guests */
-            <button
-              onClick={() => openAuthModal('general')}
-              className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/35 transition-all duration-200 hover:brightness-105 active:scale-95 cursor-pointer"
-              title="Sign in with Google to unlock all features"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              {/* Guest @username Profile Pill (opens #view-profile when clicked) */}
+              <button
+                id="header-profile-pill"
+                type="button"
+                data-target-view="profile"
+                onClick={handleOpenProfileView}
+                className="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
+                title={`Open My Profile (${studentProfile?.handle || '@focused_scholar'})`}
+              >
+                <div
+                  className="w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px]"
+                  style={{
+                    backgroundColor: 'var(--primary)',
+                    color: '#FFFFFF',
+                    border: '1px solid var(--border-glow)'
+                  }}
+                >
+                  {getUsernameMonogram(studentProfile?.username, 'ST')}
+                </div>
+                <span className="font-bold text-theme-text font-mono-numbers truncate max-w-[120px]">
+                  {studentProfile?.handle || '@focused_scholar'}
+                </span>
+              </button>
+
+              {/* Clean Sign-In Button for Guests */}
+              <button
+                onClick={() => openAuthModal('general')}
+                className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/35 transition-all duration-200 hover:brightness-105 active:scale-95 cursor-pointer"
+                title="Sign in with Google to unlock all features"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            </div>
           )}
 
           {/* Appearance / Theme Dropdown */}

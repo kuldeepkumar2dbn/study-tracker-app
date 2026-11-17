@@ -7,9 +7,11 @@ import SubjectsTab from '../components/tabs/SubjectsTab';
 import RevisionTab from '../components/tabs/RevisionTab';
 import ExamsTab from '../components/tabs/ExamsTab';
 import MockLogbookTab from '../components/tabs/MockLogbookTab';
+import LeaderboardTab from '../components/tabs/LeaderboardTab';
 import SkillsTab from '../components/tabs/SkillsTab';
 import NotesTab from '../components/tabs/NotesTab';
 import TimerTab from '../components/tabs/TimerTab';
+import ProfileTab from '../components/tabs/ProfileTab';
 import DriveModal from '../components/DriveModal';
 import { useAuth } from '../context/AuthContext';
 import { switchView, getCurrentView, initRouter } from '../../router.js';
@@ -119,6 +121,15 @@ export function SPAApp() {
         <MockLogbookTab onNavigateTab={handleNavigate} />
       </div>
 
+      {/* Real-Time Student Leaderboard View */}
+      <div 
+        id="view-leaderboard" 
+        className={`app-view w-full max-w-none mx-0 ${activeView === 'leaderboard' ? 'active-view' : ''}`}
+        data-view="leaderboard"
+      >
+        <LeaderboardTab isActiveView={activeView === 'leaderboard'} />
+      </div>
+
       {/* 7. Skill Tracker View */}
       <div 
         id="view-skills" 
@@ -148,6 +159,15 @@ export function SPAApp() {
         data-view="timer"
       >
         <TimerTab />
+      </div>
+
+      {/* 10. Student Profile View */}
+      <div 
+        id="view-profile" 
+        className={`app-view w-full max-w-none mx-0 ${activeView === 'profile' ? 'active-view' : ''}`}
+        data-view="profile"
+      >
+        <ProfileTab />
       </div>
     </div>
   );

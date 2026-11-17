@@ -41,6 +41,8 @@ import {
   handleEndOfDayRollover,
   checkAndTriggerEndOfDayRollover
 } from '../../storage-helper.js';
+import { TELEMETRY_URL } from '../../admin-config.js';
+import { syncStudentToLeaderboard } from '../../leaderboard.js';
 
 const DataContext = createContext();
 
@@ -1159,6 +1161,11 @@ export function DataProvider({ children }) {
         updatedAt: new Date().toISOString()
       };
       const res = await forceBidirectionalSync(currentPayload);
+      syncStudentToLeaderboard(TELEMETRY_URL, {
+        ...currentPayload,
+        subjectsList: subjects || [],
+        streakData
+      }).catch(() => {});
       return res;
     } catch (e) {
       console.error('Explicit sync error:', e);

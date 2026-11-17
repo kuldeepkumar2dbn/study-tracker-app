@@ -17,14 +17,17 @@ import {
   ShieldCheck,
   MessageSquare,
   CheckCircle2,
-  Target
+  Target,
+  Trophy,
+  User
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, FEATURE_COLORS } from '../context/ThemeContext';
 import { soundEngine } from '../utils/audio';
 import { celebrateTaskCompletion } from '../utils/confetti';
-import { canAccessAdmin, AdminAuth } from '../../admin-config';
+import { canAccessAdmin, AdminAuth, TELEMETRY_URL } from '../../admin-config';
+import { syncStudentToLeaderboard, stopLivePresenceHeartbeat } from '../../leaderboard.js';
 import FeedbackModal from './FeedbackModal';
 import { logFeatureUse } from '../utils/telemetry';
 
@@ -64,9 +67,11 @@ export const SIDEBAR_ITEMS = [
   { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', isProtected: true, tooltip: 'Spaced Repetition Queue' },
   { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', isProtected: true, tooltip: 'Exam Radar & Deadlines' },
   { id: 'mock-logbook', name: 'Mock Logbook', icon: Target, href: '/mock-logbook.html', isProtected: false, tooltip: 'Mock Test & Mistake Logbook' },
+  { id: 'leaderboard', name: 'Leaderboard', icon: Trophy, href: '/leaderboard.html', isProtected: false, tooltip: 'Real-Time Student Leaderboard' },
   { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
   { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', isProtected: true, tooltip: 'Google Drive Notes Vault' },
-  { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', tooltip: 'Focus Timer & Deep Work' }
+  { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', tooltip: 'Focus Timer & Deep Work' },
+  { id: 'profile', name: 'My Profile', icon: User, href: '/profile.html', isProtected: false, tooltip: 'My Student Profile & ID Card' }
 ];
 
 export const LOCKED_TAB_IDS = ['syllabus', 'revision', 'radar', 'skills', 'notes'];
@@ -111,6 +116,11 @@ export const ACTIVE_PILL_STYLES = {
     shadow: '0 0 22px -2px rgba(14, 165, 233, 0.65), 0 4px 14px rgba(2, 132, 199, 0.45)',
     border: 'rgba(186, 230, 253, 0.4)'
   },
+  leaderboard: {
+    bg: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+    shadow: '0 0 22px -2px rgba(245, 158, 11, 0.65), 0 4px 14px rgba(217, 119, 6, 0.45)',
+    border: 'rgba(253, 230, 138, 0.45)'
+  },
   skills: {
     bg: 'linear-gradient(135deg, #9333ea 0%, #a855f7 100%)',
     shadow: '0 0 22px -2px rgba(168, 85, 247, 0.65), 0 4px 14px rgba(147, 51, 234, 0.45)',
@@ -125,6 +135,11 @@ export const ACTIVE_PILL_STYLES = {
     bg: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #8b5cf6 100%)',
     shadow: '0 0 26px -2px rgba(139, 92, 246, 0.75), 0 4px 16px rgba(79, 70, 229, 0.5)',
     border: 'rgba(196, 181, 253, 0.5)'
+  },
+  profile: {
+    bg: 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)',
+    shadow: '0 0 22px -2px rgba(20, 184, 166, 0.65), 0 4px 14px rgba(13, 148, 136, 0.45)',
+    border: 'rgba(153, 246, 228, 0.45)'
   },
   admin: {
     bg: 'linear-gradient(135deg, #b45309 0%, #d97706 50%, #f59e0b 100%)',
@@ -228,6 +243,19 @@ export default function CollapsibleSidebar({
                 type: 'Deep Work'
               });
             }
+
+            // Stop 3-minute live presence heartbeat and sync completed focus session
+            stopLivePresenceHeartbeat({ sendIdlePing: false });
+            syncStudentToLeaderboard(TELEMETRY_URL, {
+              streakData: {
+                ...(streakData || {}),
+                todayHours: Number(((streakData?.todayHours || 0) + durationMin / 60).toFixed(1)),
+                weeklyVelocityHours: Number(((streakData?.weeklyVelocityHours || 0) + durationMin / 60).toFixed(1))
+              }
+            }, {
+              activeSubject: subject,
+              isLiveNow: false
+            });
 
             // 3. Celebrate
             celebrateTaskCompletion();

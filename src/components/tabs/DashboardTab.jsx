@@ -30,6 +30,8 @@ import SyllabusSyncToast from '../SyllabusSyncToast';
 import SkillRoutineChip from '../SkillRoutineChip';
 import SkillSyncToast from '../SkillSyncToast';
 import ConsistencyRadar from '../ConsistencyRadar';
+import { TELEMETRY_URL } from '../../../admin-config.js';
+import { syncStudentToLeaderboard } from '../../../leaderboard.js';
 
 /**
  * Applies the selected theme and updates .is-active state on theme selector buttons
@@ -201,6 +203,31 @@ export default function DashboardTab({ onNavigateTab }) {
     } else if (safeSubjects.length > 0 && updateSubjectHours) {
       updateSubjectHours(safeSubjects[0].id, 0.5);
     }
+
+    // Automatically background-sync +30m study log to real-time Leaderboard
+    const activeSubject = safeSubjects[0]?.name || 'General Studies';
+    const nextTodayHours = Number(((safeStreakData.todayHours || 0) + 0.5).toFixed(1));
+    const nextWeeklyHours = Number(((safeStreakData.weeklyVelocityHours || 0) + 0.5).toFixed(1));
+    const nextStreak = (safeStreakData.streakCount || 0) === 0 ? 1 : safeStreakData.streakCount;
+    const updatedSubjects = safeSubjects.map((s, idx) =>
+      idx === 0 ? { ...s, completedHours: Number(((s.completedHours || 0) + 0.5).toFixed(1)) } : s
+    );
+
+    syncStudentToLeaderboard(
+      TELEMETRY_URL,
+      {
+        subjectsList: updatedSubjects,
+        subjects: updatedSubjects,
+        dailyActivity,
+        streakData: {
+          ...safeStreakData,
+          todayHours: nextTodayHours,
+          weeklyVelocityHours: nextWeeklyHours,
+          streakCount: nextStreak
+        }
+      },
+      { activeSubject }
+    );
   };
 
   const handleToggleRoutineSlot = (slotId) => {

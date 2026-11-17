@@ -18,6 +18,15 @@ import {
 import { applySelectedTheme } from './src/components/tabs/DashboardTab.jsx';
 import { switchView, navigateTo, getCurrentView, initRouter, VIEW_IDS } from './router.js';
 import { SIDEBAR_ITEMS, setupSidebarNav, updateActiveSidebarItem } from './sidebar.js';
+import { TELEMETRY_URL } from './admin-config.js';
+import {
+  startLivePresenceHeartbeat,
+  stopLivePresenceHeartbeat,
+  isLivePresenceHeartbeatRunning,
+  syncStudentToLeaderboard,
+  fetchLeaderboard,
+  filterLeaderboardEntries
+} from './leaderboard.js';
 
 export {
   handleEndOfDayRollover,
@@ -30,7 +39,13 @@ export {
   VIEW_IDS,
   SIDEBAR_ITEMS,
   setupSidebarNav,
-  updateActiveSidebarItem
+  updateActiveSidebarItem,
+  startLivePresenceHeartbeat,
+  stopLivePresenceHeartbeat,
+  isLivePresenceHeartbeatRunning,
+  syncStudentToLeaderboard,
+  fetchLeaderboard,
+  filterLeaderboardEntries
 };
 
 /**
@@ -95,6 +110,25 @@ if (typeof window !== 'undefined') {
       setupSidebarNav();
     } catch (err) {
       console.warn('Error during router setup in app.js:', err);
+    }
+
+    // Resume Focus Timer 3-minute Live Presence Heartbeat if timer is running across reloads
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('is_timer_running') === 'true') {
+        const endTime = Number(localStorage.getItem('focus_timer_end') || 0);
+        if (endTime > Date.now()) {
+          startLivePresenceHeartbeat(TELEMETRY_URL, () => {
+            const uid = getActiveUserId();
+            const userData = uid && uid !== 'guest' ? getUserData(uid) : {};
+            const activeSubject = localStorage.getItem('focus_timer_subject') || userData?.subjects?.[0]?.name || 'General Studies';
+            return { ...userData, activeSubject };
+          });
+        } else {
+          stopLivePresenceHeartbeat({ sendIdlePing: false });
+        }
+      }
+    } catch (err) {
+      console.warn('Error checking live presence heartbeat on load in app.js:', err);
     }
   });
 }

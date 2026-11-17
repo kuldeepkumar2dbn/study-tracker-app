@@ -20,9 +20,11 @@ export const VIEW_IDS = [
   'revision',
   'radar',
   'mock-logbook',
+  'leaderboard',
   'skills',
   'notes',
-  'timer'
+  'timer',
+  'profile'
 ];
 
 export const FEATURE_NAME_MAP = {
@@ -33,9 +35,11 @@ export const FEATURE_NAME_MAP = {
   revision: 'Revision Queue',
   radar: 'Exam Radar',
   'mock-logbook': 'Mock Logbook',
+  leaderboard: 'Leaderboard',
   skills: 'Skill Tracker',
   notes: 'Drive Notes',
-  timer: 'Focus Timer'
+  timer: 'Focus Timer',
+  profile: 'My Profile'
 };
 
 const VIEW_ALIASES = {
@@ -46,6 +50,12 @@ const VIEW_ALIASES = {
   'mock-test': 'mock-logbook',
   'mock-tests': 'mock-logbook',
   'mocklogbook': 'mock-logbook',
+  rankings: 'leaderboard',
+  rank: 'leaderboard',
+  top100: 'leaderboard',
+  'my-profile': 'profile',
+  'student-profile': 'profile',
+  account: 'profile',
   index: 'dashboard',
   overview: 'dashboard'
 };
