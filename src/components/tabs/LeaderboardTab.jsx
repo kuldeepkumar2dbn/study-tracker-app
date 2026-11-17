@@ -893,6 +893,72 @@ export default function LeaderboardTab({ isActiveView = false }) {
         </div>
       )}
 
+      {/* CLEAN EMPTY-STATE CARD WHEN 0 REAL RECORDS EXIST IN LEADERBOARD */}
+      {!isLoading && rankings.length === 0 && (
+        <div
+          id="leaderboard-empty-state"
+          className="w-full rounded-2xl p-8 text-center space-y-3.5 max-w-none mx-0 animate-fadeIn"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '1.5px solid var(--border-glow)',
+            color: 'var(--text-main)'
+          }}
+        >
+          <div
+            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mx-auto"
+            style={{
+              backgroundColor: 'var(--bg-sidebar)',
+              border: '1.5px solid var(--border-glow)'
+            }}
+          >
+            <Trophy className="w-7 h-7 text-amber-500" />
+          </div>
+          <h2 className="font-display font-extrabold text-lg sm:text-xl" style={{ color: 'var(--text-main)' }}>
+            No Live Rankings Logged Yet
+          </h2>
+          <p className="text-xs sm:text-sm max-w-lg mx-auto leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            {mode === 'subject'
+              ? `No students have synced study hours for ${selectedSubject} yet. Be the #1 pioneer on the board!`
+              : 'Be the first student on the real-time Top 100 Leaderboard! Start a Focus Timer session or log study hours to claim Rank #1.'}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+            <button
+              id="leaderboard-empty-start-timer-btn"
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.switchView) {
+                  window.switchView('timer');
+                } else if (typeof window !== 'undefined') {
+                  window.location.hash = 'timer';
+                }
+              }}
+              className="btn-primary-action inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer transition-all active:scale-95"
+              style={{
+                backgroundColor: 'var(--primary)',
+                color: '#FFFFFF',
+                border: '1.5px solid var(--border-glow)'
+              }}
+            >
+              <Clock className="w-4 h-4" />
+              <span>Start Focus Timer to Join the Live Leaderboard</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncNow}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold cursor-pointer transition-all active:scale-95"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                color: 'var(--text-main)',
+                border: '1.5px solid var(--border-glow)'
+              }}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>🔄 Sync My Hours Now</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TOP 3 PODIUM CARDS (Ranks #1, #2, #3) */}
       <section aria-label="Top 3 Podium Rankings" className="w-full max-w-none mx-0">
         <div className="flex items-center justify-between mb-3 px-1">

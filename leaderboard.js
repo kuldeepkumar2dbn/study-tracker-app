@@ -420,67 +420,8 @@ export async function syncStudentToLeaderboard(endpoint = TELEMETRY_URL, userDat
 }
 
 /**
- * Deterministic fallback cohort generator (used ONLY if the remote endpoint does not return
- * live leaderboard rows yet or is offline, ensuring the Top 3 Podium & Top 100 table work seamlessly).
- */
-const COHORT_FIRST_NAMES = [
-  'Aarav', 'Ananya', 'Rohan', 'Priya', 'Kabir', 'Meera', 'Vikram', 'Diya',
-  'Siddharth', 'Ishita', 'Aditya', 'Sneha', 'Arjun', 'Kavya', 'Nikhil', 'Riya',
-  'Pranav', 'Neha', 'Dev', 'Tanvi', 'Karthik', 'Shreya', 'Varun', 'Pooja',
-  'Harsh', 'Aditi', 'Yash', 'Sakshi', 'Manish', 'Nandini'
-];
-
-const COHORT_LAST_INITIALS = ['s', 'm', 'k', 'p', 'r', 'v', 'g', 'd', 'n', 'b', 't', 'c'];
-const COHORT_TARGET_EXAMS = ['GATE', 'JEE / NEET', 'UPSC / SSC', 'Coding & Software', 'Electronics & Hardware'];
-
-function generateCommunityBenchmarkRows(subjectFilter = '', limit = 100) {
-  const rows = [];
-  const count = Math.min(limit, 100);
-  const subjectsPool = [...COMMON_LEADERBOARD_SUBJECTS];
-
-  for (let i = 0; i < count; i++) {
-    const fName = COHORT_FIRST_NAMES[i % COHORT_FIRST_NAMES.length];
-    const lInit = COHORT_LAST_INITIALS[(i * 7 + 3) % COHORT_LAST_INITIALS.length];
-    const suffix = i >= COHORT_FIRST_NAMES.length ? `${Math.floor(i / COHORT_FIRST_NAMES.length) + 1}` : '';
-    const username = `${fName.toLowerCase()}_${lInit}${suffix}`;
-    const displayName = `@${username}`;
-    const targetExam = COHORT_TARGET_EXAMS[i % COHORT_TARGET_EXAMS.length];
-
-    const primarySubject = subjectFilter || subjectsPool[i % subjectsPool.length];
-    const isLiveNow = (i % 4 === 0) || i === 0 || i === 2;
-    const baseWeekly = Math.max(2.5, Number((54.0 - i * 0.48 - ((i * 13) % 7) * 0.2).toFixed(1)));
-    const subjectHrs = Math.max(1.0, Number((baseWeekly * (0.42 + ((i % 5) * 0.08))).toFixed(1)));
-    const streak = Math.max(1, Math.round(38 - i * 0.32 + ((i * 5) % 6)));
-
-    const subjectHours = {};
-    subjectsPool.forEach((subj, sIdx) => {
-      subjectHours[subj] = subj === primarySubject
-        ? subjectHrs
-        : Number(Math.max(0.5, subjectHrs * (0.3 + ((i + sIdx) % 4) * 0.15)).toFixed(1));
-    });
-
-    rows.push({
-      studentId: `cohort_${i + 1}`,
-      username,
-      displayName,
-      targetExam,
-      weeklyHours: baseWeekly,
-      hours: subjectFilter ? subjectHrs : baseWeekly,
-      streak,
-      activeSubject: primarySubject,
-      lastSubject: primarySubject,
-      isLiveNow,
-      subjectHours,
-      updatedAt: new Date(Date.now() - (i * 180000)).toISOString(),
-      isCohortPreview: true
-    });
-  }
-
-  return rows;
-}
-
-/**
- * Normalizes a raw student row returned by remote Google Apps Script or cache.
+ * Normalizes a raw student row returned by StudyTracker_Admin_DB (Google Apps Script) or cache.
+ * Strictly zero fake/mock/sample students are ever generated.
  */
 function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
   if (!raw || typeof raw !== 'object') return null;
@@ -643,25 +584,26 @@ export async function fetchLeaderboard(
     }
   }
 
-  // 3. Fallback to community benchmark cohort so UI always renders rich Top 100 leaderboard
+  // 3. Strictly zero fake/mock fallback rows: if StudyTracker_Admin_DB Leaderboard tab is empty, display only real rows
   if (!rawEntries) {
-    rawEntries = generateCommunityBenchmarkRows(cleanSubject, maxEntries);
-    source = 'community';
+    rawEntries = [];
+    source = 'live';
   }
 
-  // 4. Normalize and deduplicate by studentId
+  // 4. Normalize and deduplicate by studentId (ignoring any stale cached preview rows)
   const byId = new Map();
   rawEntries.forEach((row) => {
+    if (row?.isCohortPreview || String(row?.studentId || '').startsWith('cohort_')) return;
     const normalized = normalizeLeaderboardEntry(row, normalizedMode, cleanSubject);
     if (normalized) {
-      // In subject mode, only include entries with >0 hours for that subject (unless it's the current user)
+      // In subject mode, only include entries with >0 hours for that subject
       if (normalizedMode === 'overall' || normalized.hours > 0) {
         byId.set(normalized.studentId, normalized);
       }
     }
   });
 
-  // 5. Merge current logged-in student's live entry if opted in
+  // 5. Merge current logged-in student's real live entry ONLY if opted in AND has logged real hours or is actively studying live
   const settings = getLeaderboardSettings(currentUserData?.userProfile);
   const currentStudentId = currentUserData?.studentId || getStudentId(currentUserData?.userProfile);
   const effectiveOptIn = currentUserData?.optedIn !== undefined
@@ -675,7 +617,12 @@ export async function fetchLeaderboard(
 
     if (selfRaw) {
       const normalizedSelf = normalizeLeaderboardEntry(selfRaw, normalizedMode, cleanSubject);
-      if (normalizedSelf) {
+      const hasRealActivity = normalizedSelf && (
+        normalizedSelf.hours > 0 ||
+        normalizedSelf.isLiveNow === true ||
+        byId.has(currentStudentId)
+      );
+      if (hasRealActivity) {
         const existing = byId.get(currentStudentId);
         byId.set(currentStudentId, {
           ...(existing || {}),

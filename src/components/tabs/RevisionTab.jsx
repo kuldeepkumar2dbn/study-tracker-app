@@ -191,10 +191,26 @@ export default function RevisionTab() {
           })}
 
           {filteredTodayQueue.length === 0 && (
-            <div className="py-12 text-center text-theme-muted">
-              <CheckCircle2 className="w-12 h-12 mx-auto mb-2 text-emerald-400/60" />
-              <p className="text-sm font-semibold text-theme-text">All Caught Up for Today!</p>
-              <p className="text-xs mt-1">You have reviewed all due topics on your spaced repetition curve.</p>
+            <div
+              id="revision-queue-empty-state"
+              className="py-12 text-center text-theme-muted rounded-xl border border-dashed border-theme-border/70 p-6 space-y-2.5"
+            >
+              <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-400/60" />
+              <p className="text-sm font-semibold text-theme-text">0 Topics Due for Revision Today</p>
+              <p className="text-xs max-w-md mx-auto">Add syllabus chapters or tag Conceptual Gaps in your Mock Logbook to populate your spaced repetition queue.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.switchView) {
+                    window.switchView('syllabus');
+                  } else if (typeof window !== 'undefined') {
+                    window.location.hash = 'syllabus';
+                  }
+                }}
+                className="btn-primary-action mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-sm hover:bg-theme-accentHover transition-all cursor-pointer"
+              >
+                <span>+ Add Subjects &amp; Syllabus Topics</span>
+              </button>
             </div>
           )}
         </div>

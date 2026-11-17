@@ -9,6 +9,7 @@
  * - POST type="feedback": Logs student feedback & bug reports
  */
 
+var LEADERBOARD_DB_NAME = 'StudyTracker_Admin_DB';
 var LEADERBOARD_SHEET = 'Leaderboard';
 var TELEMETRY_SHEET = 'Telemetry';
 var FEEDBACK_SHEET = 'Feedback';
@@ -329,6 +330,7 @@ function doGet(e) {
     return jsonResponse_({
       rankings: entries.slice(0, limit),
       totalParticipants: entries.length,
+      source: LEADERBOARD_DB_NAME,
       mode: mode,
       subject: subject,
       fetchedAt: new Date().toISOString()

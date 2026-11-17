@@ -1122,10 +1122,24 @@ export default function MockLogbookTab({ onNavigateTab }) {
           })}
 
           {tests.length === 0 && (
-            <div className="py-10 text-center text-xs text-theme-muted rounded-xl border border-dashed border-theme-border p-4">
-              <Target className="w-8 h-8 mx-auto mb-2 text-theme-muted opacity-40" />
-              <p className="font-semibold text-theme-text">No mock tests logged yet.</p>
-              <p className="mt-1">Fill out the form above to log your first mock test and analyze negative marks.</p>
+            <div
+              id="mock-logbook-empty-state"
+              className="py-10 text-center text-xs text-theme-muted rounded-xl border border-dashed border-theme-border p-5 space-y-2.5"
+            >
+              <Target className="w-8 h-8 mx-auto text-theme-muted opacity-50" />
+              <p className="text-sm font-semibold text-theme-text">No mock tests logged yet.</p>
+              <p>Log your first real mock exam to calculate live negative marking penalties and visualize Score % vs. Accuracy % trends.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  const formEl = document.getElementById('mock-entry-form');
+                  if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="btn-primary-action mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all cursor-pointer active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Log Your First Mock Test</span>
+              </button>
             </div>
           )}
         </div>

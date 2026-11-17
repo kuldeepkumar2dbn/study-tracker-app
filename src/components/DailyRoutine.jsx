@@ -653,14 +653,14 @@ export default function DailyRoutine() {
             {routineSlots.length === 0 && (
               <div className="py-12 text-center rounded-2xl border border-dashed border-theme-border bg-theme-surface/30 p-6">
                 <Clock className="w-10 h-10 text-theme-muted mx-auto mb-3 opacity-50" />
-                <p className="text-sm font-semibold text-theme-text">No time blocks scheduled today.</p>
-                <p className="text-xs text-theme-muted mt-1">No time blocks scheduled today. Click '+ Add Block' to plan your day.</p>
+                <p className="text-sm font-semibold text-theme-text">No time blocks scheduled today yet.</p>
+                <p className="text-xs text-theme-muted mt-1">Plan your study blocks to stay consistent and track daily momentum.</p>
                 <button
                   onClick={() => setIsSlotModalOpen(true)}
-                  className="mt-4 px-3.5 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs hover:bg-theme-accentHover transition-colors inline-flex items-center gap-1.5"
+                  className="mt-4 px-4 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs hover:bg-theme-accentHover transition-colors inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Block</span>
+                  <span>+ Add Your First Routine Block</span>
                 </button>
               </div>
             )}

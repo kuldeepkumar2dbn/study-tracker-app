@@ -435,12 +435,12 @@ export default function DashboardTab({ onNavigateTab }) {
                 <RollingNumber value={safeStreakData.streakCount} />
               </span>
               <span className="text-xs text-theme-muted font-medium">
-                {safeStreakData.streakCount === 0 ? "0 days streak" : "consecutive days"}
+                consecutive days
               </span>
             </div>
             <p className="mt-2 text-xs text-theme-muted flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${safeStreakData.streakCount === 0 ? 'bg-amber-400/50' : 'bg-emerald-500'}`}></span>
-              <span>{safeStreakData.streakCount === 0 ? "Day 1 - Ready to start!" : "Study flame burning hot"}</span>
+              <span>{safeStreakData.streakCount === 0 ? "Log a study session to start your streak" : "Study flame burning hot"}</span>
             </p>
           </div>
         </div>
@@ -470,7 +470,7 @@ export default function DashboardTab({ onNavigateTab }) {
             </div>
           ) : (
             <div>
-              <p className="text-xs font-semibold text-theme-text">No upcoming exams</p>
+              <p className="text-xs font-semibold text-theme-text">No deadlines set</p>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -479,7 +479,7 @@ export default function DashboardTab({ onNavigateTab }) {
                 className="mt-2 px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1 transition-all active:scale-95"
               >
                 <Plus className="w-3 h-3" />
-                <span>+ Add Exam</span>
+                <span>+ Add Deadline</span>
               </button>
             </div>
           )}
@@ -600,14 +600,14 @@ export default function DashboardTab({ onNavigateTab }) {
               {safeRoutineSlots.length === 0 && (
                 <div className="py-8 text-center text-xs text-theme-muted rounded-xl border border-dashed border-theme-border/60 p-4">
                   <Clock className="w-8 h-8 mx-auto mb-2 text-theme-border opacity-50" />
-                  <p className="font-medium text-theme-text">No time blocks scheduled today. Click '+ Add Block' to plan your day.</p>
+                  <p className="font-medium text-theme-text">No routine blocks scheduled today yet.</p>
                   <div className="mt-3 flex items-center justify-center gap-2">
                     <button
                       onClick={() => setIsAddRoutineModalOpen(true)}
-                      className="px-3 py-1.5 rounded-xl bg-theme-accent text-white font-semibold text-xs inline-flex items-center gap-1 shadow-sm hover:bg-theme-accentHover transition-colors"
+                      className="px-3.5 py-1.5 rounded-xl bg-theme-accent text-white font-semibold text-xs inline-flex items-center gap-1 shadow-sm hover:bg-theme-accentHover transition-colors cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>+ Add Block</span>
+                      <span>+ Add Your First Routine Block</span>
                     </button>
                   </div>
                 </div>
@@ -672,10 +672,17 @@ export default function DashboardTab({ onNavigateTab }) {
               })}
 
               {todayRevisionQueue.length === 0 && (
-                <div className="py-8 text-center text-theme-muted text-xs">
+                <div className="py-8 text-center text-theme-muted text-xs rounded-xl border border-dashed border-theme-border/60 p-4">
                   <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-400" />
-                  <p className="font-semibold text-theme-text">All Caught Up for Today!</p>
-                  <p className="mt-0.5">No reviews due today on your forgetting curve.</p>
+                  <p className="font-semibold text-theme-text">0 topics due for revision today</p>
+                  <p className="mt-0.5">Add subjects &amp; chapters to automatically build your D+1 to D+30 spaced-repetition queue.</p>
+                  <button
+                    onClick={() => navigate('syllabus')}
+                    className="mt-3 px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-theme-text font-semibold text-xs inline-flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-theme-accent" />
+                    <span>+ Add Study Topics</span>
+                  </button>
                 </div>
               )}
             </div>

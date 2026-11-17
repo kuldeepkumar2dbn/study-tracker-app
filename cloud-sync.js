@@ -41,6 +41,42 @@ let activeFileId = null;
 let currentSyncStatus = 'offline'; // 'offline' | 'syncing' | 'synced' | 'needs_auth' | 'error'
 let lastSyncedTimestamp = null;
 let debounceTimer = null;
+const _hydratedUsers = new Set();
+
+/**
+ * Checks whether a user dataset contains purely blank zero-state defaults
+ * (no subjects, routine, exams, skills, notes, goals, links, streak, hours, or dailyActivity).
+ * Used to guarantee blank defaults never overwrite a returning user's real Google Drive data.
+ */
+export function isBlankZeroState(data) {
+  if (!data || typeof data !== 'object') return true;
+  const hasArrays =
+    (Array.isArray(data.subjects) && data.subjects.length > 0) ||
+    (Array.isArray(data.routine) && data.routine.length > 0) ||
+    (Array.isArray(data.exams) && data.exams.length > 0) ||
+    (Array.isArray(data.skills) && data.skills.length > 0) ||
+    (Array.isArray(data.notes) && data.notes.length > 0) ||
+    (Array.isArray(data.weeklyGoals) && data.weeklyGoals.length > 0) ||
+    (Array.isArray(data.importantLinks) && data.importantLinks.length > 0) ||
+    (Array.isArray(data.tomorrowPlan) && data.tomorrowPlan.length > 0) ||
+    (Array.isArray(data.completedRoutineToday) && data.completedRoutineToday.length > 0) ||
+    (Array.isArray(data.mockTests) && data.mockTests.length > 0);
+  if (hasArrays) return false;
+
+  const hasActivity = data.dailyActivity && typeof data.dailyActivity === 'object' &&
+    Object.values(data.dailyActivity).some((mins) => Number(mins) > 0);
+  if (hasActivity) return false;
+
+  const hasHoursOrStreak =
+    Number(data.streak || 0) > 0 ||
+    Number(data.todayLoggedHours || data.todayHours || 0) > 0 ||
+    Number(data.weeklyVelocityHours || 0) > 0;
+  if (hasHoursOrStreak) return false;
+
+  if (data.studentProfile && data.studentProfile.updatedAt) return false;
+
+  return true;
+}
 
 /**
  * Format relative sync time for UI tooltips:
@@ -597,6 +633,7 @@ export async function hydrateFromCloud(accessToken, userId) {
         const shouldHydrateRemote = isLocalZeroOrEmpty || remoteTime >= localTime || !localTime;
 
         if (shouldHydrateRemote) {
+          _hydratedUsers.add(userId);
           // If local had a higher streak or extra dailyActivity dates, push merged state back to Drive
           const localHasExtra = (Number(localData?.streak || 0) > Number(remoteData.streak || 0)) ||
             (localData?.dailyActivity && Object.keys(localData.dailyActivity).some(k => !remoteData.dailyActivity?.[k]));
@@ -612,6 +649,7 @@ export async function hydrateFromCloud(accessToken, userId) {
             data: mergedData
           };
         } else {
+          _hydratedUsers.add(userId);
           // Local laptop data is genuinely newer: upload merged data to cloud
           debounceSaveToDrive(mergedData, 100);
           setSyncStatus('synced', { syncedAt: Date.now() });
@@ -627,7 +665,7 @@ export async function hydrateFromCloud(accessToken, userId) {
 
     // ==========================================
     // CASE B: File Does Not Exist in Google Drive
-    // Only then initialize the zero-state
+    // Initialize pure zero-state (never seeded with demo data)
     // ==========================================
     let zeroState = getOrCreateZeroStateData(userId) || createZeroStateData(userId);
     zeroState.userId = userId;
@@ -636,6 +674,7 @@ export async function hydrateFromCloud(accessToken, userId) {
     populateGranularStorage(userId, zeroState);
 
     const createdFile = await createSyncFile(token, zeroState);
+    _hydratedUsers.add(userId);
     setSyncStatus('synced', { syncedAt: Date.now() });
 
     return {
@@ -670,13 +709,19 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
   const storageKey = `studyflow_${activeUserId}_data`;
   const nowIso = new Date().toISOString();
 
-  // 1. Save immediately to LocalStorage for zero UI lag
   const payload = {
     ...studyData,
     userId: activeUserId,
     updatedAt: nowIso
   };
 
+  // Guard: NEVER overwrite a returning user's Google Drive file with blank defaults
+  // before initial cloud hydration completes.
+  if (!_hydratedUsers.has(activeUserId) && isBlankZeroState(payload)) {
+    return;
+  }
+
+  // 1. Save immediately to LocalStorage for zero UI lag
   try {
     localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch (e) {
@@ -710,9 +755,23 @@ export function debounceSaveToDrive(studyData, delay = 2000) {
         const file = await findSyncFile(token);
         if (file && file.id) {
           fileId = file.id;
+          // If an existing cloud file is discovered while local payload is blank, hydrate instead of clobbering
+          if (isBlankZeroState(payload)) {
+            const remoteData = await downloadSyncFile(token, fileId);
+            if (remoteData && !isBlankZeroState(remoteData)) {
+              const merged = mergeCloudAndLocalData(remoteData, payload);
+              localStorage.setItem(storageKey, JSON.stringify(merged));
+              populateGranularStorage(activeUserId, merged);
+              dispatchSyncEvents(merged);
+              _hydratedUsers.add(activeUserId);
+              setSyncStatus('synced', { syncedAt: Date.now() });
+              return;
+            }
+          }
         } else {
           const created = await createSyncFile(token, payload);
           fileId = created.id;
+          _hydratedUsers.add(activeUserId);
         }
       }
 

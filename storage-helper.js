@@ -11,8 +11,10 @@
  * 5. Passes complete merged object to Google Drive background sync (debounceSaveToDrive)
  */
 
-import { debounceSaveToDrive, populateGranularStorage } from './cloud-sync.js';
+import { debounceSaveToDrive, populateGranularStorage, isBlankZeroState } from './cloud-sync.js';
 import { getActiveUserId, isDemoUser, getLocalDateString } from './auth-guard.js';
+
+export { isBlankZeroState };
 
 /**
  * Reads the full current dataset for a user from LocalStorage
@@ -124,7 +126,7 @@ export function mergeUserData(existing = {}, updates = {}) {
  */
 export function patchUserData(userId, updates = {}) {
   const targetUserId = userId || getActiveUserId();
-  if (!targetUserId || targetUserId === 'guest') {
+  if (!targetUserId || targetUserId === 'guest' || targetUserId === 'demo_sandbox_user' || isDemoUser()) {
     return null;
   }
 
@@ -137,6 +139,11 @@ export function patchUserData(userId, updates = {}) {
     }
   } catch (err) {
     console.warn(`Error reading existing data before patch for ${targetUserId}:`, err);
+  }
+
+  // Guard: never overwrite populated real user data with a blank zero-state payload
+  if (!isBlankZeroState(existing) && isBlankZeroState(updates)) {
+    return existing;
   }
 
   const updated = mergeUserData(existing, updates);
