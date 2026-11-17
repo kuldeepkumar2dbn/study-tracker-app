@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { soundEngine } from '../../utils/audio';
 import { ambientAudioEngine } from '../../utils/ambientAudio';
 import AmbientAudioControls from '../AmbientAudioControls';
@@ -33,6 +34,7 @@ const PRESETS = [
 
 export default function TimerTab() {
   const { subjects, addTimerSession, timerHistory, streakData, dailyActivity } = useData();
+  const { isGoogleAuthenticated } = useAuth();
 
   const [activePreset, setActivePreset] = useState(PRESETS[0]);
   const [totalSeconds, setTotalSeconds] = useState(PRESETS[0].durationSec);
@@ -89,8 +91,10 @@ export default function TimerTab() {
         if (remaining > 0) {
           setTimeLeft(remaining);
           setIsRunning(true);
-          // Resume 3-minute live presence heartbeat if timer is actively running
-          startLivePresenceHeartbeat(TELEMETRY_URL, getCurrentStatsPayload);
+          // Resume 3-minute live presence heartbeat if timer is actively running (Google-authenticated users only)
+          if (isGoogleAuthenticated) {
+            startLivePresenceHeartbeat(TELEMETRY_URL, getCurrentStatsPayload);
+          }
         } else {
           setTimeLeft(0);
           setIsRunning(false);
@@ -183,31 +187,33 @@ export default function TimerTab() {
       });
       setTimeout(() => setSessionCompletedNotice(null), 6000);
 
-      // Automatically sync completed Focus Timer hours to real-time Leaderboard
-      const addedHours = Number((minutes / 60).toFixed(1));
-      const updatedSubjects = (subjects || []).map((s) =>
-        s.name === selectedSubject
-          ? { ...s, completedHours: Number(((s.completedHours || 0) + addedHours).toFixed(1)) }
-          : s
-      );
-      syncStudentToLeaderboard(
-        TELEMETRY_URL,
-        {
-          subjectsList: updatedSubjects,
-          subjects: updatedSubjects,
-          dailyActivity,
-          streakData: {
-            ...(streakData || {}),
-            todayHours: Number(((streakData?.todayHours || 0) + addedHours).toFixed(1)),
-            weeklyVelocityHours: Number(((streakData?.weeklyVelocityHours || 0) + addedHours).toFixed(1)),
-            streakCount: (streakData?.streakCount || 0) === 0 ? 1 : streakData.streakCount
+      // Automatically sync completed Focus Timer hours to real-time Leaderboard (Google-authenticated users only)
+      if (isGoogleAuthenticated) {
+        const addedHours = Number((minutes / 60).toFixed(1));
+        const updatedSubjects = (subjects || []).map((s) =>
+          s.name === selectedSubject
+            ? { ...s, completedHours: Number(((s.completedHours || 0) + addedHours).toFixed(1)) }
+            : s
+        );
+        syncStudentToLeaderboard(
+          TELEMETRY_URL,
+          {
+            subjectsList: updatedSubjects,
+            subjects: updatedSubjects,
+            dailyActivity,
+            streakData: {
+              ...(streakData || {}),
+              todayHours: Number(((streakData?.todayHours || 0) + addedHours).toFixed(1)),
+              weeklyVelocityHours: Number(((streakData?.weeklyVelocityHours || 0) + addedHours).toFixed(1)),
+              streakCount: (streakData?.streakCount || 0) === 0 ? 1 : streakData.streakCount
+            }
+          },
+          {
+            activeSubject: selectedSubject,
+            isLiveNow: false
           }
-        },
-        {
-          activeSubject: selectedSubject,
-          isLiveNow: false
-        }
-      );
+        );
+      }
     }
   };
 
@@ -245,8 +251,10 @@ export default function TimerTab() {
         activeSubject: selectedSubject
       };
 
-      // Trigger 3-minute live presence heartbeat so student immediately appears as 🟢 Studying [Active Subject]
-      startLivePresenceHeartbeat(TELEMETRY_URL, getCurrentStatsPayload);
+      // Trigger 3-minute live presence heartbeat so authenticated student immediately appears as 🟢 Studying [Active Subject]
+      if (isGoogleAuthenticated) {
+        startLivePresenceHeartbeat(TELEMETRY_URL, getCurrentStatsPayload);
+      }
     } else {
       // Gently fade out sound over 2 seconds when pausing
       ambientAudioEngine.fadeOut(2.0);

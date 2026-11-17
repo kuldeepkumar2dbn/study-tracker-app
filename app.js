@@ -8,7 +8,7 @@
  * 3. Two-Way Syllabus Completion Sync & Unfinished Task Carryover
  */
 
-import { getActiveUserId, isDemoUser, getLocalDateString } from './auth-guard.js';
+import { getActiveUserId, isDemoUser, isUserAuthenticated, getLocalDateString } from './auth-guard.js';
 import { 
   getUserData, 
   handleEndOfDayRollover, 
@@ -17,9 +17,20 @@ import {
 } from './storage-helper.js';
 import { applySelectedTheme } from './src/components/tabs/DashboardTab.jsx';
 import { switchView, navigateTo, getCurrentView, initRouter, VIEW_IDS } from './router.js';
-import { SIDEBAR_ITEMS, setupSidebarNav, updateActiveSidebarItem } from './sidebar.js';
+import {
+  SIDEBAR_ITEMS,
+  GUEST_LOCAL_VIEWS,
+  GUEST_DEMO_VIEWS,
+  GUEST_SYNC_LOCKED_VIEWS,
+  GUEST_LOCKED_VIEWS,
+  getSidebarGuestState,
+  syncSidebarGuestBadges,
+  setupSidebarNav,
+  updateActiveSidebarItem
+} from './sidebar.js';
 import { TELEMETRY_URL } from './admin-config.js';
 import {
+  canSyncToLeaderboard,
   startLivePresenceHeartbeat,
   stopLivePresenceHeartbeat,
   isLivePresenceHeartbeatRunning,
@@ -27,6 +38,10 @@ import {
   fetchLeaderboard,
   filterLeaderboardEntries
 } from './leaderboard.js';
+import {
+  getProfileAccessState,
+  applyProfileDemoMode
+} from './profile.js';
 import {
   purgeExpiredExamDeadlines,
   filterActiveExamDeadlines,
@@ -37,6 +52,16 @@ import {
 } from './exam-radar.js';
 
 export {
+  isUserAuthenticated,
+  getProfileAccessState,
+  applyProfileDemoMode,
+  canSyncToLeaderboard,
+  GUEST_LOCAL_VIEWS,
+  GUEST_DEMO_VIEWS,
+  GUEST_SYNC_LOCKED_VIEWS,
+  GUEST_LOCKED_VIEWS,
+  getSidebarGuestState,
+  syncSidebarGuestBadges,
   handleEndOfDayRollover,
   checkAndTriggerEndOfDayRollover,
   applySelectedTheme,
@@ -61,6 +86,20 @@ export {
   startMidnightExamPurgeScheduler,
   stopMidnightExamPurgeScheduler
 };
+
+/**
+ * Applies role-based guest feature gating across #view-profile and the sidebar.
+ */
+export function applyGuestAccessGating(authUserProfile = undefined) {
+  const authed = isUserAuthenticated(authUserProfile);
+  try {
+    applyProfileDemoMode(null, authUserProfile);
+    syncSidebarGuestBadges(typeof document !== 'undefined' ? document : null, authed);
+  } catch (err) {
+    console.warn('Non-fatal guest access gating sync warning:', err);
+  }
+  return { isAuthenticated: authed, isGuestDemo: !authed };
+}
 
 /**
  * Executes root app hydration check:
@@ -122,6 +161,13 @@ if (typeof window !== 'undefined') {
     try {
       initRouter();
       setupSidebarNav();
+      applyGuestAccessGating();
+
+      const handleAuthOrViewGateSync = () => {
+        applyGuestAccessGating();
+      };
+      window.addEventListener('studyflow-auth-changed', handleAuthOrViewGateSync);
+      window.addEventListener('studyflow-view-changed', handleAuthOrViewGateSync);
     } catch (err) {
       console.warn('Error during router setup in app.js:', err);
     }
@@ -143,11 +189,11 @@ if (typeof window !== 'undefined') {
       console.warn('Error initializing expired exam deadline auto-purge in app.js:', err);
     }
 
-    // Resume Focus Timer 3-minute Live Presence Heartbeat if timer is running across reloads
+    // Resume Focus Timer 3-minute Live Presence Heartbeat ONLY for Google-authenticated users
     try {
       if (typeof localStorage !== 'undefined' && localStorage.getItem('is_timer_running') === 'true') {
         const endTime = Number(localStorage.getItem('focus_timer_end') || 0);
-        if (endTime > Date.now()) {
+        if (endTime > Date.now() && isUserAuthenticated()) {
           startLivePresenceHeartbeat(TELEMETRY_URL, () => {
             const uid = getActiveUserId();
             const userData = uid && uid !== 'guest' ? getUserData(uid) : {};

@@ -31,6 +31,7 @@ import { applySelectedTheme } from './DashboardTab';
 import { TELEMETRY_URL } from '../../../admin-config.js';
 import {
   TARGET_EXAM_PRESETS,
+  isUserAuthenticated,
   getStudentProfile,
   saveStudentProfile,
   validateUsername,
@@ -62,11 +63,16 @@ export default function ProfileTab() {
     dailyTargetMinutes,
     setDailyTargetMinutes
   } = useData();
-  const { userProfile, isAuthenticated, signOut, openAuthModal, isDemo } = useAuth();
+  const { userProfile, isAuthenticated, isGoogleAuthenticated, signOut, openAuthModal, isDemo } = useAuth();
   const { theme, setTheme, themes } = useTheme();
 
+  // Role-based access check: non-Google-authenticated visitors view Read-Only Demo Preview Mode
+  const isAuthedUser = Boolean(isGoogleAuthenticated && isUserAuthenticated(userProfile));
+  const isDemoPreview = !isAuthedUser;
+  const disabledFieldClass = isDemoPreview ? 'opacity-60 cursor-not-allowed' : '';
+
   const initialProfile = useMemo(() => {
-    const saved = getStudentProfile(userProfile);
+    const saved = getStudentProfile(isAuthedUser ? userProfile : null);
     // Sync initial daily goal from Dashboard target if profile hasn't been explicitly saved yet
     if (!saved.updatedAt && dailyTargetMinutes) {
       return {
@@ -75,7 +81,7 @@ export default function ProfileTab() {
       };
     }
     return saved;
-  }, [userProfile]);
+  }, [userProfile, isAuthedUser]);
 
   const [username, setUsername] = useState(initialProfile.username);
   const [fullName, setFullName] = useState(initialProfile.fullName);
@@ -106,6 +112,23 @@ export default function ProfileTab() {
     return secret ? `${secret.slice(0, 8)}••••${secret.slice(-4)}` : 'Active';
   });
 
+  // Automatically hydrate and unlock profile inputs when the user signs in with Google
+  useEffect(() => {
+    if (isAuthedUser) {
+      const hydrated = getStudentProfile(userProfile);
+      setUsername(hydrated.username);
+      setFullName(hydrated.fullName);
+      setAge(hydrated.age === '' ? '' : String(hydrated.age));
+      setCity(hydrated.city);
+      setTargetExam(hydrated.targetExam);
+      setCustomTargetExam(hydrated.customTargetExam);
+      setDailyGoalHours(String(hydrated.dailyGoalHours || 4));
+      setBio(hydrated.bio);
+      setShowOnLeaderboard(hydrated.showOnLeaderboard);
+      setFormError(null);
+    }
+  }, [isAuthedUser, userProfile]);
+
   // React to mock logbook updates & theme changes
   useEffect(() => {
     const onStatsUpdate = () => setStatsTick((t) => t + 1);
@@ -126,10 +149,12 @@ export default function ProfileTab() {
 
   // Live validation & ID Card preview computations
   const usernameCheck = useMemo(() => validateUsername(username), [username]);
-  const previewHandle = usernameCheck.cleaned ? `@${usernameCheck.cleaned}` : '@your_handle';
+  const previewHandle = isDemoPreview
+    ? 'Guest Demo'
+    : (usernameCheck.cleaned ? `@${usernameCheck.cleaned}` : '@your_handle');
   const monogram = useMemo(
-    () => getUsernameMonogram(username, fullName || userProfile?.name || 'ST'),
-    [username, fullName, userProfile]
+    () => (isDemoPreview ? 'GD' : getUsernameMonogram(username, fullName || userProfile?.name || 'ST')),
+    [isDemoPreview, username, fullName, userProfile]
   );
   const targetExamInfo = useMemo(
     () => resolveTargetExamDisplay(targetExam, customTargetExam),
@@ -216,6 +241,12 @@ export default function ProfileTab() {
     e.preventDefault();
     setFormError(null);
 
+    // Block all edits and saves in Read-Only Demo Preview Mode until Google Sign-In
+    if (isDemoPreview) {
+      openAuthModal('profile', '#profile');
+      return;
+    }
+
     const check = validateUsername(username);
     if (!check.valid) {
       setFormError(check.error);
@@ -243,7 +274,7 @@ export default function ProfileTab() {
           bio,
           showOnLeaderboard
         },
-        { userId: userProfile?.sub }
+        { userId: userProfile?.sub, requireAuth: true, authUserProfile: userProfile }
       );
 
       if (!saveRes.success) {
@@ -327,6 +358,52 @@ export default function ProfileTab() {
         </div>
       )}
 
+      {/* Prominent Read-Only Demo Preview Mode Banner (shown to non-logged-in visitors) */}
+      {isDemoPreview && (
+        <div
+          id="profile-demo-preview-banner"
+          role="region"
+          aria-label="Demo Preview Mode Notice"
+          className="w-full rounded-2xl p-4 sm:p-5 shadow-glow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn"
+          style={{
+            backgroundColor: 'var(--bg-card)',
+            border: '2px solid var(--primary)',
+            boxShadow: '0 0 0 1px var(--border-glow)',
+            color: 'var(--text-main)'
+          }}
+        >
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <span
+              className="inline-flex items-center justify-center px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider shrink-0"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                border: '1.5px solid var(--border-glow)',
+                color: 'var(--text-main)'
+              }}
+            >
+              Demo
+            </span>
+            <p className="text-xs sm:text-sm font-bold leading-relaxed" style={{ color: 'var(--text-main)' }}>
+              👀 Demo Preview Mode — Sign in with Google to claim your custom @username, edit your profile, and sync to the Leaderboard
+            </p>
+          </div>
+          <button
+            id="profile-demo-signin-btn"
+            type="button"
+            onClick={() => openAuthModal('profile', '#profile')}
+            className="btn-primary-action inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold shrink-0 transition-all cursor-pointer active:scale-95"
+            style={{
+              backgroundColor: 'var(--primary)',
+              color: '#FFFFFF',
+              border: '1.5px solid var(--border-glow)'
+            }}
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Sign In with Google</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Header Banner */}
       <div
         className="relative overflow-hidden rounded-2xl p-6 sm:p-7 shadow-glow-card card-glow-hover w-full max-w-none mx-0"
@@ -383,7 +460,7 @@ export default function ProfileTab() {
               <span>View Public Leaderboard</span>
             </button>
 
-            {isAuthenticated ? (
+            {isAuthedUser ? (
               <button
                 id="profile-signout-btn"
                 type="button"
@@ -395,14 +472,14 @@ export default function ProfileTab() {
                 }}
               >
                 <LogOut className="w-4 h-4" />
-                <span>{isDemo ? 'End Demo Session' : 'Sign Out'}</span>
+                <span>Sign Out</span>
               </button>
             ) : (
               <button
                 id="profile-signin-btn"
                 type="button"
-                onClick={() => openAuthModal('general')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95"
+                onClick={() => openAuthModal('profile', '#profile')}
+                className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95"
                 style={{
                   backgroundColor: 'var(--primary)',
                   color: '#FFFFFF',
@@ -445,12 +522,12 @@ export default function ProfileTab() {
                 color: 'var(--text-main)'
               }}
             >
-              <span className={`w-2 h-2 rounded-full ${showOnLeaderboard ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-              <span>{showOnLeaderboard ? 'Public on Top 100' : 'Private Mode'}</span>
+              <span className={`w-2 h-2 rounded-full ${isDemoPreview ? 'bg-amber-500' : (showOnLeaderboard ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400')}`} />
+              <span>{isDemoPreview ? 'Read-Only Demo' : (showOnLeaderboard ? 'Public on Top 100' : 'Private Mode')}</span>
             </span>
           </div>
 
-          {/* Monogram Avatar + Bold @username + Full Name */}
+          {/* Monogram Avatar + Bold @username (or Guest Demo badge) + Full Name */}
           <div className="flex items-center gap-4">
             <div
               id="profile-monogram-avatar"
@@ -465,18 +542,35 @@ export default function ProfileTab() {
             </div>
 
             <div className="min-w-0 flex-1 space-y-1">
-              <h2
-                id="profile-preview-handle"
-                className="font-display font-extrabold text-xl sm:text-2xl truncate"
-                style={{ color: 'var(--text-main)' }}
-              >
-                {previewHandle}
-              </h2>
+              {isDemoPreview ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    id="profile-guest-demo-badge"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-extrabold tracking-tight"
+                    style={{
+                      backgroundColor: 'var(--bg-sidebar)',
+                      border: '1.5px solid var(--border-glow)',
+                      color: 'var(--text-main)'
+                    }}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span id="profile-preview-handle">Guest Demo</span>
+                  </span>
+                </div>
+              ) : (
+                <h2
+                  id="profile-preview-handle"
+                  className="font-display font-extrabold text-xl sm:text-2xl truncate"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  {previewHandle}
+                </h2>
+              )}
               <p
                 className="text-sm font-semibold truncate"
                 style={{ color: 'var(--text-muted)' }}
               >
-                {fullName.trim() || userProfile?.name || 'StudyFlow Scholar'}
+                {isDemoPreview ? 'Sign in with Google to claim @username' : (fullName.trim() || userProfile?.name || 'StudyFlow Scholar')}
               </p>
 
               {/* Target Exam / Primary Skill Badge */}
@@ -623,13 +717,30 @@ export default function ProfileTab() {
           }}
         >
           <form id="student-profile-form" onSubmit={handleSaveProfile} className="space-y-5">
-            <div className="pb-3" style={{ borderBottom: '1px solid var(--border-glow)' }}>
-              <h2 className="font-display font-bold text-lg" style={{ color: 'var(--text-main)' }}>
-                Edit Profile Details
-              </h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                Changes update your Student ID card live and sync to your Leaderboard &amp; Daily Target.
-              </p>
+            <div className="pb-3 flex flex-wrap items-center justify-between gap-2" style={{ borderBottom: '1px solid var(--border-glow)' }}>
+              <div>
+                <h2 className="font-display font-bold text-lg" style={{ color: 'var(--text-main)' }}>
+                  Edit Profile Details
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {isDemoPreview
+                    ? 'Read-only preview — Sign in with Google above to unlock editing and cloud sync.'
+                    : 'Changes update your Student ID card live and sync to your Leaderboard & Daily Target.'}
+                </p>
+              </div>
+              {isDemoPreview && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold"
+                  style={{
+                    backgroundColor: 'var(--bg-sidebar)',
+                    border: '1px solid var(--border-glow)',
+                    color: 'var(--text-main)'
+                  }}
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Read-Only</span>
+                </span>
+              )}
             </div>
 
             {formError && (
@@ -656,10 +767,10 @@ export default function ProfileTab() {
                   Username (@handle) <span className="text-rose-500">*</span>
                 </label>
                 <div
-                  className="flex items-center rounded-xl overflow-hidden"
+                  className={`flex items-center rounded-xl overflow-hidden ${disabledFieldClass}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
-                    border: usernameCheck.valid ? '1.5px solid var(--border-glow)' : '1.5px solid #f43f5e'
+                    border: (isDemoPreview || usernameCheck.valid) ? '1.5px solid var(--border-glow)' : '1.5px solid #f43f5e'
                   }}
                 >
                   <span
@@ -672,23 +783,27 @@ export default function ProfileTab() {
                     id="profile-username-input"
                     type="text"
                     required
+                    disabled={isDemoPreview}
                     minLength={3}
                     maxLength={20}
-                    value={username}
+                    value={isDemoPreview ? 'guest_demo' : username}
                     onChange={(e) => {
+                      if (isDemoPreview) return;
                       const rawVal = e.target.value.replace(/^@+/, '');
                       setUsername(rawVal);
                       setFormError(null);
                     }}
                     placeholder="kuldeep_dev"
-                    className="w-full py-2.5 pr-3 bg-transparent text-sm font-semibold focus:outline-none"
+                    className={`w-full py-2.5 pr-3 bg-transparent text-sm font-semibold focus:outline-none ${disabledFieldClass}`}
                     style={{ color: 'var(--text-main)' }}
                   />
                 </div>
-                <p className="text-[11px]" style={{ color: usernameCheck.valid ? 'var(--text-muted)' : '#f43f5e' }}>
-                  {usernameCheck.valid
-                    ? `Leaderboard handle: ${usernameCheck.handle}`
-                    : usernameCheck.error}
+                <p className="text-[11px]" style={{ color: (isDemoPreview || usernameCheck.valid) ? 'var(--text-muted)' : '#f43f5e' }}>
+                  {isDemoPreview
+                    ? 'Sign in with Google to claim your custom @username.'
+                    : (usernameCheck.valid
+                        ? `Leaderboard handle: ${usernameCheck.handle}`
+                        : usernameCheck.error)}
                 </p>
               </div>
 
@@ -703,11 +818,15 @@ export default function ProfileTab() {
                 <input
                   id="profile-fullname-input"
                   type="text"
+                  disabled={isDemoPreview}
                   maxLength={60}
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setFullName(e.target.value);
+                  }}
                   placeholder="e.g. Kuldeep Kumar"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none"
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none ${disabledFieldClass}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
                     border: '1.5px solid var(--border-glow)',
@@ -730,12 +849,16 @@ export default function ProfileTab() {
                 <input
                   id="profile-age-input"
                   type="number"
+                  disabled={isDemoPreview}
                   min={10}
                   max={99}
                   value={age}
-                  onChange={(e) => setAge(e.target.value)}
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setAge(e.target.value);
+                  }}
                   placeholder="21"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold font-mono-numbers focus:outline-none"
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold font-mono-numbers focus:outline-none ${disabledFieldClass}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
                     border: '1.5px solid var(--border-glow)',
@@ -755,11 +878,15 @@ export default function ProfileTab() {
                 <input
                   id="profile-city-input"
                   type="text"
+                  disabled={isDemoPreview}
                   maxLength={40}
                   value={city}
-                  onChange={(e) => setCity(e.target.value)}
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setCity(e.target.value);
+                  }}
                   placeholder="e.g. New Delhi"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none"
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none ${disabledFieldClass}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
                     border: '1.5px solid var(--border-glow)',
@@ -779,13 +906,17 @@ export default function ProfileTab() {
                 <input
                   id="profile-daily-goal-input"
                   type="number"
+                  disabled={isDemoPreview}
                   min={0.5}
                   max={24}
                   step={0.5}
                   value={dailyGoalHours}
-                  onChange={(e) => setDailyGoalHours(e.target.value)}
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setDailyGoalHours(e.target.value);
+                  }}
                   placeholder="6.0"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold font-mono-numbers focus:outline-none"
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold font-mono-numbers focus:outline-none ${disabledFieldClass}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
                     border: '1.5px solid var(--border-glow)',
@@ -807,9 +938,13 @@ export default function ProfileTab() {
                 </label>
                 <select
                   id="profile-target-exam-select"
+                  disabled={isDemoPreview}
                   value={targetExam}
-                  onChange={(e) => setTargetExam(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none cursor-pointer"
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setTargetExam(e.target.value);
+                  }}
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none ${isDemoPreview ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
                     border: '1.5px solid var(--border-glow)',
@@ -836,11 +971,14 @@ export default function ProfileTab() {
                   id="profile-custom-target-input"
                   type="text"
                   maxLength={40}
-                  disabled={targetExam !== 'Other'}
+                  disabled={isDemoPreview || targetExam !== 'Other'}
                   value={customTargetExam}
-                  onChange={(e) => setCustomTargetExam(e.target.value)}
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setCustomTargetExam(e.target.value);
+                  }}
                   placeholder="e.g. Full-Stack Dev / CAT / GRE"
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none disabled:opacity-50"
+                  className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-semibold focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed ${disabledFieldClass}`}
                   style={{
                     backgroundColor: 'var(--bg-sidebar)',
                     border: '1.5px solid var(--border-glow)',
@@ -867,11 +1005,15 @@ export default function ProfileTab() {
               <textarea
                 id="profile-bio-input"
                 rows={2}
+                disabled={isDemoPreview}
                 maxLength={120}
                 value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, 120))}
+                onChange={(e) => {
+                  if (isDemoPreview) return;
+                  setBio(e.target.value.slice(0, 120));
+                }}
                 placeholder="Consistent 6h/day until exam day."
-                className="w-full px-3.5 py-2.5 rounded-xl text-sm font-medium focus:outline-none resize-none"
+                className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-medium focus:outline-none resize-none ${disabledFieldClass}`}
                 style={{
                   backgroundColor: 'var(--bg-sidebar)',
                   border: '1.5px solid var(--border-glow)',
@@ -883,7 +1025,8 @@ export default function ProfileTab() {
             {/* Row 5: Leaderboard Visibility Toggle */}
             <label
               htmlFor="profile-leaderboard-visibility-toggle"
-              className="flex items-center justify-between gap-4 p-4 rounded-xl cursor-pointer select-none"
+              aria-disabled={isDemoPreview}
+              className={`flex items-center justify-between gap-4 p-4 rounded-xl select-none ${isDemoPreview ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
               style={{
                 backgroundColor: 'var(--bg-sidebar)',
                 border: '1.5px solid var(--border-glow)'
@@ -896,7 +1039,9 @@ export default function ProfileTab() {
                     Show my <span className="font-mono-numbers">{previewHandle}</span> on the Public Top 100 Leaderboard
                   </p>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    Displays your @username, target exam badge, weekly hours, and live studying status.
+                    {isDemoPreview
+                      ? 'Sign in with Google to opt into the Public Top 100 Leaderboard.'
+                      : 'Displays your @username, target exam badge, weekly hours, and live studying status.'}
                   </p>
                 </div>
               </div>
@@ -905,20 +1050,24 @@ export default function ProfileTab() {
                 <input
                   id="profile-leaderboard-visibility-toggle"
                   type="checkbox"
-                  checked={showOnLeaderboard}
-                  onChange={(e) => setShowOnLeaderboard(e.target.checked)}
-                  className="sr-only"
+                  disabled={isDemoPreview}
+                  checked={isDemoPreview ? false : showOnLeaderboard}
+                  onChange={(e) => {
+                    if (isDemoPreview) return;
+                    setShowOnLeaderboard(e.target.checked);
+                  }}
+                  className={`sr-only ${disabledFieldClass}`}
                 />
                 <span
                   className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
                   style={{
-                    backgroundColor: showOnLeaderboard ? 'var(--primary)' : 'rgba(148, 163, 184, 0.35)',
+                    backgroundColor: (!isDemoPreview && showOnLeaderboard) ? 'var(--primary)' : 'rgba(148, 163, 184, 0.35)',
                     border: '1.5px solid var(--border-glow)'
                   }}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      showOnLeaderboard ? 'translate-x-5' : 'translate-x-0.5'
+                      (!isDemoPreview && showOnLeaderboard) ? 'translate-x-5' : 'translate-x-0.5'
                     }`}
                   />
                 </span>
@@ -930,15 +1079,19 @@ export default function ProfileTab() {
               <button
                 id="save-profile-sync-btn"
                 type="submit"
-                disabled={isSaving || !usernameCheck.valid}
-                className="btn-primary-action flex items-center gap-2 px-6 py-3 rounded-xl text-xs sm:text-sm font-extrabold shadow-glow-accent transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                disabled={isDemoPreview || isSaving || !usernameCheck.valid}
+                className={`btn-primary-action flex items-center gap-2 px-6 py-3 rounded-xl text-xs sm:text-sm font-extrabold shadow-glow-accent transition-all ${
+                  isDemoPreview
+                    ? 'opacity-60 cursor-not-allowed'
+                    : 'cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed'
+                }`}
                 style={{
                   backgroundColor: 'var(--primary)',
                   color: '#FFFFFF',
                   border: '1.5px solid var(--border-glow)'
                 }}
               >
-                <Save className="w-4 h-4" />
+                {isDemoPreview ? <Lock className="w-4 h-4" /> : <Save className="w-4 h-4" />}
                 <span>{isSaving ? 'Saving & Syncing...' : 'Save Profile & Sync'}</span>
               </button>
             </div>

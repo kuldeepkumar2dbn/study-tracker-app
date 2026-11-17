@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { 
   getUserProfile, 
   isAuthenticated as checkIsAuthenticated, 
+  isUserAuthenticated,
   isTokenValid, 
   saveUserSession, 
   logout, 
@@ -19,6 +20,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(() => getUserProfile());
   const [isAuthenticated, setIsAuthenticated] = useState(() => checkIsAuthenticated());
+  const [isGoogleAuthenticated, setIsGoogleAuthenticated] = useState(() => isUserAuthenticated());
   const [isTokenExpired, setIsTokenExpired] = useState(() => !isTokenValid());
   const [authModalState, setAuthModalState] = useState({
     isOpen: false,
@@ -28,12 +30,14 @@ export function AuthProvider({ children }) {
 
   const refreshAuthState = useCallback(() => {
     const profile = getUserProfile();
+    const googleAuthed = isUserAuthenticated(profile);
     setUserProfile(profile);
     setIsAuthenticated(!!profile);
+    setIsGoogleAuthenticated(googleAuthed);
     setIsTokenExpired(!isTokenValid());
   }, []);
 
-  // Synchronize auth state across browser tabs and storage updates
+  // Synchronize auth state across browser tabs, storage updates, and in-app OAuth changes
   useEffect(() => {
     refreshAuthState();
 
@@ -41,6 +45,7 @@ export function AuthProvider({ children }) {
       if (
         !e.key || 
         e.key === AUTH_KEYS.USER_PROFILE || 
+        e.key === AUTH_KEYS.STUDY_USER_PROFILE ||
         e.key === AUTH_KEYS.ACCESS_TOKEN || 
         e.key === AUTH_KEYS.TOKEN_EXPIRY
       ) {
@@ -48,8 +53,16 @@ export function AuthProvider({ children }) {
       }
     };
 
+    const handleAuthChanged = () => {
+      refreshAuthState();
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('studyflow-auth-changed', handleAuthChanged);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('studyflow-auth-changed', handleAuthChanged);
+    };
   }, [refreshAuthState]);
 
   const openAuthModal = useCallback((featureKey = 'general', redirectOnSuccess = null) => {
@@ -232,6 +245,7 @@ export function AuthProvider({ children }) {
       value={{
         userProfile,
         isAuthenticated,
+        isGoogleAuthenticated,
         isTokenExpired,
         isDemo,
         authModalState,
@@ -257,6 +271,7 @@ export function useAuth() {
     return {
       userProfile: profile,
       isAuthenticated: !!profile,
+      isGoogleAuthenticated: isUserAuthenticated(profile),
       isTokenExpired: !isTokenValid(),
       isDemo: isDemoUser(),
       authModalState: { isOpen: false, featureKey: 'general', redirectOnSuccess: null },

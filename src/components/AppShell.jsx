@@ -98,7 +98,7 @@ export function SharedHeader({
 }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
   const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks, subjects, dailyActivity } = useData();
-  const { isAuthenticated, userProfile, signOut, openAuthModal, isDemo } = useAuth();
+  const { isAuthenticated, isGoogleAuthenticated, userProfile, signOut, openAuthModal, isDemo } = useAuth();
   
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
@@ -197,6 +197,10 @@ export function SharedHeader({
   }, []);
 
   const handleTriggerCloudAndLeaderboardSync = () => {
+    if (!isGoogleAuthenticated) {
+      openAuthModal('general');
+      return;
+    }
     if (syncNowToDrive) syncNowToDrive();
     syncStudentToLeaderboard(TELEMETRY_URL, {
       userProfile,
@@ -499,16 +503,20 @@ export function SharedHeader({
             )}
           </div>
 
-          {/* 4. @username Profile Pill (clicking opens #view-profile, which houses Sign Out) */}
+          {/* 4. @username Profile Pill (or Guest Demo pill when not logged in; clicking opens #view-profile) */}
           <button
             id="header-profile-pill"
             type="button"
             data-target-view="profile"
             onClick={handleOpenProfileView}
             className="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
-            title={`Open My Profile (${studentProfile?.handle || '@focused_scholar'})`}
+            title={
+              isGoogleAuthenticated
+                ? `Open My Profile (${studentProfile?.handle || '@focused_scholar'})`
+                : 'Open My Profile (Read-Only Guest Demo Preview)'
+            }
           >
-            {isAuthenticated && userProfile?.picture ? (
+            {isGoogleAuthenticated && userProfile?.picture ? (
               <img 
                 src={userProfile.picture} 
                 alt={studentProfile?.handle || userProfile.name} 
@@ -524,11 +532,13 @@ export function SharedHeader({
                   border: '1px solid var(--border-glow)'
                 }}
               >
-                {getUsernameMonogram(studentProfile?.username, userProfile?.name || 'ST')}
+                {isGoogleAuthenticated
+                  ? getUsernameMonogram(studentProfile?.username, userProfile?.name || 'ST')
+                  : 'GD'}
               </div>
             )}
             <span className="font-bold text-theme-text font-mono-numbers truncate max-w-[120px]">
-              {studentProfile?.handle || '@focused_scholar'}
+              {isGoogleAuthenticated ? (studentProfile?.handle || '@focused_scholar') : 'Guest Demo'}
             </span>
           </button>
 

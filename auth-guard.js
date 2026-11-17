@@ -375,6 +375,24 @@ export function isAuthenticated() {
 }
 
 /**
+ * Checks whether the current visitor is authenticated via genuine Google OAuth
+ * (returns false for unauthenticated guests and local Demo Sandbox preview sessions).
+ *
+ * @param {Object|null} [explicitProfile] - Optional profile override to evaluate
+ * @returns {boolean}
+ */
+export function isUserAuthenticated(explicitProfile = undefined) {
+  const profile = explicitProfile !== undefined ? explicitProfile : getUserProfile();
+  if (!profile || typeof profile !== 'object') return false;
+  if (profile.isDemo === true || profile.sub === 'demo_sandbox_user') return false;
+  if (explicitProfile === undefined && isDemoUser()) return false;
+  const sub = String(profile.sub || '').trim();
+  const email = String(profile.email || '').trim();
+  if (sub === 'guest' || email === 'demo@studyflow.local') return false;
+  return Boolean(sub || email);
+}
+
+/**
  * Retrieves the currently active Google Drive OAuth access token from sessionStorage or memory.
  * Never retrieves from long-lived localStorage or cookies.
  */
@@ -482,6 +500,16 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
       if (sanitized) {
         sessionStorage.setItem(AUTH_KEYS.DRIVE_USER, JSON.stringify(sanitized));
       }
+    }
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studyflow-auth-changed', {
+        detail: {
+          isAuthenticated: Boolean(sanitized),
+          isGoogleAuthenticated: isUserAuthenticated(sanitized),
+          profile: sanitized
+        }
+      }));
     }
   } catch (e) {
     console.error('Error saving user session:', e);
@@ -702,6 +730,16 @@ export function clearAuthTokens() {
     sessionStorage.removeItem(AUTH_KEYS.STUDY_USER_PROFILE);
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_TOKEN);
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_USER);
+
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studyflow-auth-changed', {
+        detail: {
+          isAuthenticated: false,
+          isGoogleAuthenticated: false,
+          profile: null
+        }
+      }));
+    }
   } catch (e) {
     console.error('Error clearing auth tokens:', e);
   }
@@ -799,5 +837,6 @@ if (typeof window !== 'undefined') {
       sessionStorage.removeItem(AUTH_KEYS.TOKEN_EXPIRY);
     }
   } catch {}
+  window.isUserAuthenticated = isUserAuthenticated;
   getUserProfile();
 }

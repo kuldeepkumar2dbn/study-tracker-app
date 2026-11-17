@@ -8,8 +8,46 @@
 
 import { TELEMETRY_URL, isTelemetryConfigured, getLoggedInUserProfile } from './admin-config.js';
 import { sanitizeText, stripHtmlTags, getOrCreateUserSecret } from './security-privacy.js';
+import { isUserAuthenticated } from './auth-guard.js';
 
-export { TELEMETRY_URL, sanitizeText, getOrCreateUserSecret };
+export { TELEMETRY_URL, sanitizeText, getOrCreateUserSecret, isUserAuthenticated };
+
+/**
+ * Determines whether the caller is permitted to push entries to the public Leaderboard
+ * tab in StudyTracker_Admin_DB. Guest and local Demo Preview sessions are strictly blocked
+ * until authenticated via Google OAuth.
+ *
+ * @param {Object} [userData={}]
+ * @param {Object} [options={}]
+ * @returns {boolean}
+ */
+export function canSyncToLeaderboard(userData = {}, options = {}) {
+  if (options?.isAuthenticated === false || userData?.isGuest === true) {
+    return false;
+  }
+
+  const candidateProfile = options?.userProfile !== undefined ? options.userProfile : userData?.userProfile;
+  if (candidateProfile && (candidateProfile.isDemo === true || candidateProfile.sub === 'demo_sandbox_user')) {
+    return false;
+  }
+
+  const candidateId = String(options?.studentId || userData?.studentId || '').trim();
+  if (candidateId === 'guest' || candidateId === 'demo_sandbox_user' || candidateId === 'usr_anonymous') {
+    return false;
+  }
+
+  // In browser environments (or when requireAuth is explicitly set), enforce genuine Google OAuth login
+  if (options?.requireAuth === true || typeof window !== 'undefined') {
+    if (options?.bypassAuthCheck === true) return true;
+    return isUserAuthenticated(candidateProfile !== undefined ? candidateProfile : undefined);
+  }
+
+  // In headless Node unit-test environments, require an explicit non-guest studentId or authenticated profile
+  if (candidateProfile && isUserAuthenticated(candidateProfile)) {
+    return true;
+  }
+  return Boolean(candidateId);
+}
 
 export const LEADERBOARD_SETTINGS_KEY = 'studytracker_leaderboard_settings';
 export const LEADERBOARD_CACHE_KEY = 'studytracker_leaderboard_cache';
@@ -344,6 +382,17 @@ export function getLocalSelfEntry() {
  * @returns {Promise<{success: boolean, payload: Object, syncedAt: string, skipped?: boolean}>}
  */
 export async function syncStudentToLeaderboard(endpoint = TELEMETRY_URL, userData = {}, options = {}) {
+  // Prevent guest / unauthenticated sessions from pushing entries to the public Leaderboard sheet
+  if (!canSyncToLeaderboard(userData, options)) {
+    return {
+      success: false,
+      blocked: true,
+      skipped: true,
+      reason: 'auth_required',
+      error: 'Sign in with Google to sync your study hours to the public Leaderboard.'
+    };
+  }
+
   const targetUrl = endpoint || TELEMETRY_URL;
   const payload = buildStudentLeaderboardPayload(userData, options);
 
@@ -603,12 +652,15 @@ export async function fetchLeaderboard(
     }
   });
 
-  // 5. Merge current logged-in student's real live entry ONLY if opted in AND has logged real hours or is actively studying live
+  // 5. Merge current logged-in student's real live entry ONLY if Google-authenticated, opted in, AND has real activity
   const settings = getLeaderboardSettings(currentUserData?.userProfile);
   const currentStudentId = currentUserData?.studentId || getStudentId(currentUserData?.userProfile);
-  const effectiveOptIn = currentUserData?.optedIn !== undefined
-    ? Boolean(currentUserData.optedIn)
-    : settings.optedIn;
+  const canMergeSelf = canSyncToLeaderboard(currentUserData || {}, {});
+  const effectiveOptIn = canMergeSelf && (
+    currentUserData?.optedIn !== undefined
+      ? Boolean(currentUserData.optedIn)
+      : settings.optedIn
+  );
 
   if (effectiveOptIn) {
     const selfRaw = currentUserData
@@ -750,12 +802,26 @@ let _heartbeatActive = false;
 export function startLivePresenceHeartbeat(
   endpoint = TELEMETRY_URL,
   getCurrentStatsPayload = null,
-  intervalMs = LIVE_HEARTBEAT_INTERVAL_MS
+  intervalMs = LIVE_HEARTBEAT_INTERVAL_MS,
+  options = {}
 ) {
   // Clear any existing heartbeat to prevent duplicate intervals
   if (_heartbeatTimerId !== null) {
     clearInterval(_heartbeatTimerId);
     _heartbeatTimerId = null;
+  }
+
+  // Block guest / unauthenticated sessions from pushing live presence pings to public Leaderboard
+  const initialStats = typeof getCurrentStatsPayload === 'function'
+    ? getCurrentStatsPayload()
+    : (getCurrentStatsPayload || {});
+  if (!canSyncToLeaderboard(initialStats, options)) {
+    _heartbeatActive = false;
+    return {
+      active: false,
+      blocked: true,
+      reason: 'auth_required'
+    };
   }
 
   _heartbeatEndpoint = endpoint || TELEMETRY_URL;
@@ -860,6 +926,8 @@ if (typeof window !== 'undefined') {
     TELEMETRY_URL,
     LIVE_HEARTBEAT_INTERVAL_MS,
     COMMON_LEADERBOARD_SUBJECTS,
+    canSyncToLeaderboard,
+    isUserAuthenticated,
     getStudentId,
     getLeaderboardSettings,
     saveLeaderboardSettings,
@@ -881,6 +949,8 @@ export default {
   LEADERBOARD_CACHE_KEY,
   LIVE_HEARTBEAT_INTERVAL_MS,
   COMMON_LEADERBOARD_SUBJECTS,
+  canSyncToLeaderboard,
+  isUserAuthenticated,
   getStudentId,
   getLeaderboardSettings,
   saveLeaderboardSettings,

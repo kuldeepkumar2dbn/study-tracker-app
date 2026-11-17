@@ -10,10 +10,79 @@
  */
 
 import { patchUserData } from './storage-helper.js';
-import { getActiveUserId } from './auth-guard.js';
+import { getActiveUserId, isUserAuthenticated } from './auth-guard.js';
 import { sanitizeText, stripHtmlTags } from './security-privacy.js';
 
-export { sanitizeText };
+export { sanitizeText, isUserAuthenticated };
+
+/**
+ * Evaluates whether #view-profile should run in Read-Only Demo Preview mode
+ * or full authenticated editing mode based on Google OAuth login status.
+ *
+ * @param {Object|null} [authUserProfile] - Optional profile override
+ * @returns {{ isAuthenticated: boolean, isReadOnlyDemo: boolean, badgeLabel: string|null, mode: string }}
+ */
+export function getProfileAccessState(authUserProfile = undefined) {
+  const authed = isUserAuthenticated(authUserProfile);
+  return {
+    isAuthenticated: authed,
+    isReadOnlyDemo: !authed,
+    badgeLabel: authed ? null : 'Guest Demo',
+    mode: authed ? 'authenticated' : 'demo-preview'
+  };
+}
+
+/**
+ * Applies or removes Read-Only Demo Preview DOM lock states inside #view-profile.
+ * Sets `disabled = true` and `opacity-60 cursor-not-allowed` on every input, select,
+ * textarea, privacy toggle, and Save Profile & Sync button when the visitor is not signed in.
+ *
+ * @param {HTMLElement|Document|null} [root]
+ * @param {Object|null} [authUserProfile]
+ * @returns {{ isAuthenticated: boolean, isReadOnlyDemo: boolean, lockedCount: number }}
+ */
+export function applyProfileDemoMode(root = null, authUserProfile = undefined) {
+  const state = getProfileAccessState(authUserProfile);
+  if (typeof document === 'undefined' && !root) {
+    return { ...state, lockedCount: 0 };
+  }
+
+  const scope = root || document.getElementById('view-profile') || document.getElementById('student-profile-view-root');
+  if (!scope || typeof scope.querySelectorAll !== 'function') {
+    return { ...state, lockedCount: 0 };
+  }
+
+  const form = scope.querySelector('#student-profile-form') || scope;
+  const controls = form.querySelectorAll('input, select, textarea, button[type="submit"], #save-profile-sync-btn');
+  let lockedCount = 0;
+
+  controls.forEach((el) => {
+    if (state.isReadOnlyDemo) {
+      el.disabled = true;
+      el.setAttribute('aria-disabled', 'true');
+      el.classList.add('opacity-60', 'cursor-not-allowed');
+      lockedCount += 1;
+    } else {
+      // Preserve custom-target-input disabled rule if targetExam !== 'Other'
+      if (el.id === 'profile-custom-target-input') {
+        const targetSelect = form.querySelector('#profile-target-exam-select');
+        const isOther = targetSelect ? targetSelect.value === 'Other' : false;
+        el.disabled = !isOther;
+      } else {
+        el.disabled = false;
+      }
+      el.removeAttribute('aria-disabled');
+      el.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
+  });
+
+  const banner = scope.querySelector('#profile-demo-preview-banner');
+  if (banner) {
+    banner.hidden = !state.isReadOnlyDemo;
+  }
+
+  return { ...state, lockedCount };
+}
 
 export const STUDENT_PROFILE_KEY = 'studytracker_student_profile';
 export const MOCK_TESTS_STORAGE_KEY = 'studytracker_mock_tests';
@@ -172,8 +241,19 @@ export function getStudentProfile(authUserProfile = null) {
 
 /**
  * Validates and persists the Student Profile to localStorage + Google Drive via patchUserData.
+ * Blocks edits and persistence when the visitor is not signed in via Google OAuth.
  */
-export function saveStudentProfile(input = {}, { userId = null } = {}) {
+export function saveStudentProfile(input = {}, { userId = null, requireAuth = false, authUserProfile = undefined, bypassAuthCheck = false } = {}) {
+  const shouldEnforceAuth = requireAuth === true || (typeof window !== 'undefined' && bypassAuthCheck !== true);
+  if (shouldEnforceAuth && !isUserAuthenticated(authUserProfile)) {
+    return {
+      success: false,
+      blocked: true,
+      reason: 'auth_required',
+      error: 'Demo Preview Mode is read-only. Sign in with Google to edit and save your profile.'
+    };
+  }
+
   const check = validateUsername(input.username);
   if (!check.valid) {
     return { success: false, error: check.error };
@@ -282,6 +362,9 @@ if (typeof window !== 'undefined') {
   window.StudyProfile = {
     STUDENT_PROFILE_KEY,
     TARGET_EXAM_PRESETS,
+    isUserAuthenticated,
+    getProfileAccessState,
+    applyProfileDemoMode,
     sanitizeUsername,
     validateUsername,
     formatHandle,
@@ -297,6 +380,9 @@ export default {
   STUDENT_PROFILE_KEY,
   TARGET_EXAM_PRESETS,
   USERNAME_REGEX,
+  isUserAuthenticated,
+  getProfileAccessState,
+  applyProfileDemoMode,
   sanitizeUsername,
   validateUsername,
   formatHandle,

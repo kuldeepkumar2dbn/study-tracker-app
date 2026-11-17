@@ -13,7 +13,9 @@ import {
   Edit3,
   ArrowDownCircle,
   Sparkles,
-  Search
+  Search,
+  Lock,
+  LogIn
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -34,8 +36,9 @@ const POLL_INTERVAL_MS = 30000;
 
 export default function LeaderboardTab({ isActiveView = false }) {
   const { subjects = [], streakData, dailyActivity = {} } = useData();
-  const { userProfile } = useAuth();
+  const { userProfile, isGoogleAuthenticated, openAuthModal } = useAuth();
   const { theme } = useTheme();
+  const isGuestSyncLocked = !isGoogleAuthenticated;
 
   // Persisted display name, opt-in privacy toggle, and live 30s auto-refresh toggle
   const initialSettings = useMemo(() => getLeaderboardSettings(userProfile), [userProfile]);
@@ -131,14 +134,15 @@ export default function LeaderboardTab({ isActiveView = false }) {
   // Build current user study snapshot for syncing & live rank calculation
   const buildCurrentUserSnapshot = useCallback(() => ({
     userProfile,
-    studentId: currentStudentId,
+    studentId: isGuestSyncLocked ? 'guest' : currentStudentId,
+    isGuest: isGuestSyncLocked,
     displayName,
-    optedIn,
+    optedIn: isGuestSyncLocked ? false : optedIn,
     subjectsList: subjects,
     subjects,
     streakData,
     dailyActivity
-  }), [userProfile, currentStudentId, displayName, optedIn, subjects, streakData, dailyActivity]);
+  }), [userProfile, isGuestSyncLocked, currentStudentId, displayName, optedIn, subjects, streakData, dailyActivity]);
 
   // Fetch leaderboard rankings from TELEMETRY_URL
   const loadLeaderboard = useCallback(async ({ silent = false } = {}) => {
@@ -240,6 +244,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
 
   // Save inline Display Name
   const handleDisplayNameBlur = () => {
+    if (isGuestSyncLocked) return;
     const cleaned = displayName.trim() || 'Focused Scholar';
     setDisplayName(cleaned);
     saveLeaderboardSettings({ displayName: cleaned }, userProfile);
@@ -247,6 +252,10 @@ export default function LeaderboardTab({ isActiveView = false }) {
 
   // Toggle Opt-In privacy control
   const handleToggleOptIn = async () => {
+    if (isGuestSyncLocked) {
+      openAuthModal('leaderboard', '#leaderboard');
+      return;
+    }
     const nextOptIn = !optedIn;
     setOptedIn(nextOptIn);
     saveLeaderboardSettings({ optedIn: nextOptIn }, userProfile);
@@ -277,6 +286,10 @@ export default function LeaderboardTab({ isActiveView = false }) {
 
   // Manual "🔄 Sync My Hours Now" button
   const handleSyncNow = async () => {
+    if (isGuestSyncLocked) {
+      openAuthModal('leaderboard', '#leaderboard');
+      return;
+    }
     setIsSyncing(true);
     const cleanedName = displayName.trim() || 'Focused Scholar';
     setDisplayName(cleanedName);
@@ -740,6 +753,37 @@ export default function LeaderboardTab({ isActiveView = false }) {
         </div>
 
         {/* Row 2: Display Name, Opt-In Privacy Toggle, and "🔄 Sync My Hours Now" Button */}
+        {isGuestSyncLocked && (
+          <div
+            id="leaderboard-guest-sync-gate"
+            className="mt-3 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            style={{
+              backgroundColor: 'var(--bg-sidebar)',
+              border: '1.5px solid var(--border-glow)',
+              color: 'var(--text-main)'
+            }}
+          >
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <span>🔒</span>
+              <span>Leaderboard sync is locked for guests. Sign in with Google to claim your @username and sync your hours to the public Top 100.</span>
+            </div>
+            <button
+              id="leaderboard-guest-signin-btn"
+              type="button"
+              onClick={() => openAuthModal('leaderboard', '#leaderboard')}
+              className="btn-primary-action inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold shrink-0 cursor-pointer transition-all active:scale-95"
+              style={{
+                backgroundColor: 'var(--primary)',
+                color: '#FFFFFF',
+                border: '1.5px solid var(--border-glow)'
+              }}
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In with Google</span>
+            </button>
+          </div>
+        )}
+
         <div
           className="pt-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
           style={{ borderTop: '1px solid var(--border-glow)' }}
@@ -757,18 +801,22 @@ export default function LeaderboardTab({ isActiveView = false }) {
             <input
               id="leaderboard-display-name-input"
               type="text"
+              disabled={isGuestSyncLocked}
               maxLength={40}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              value={isGuestSyncLocked ? 'Guest Demo' : displayName}
+              onChange={(e) => {
+                if (isGuestSyncLocked) return;
+                setDisplayName(e.target.value);
+              }}
               onBlur={handleDisplayNameBlur}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !isGuestSyncLocked) {
                   handleDisplayNameBlur();
                   handleSyncNow();
                 }
               }}
               placeholder="Enter your display name"
-              className="px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold w-full sm:w-56 focus:outline-none"
+              className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold w-full sm:w-56 focus:outline-none ${isGuestSyncLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
               style={{
                 backgroundColor: 'var(--bg-sidebar)',
                 border: '1.5px solid var(--border-glow)',
@@ -781,7 +829,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
           <div className="flex flex-wrap items-center gap-3">
             <label
               htmlFor="leaderboard-optin-toggle"
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl cursor-pointer select-none"
+              className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl select-none ${isGuestSyncLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
               style={{
                 backgroundColor: 'var(--bg-sidebar)',
                 border: '1px solid var(--border-glow)'
@@ -794,20 +842,21 @@ export default function LeaderboardTab({ isActiveView = false }) {
               <input
                 id="leaderboard-optin-toggle"
                 type="checkbox"
-                checked={optedIn}
+                disabled={isGuestSyncLocked}
+                checked={isGuestSyncLocked ? false : optedIn}
                 onChange={handleToggleOptIn}
                 className="sr-only"
               />
               <span
                 className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
                 style={{
-                  backgroundColor: optedIn ? 'var(--primary)' : 'rgba(148, 163, 184, 0.35)',
+                  backgroundColor: (!isGuestSyncLocked && optedIn) ? 'var(--primary)' : 'rgba(148, 163, 184, 0.35)',
                   border: '1px solid var(--border-glow)'
                 }}
               >
                 <span
                   className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                    optedIn ? 'translate-x-4' : 'translate-x-0.5'
+                    (!isGuestSyncLocked && optedIn) ? 'translate-x-4' : 'translate-x-0.5'
                   }`}
                 />
               </span>
@@ -816,17 +865,22 @@ export default function LeaderboardTab({ isActiveView = false }) {
             <button
               id="leaderboard-sync-now-btn"
               type="button"
-              disabled={isSyncing}
+              disabled={isSyncing || isGuestSyncLocked}
               onClick={handleSyncNow}
-              className="btn-primary-action flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-glow-accent transition-all cursor-pointer active:scale-95 disabled:opacity-60"
+              title={isGuestSyncLocked ? 'Sign in with Google to sync your hours to the Leaderboard' : 'Sync your real study hours to the Leaderboard'}
+              className={`btn-primary-action flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-glow-accent transition-all ${
+                isGuestSyncLocked
+                  ? 'opacity-60 cursor-not-allowed'
+                  : 'cursor-pointer active:scale-95 disabled:opacity-60'
+              }`}
               style={{
                 backgroundColor: 'var(--primary)',
                 color: '#FFFFFF',
                 border: '1.5px solid var(--border-glow)'
               }}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Syncing Hours...' : '🔄 Sync My Hours Now'}</span>
+              {isGuestSyncLocked ? <Lock className="w-3.5 h-3.5" /> : <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
+              <span>{isSyncing ? 'Syncing Hours...' : (isGuestSyncLocked ? '🔒 Sync My Hours Now' : '🔄 Sync My Hours Now')}</span>
             </button>
           </div>
         </div>

@@ -920,11 +920,13 @@ export function DataProvider({ children }) {
         updatedAt: new Date().toISOString()
       };
       const res = await forceBidirectionalSync(currentPayload);
-      syncStudentToLeaderboard(TELEMETRY_URL, {
-        ...currentPayload,
-        subjectsList: subjects || [],
-        streakData
-      }).catch(() => {});
+      if (activeId && activeId !== 'guest' && activeId !== 'demo_sandbox_user' && !isDemo) {
+        syncStudentToLeaderboard(TELEMETRY_URL, {
+          ...currentPayload,
+          subjectsList: subjects || [],
+          streakData
+        }).catch(() => {});
+      }
       return res;
     } catch (e) {
       console.error('Explicit sync error:', e);

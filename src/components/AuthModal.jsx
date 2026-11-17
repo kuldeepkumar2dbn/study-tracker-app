@@ -12,7 +12,9 @@ import {
   Calendar,
   Repeat,
   BookOpen,
-  FileText
+  FileText,
+  User,
+  Trophy
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -115,6 +117,48 @@ export const LOCKED_FEATURE_CONFIGS = {
     ],
     defaultUrl: '/notes.html'
   },
+  profile: {
+    id: 'profile',
+    name: 'My Student Profile',
+    tagline: 'Claim your custom @username, customize your Student ID card, and sync across devices',
+    icon: User,
+    color: 'teal',
+    benefits: [
+      'Claim a unique @username handle for the real-time Top 100 Leaderboard',
+      'Customize your Target Exam badge, daily study goal, and study motto',
+      'Sync your profile and progress securely to your personal Google Drive',
+      'Age, City, Notes, and Mock Mistakes stay strictly private to your account'
+    ],
+    defaultUrl: '#profile'
+  },
+  leaderboard: {
+    id: 'leaderboard',
+    name: 'Leaderboard Live Sync',
+    tagline: 'Sync your real focus hours, streak, and live study room presence to the Top 100',
+    icon: Trophy,
+    color: 'amber',
+    benefits: [
+      'Appear on the Overall Top 100 and Subject-Wise Leaderboard under your @username',
+      'Join the Live Study Room when your Focus Timer is running',
+      'Protected by cryptographic ownership tokens so nobody can spoof your stats',
+      'Opt out or erase your Leaderboard row anytime with 1 click'
+    ],
+    defaultUrl: '#leaderboard'
+  },
+  'ai-coach': {
+    id: 'ai-coach',
+    name: 'AI Study Coach & Burnout Diagnostics',
+    tagline: 'Unlock personalized pace analytics, retention coaching, and burnout protection',
+    icon: Sparkles,
+    color: 'indigo',
+    benefits: [
+      'Real-time burnout monitoring calibrated to your logged study sessions',
+      'Personalized pacing advice based on your daily target and revision queue',
+      'Synced across devices with your personal Google Drive study archive',
+      'Zero external data brokers — all insights computed for your account'
+    ],
+    defaultUrl: '#dashboard'
+  },
   general: {
     id: 'general',
     name: 'Full Academic Suite',
@@ -149,9 +193,17 @@ export default function AuthModal() {
       await loginWithGoogle();
       closeAuthModal();
 
-      // If a destination URL was requested (e.g. user clicked a specific tab)
+      // If a destination URL or SPA hash was requested (e.g. user clicked a specific tab)
       const targetUrl = authModalState.redirectOnSuccess || feature.defaultUrl;
-      if (targetUrl && !window.location.pathname.endsWith(targetUrl)) {
+      if (targetUrl && targetUrl.startsWith('#')) {
+        const viewId = targetUrl.replace(/^#\/?/, '');
+        if (typeof window !== 'undefined' && typeof window.switchView === 'function') {
+          window.switchView(viewId);
+        } else {
+          window.location.hash = viewId;
+        }
+        setIsLoading(false);
+      } else if (targetUrl && !window.location.pathname.endsWith(targetUrl)) {
         window.location.href = targetUrl;
       } else {
         // Smoothly reload current page to activate unlocked state

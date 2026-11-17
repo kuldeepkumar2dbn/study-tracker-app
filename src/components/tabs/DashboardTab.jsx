@@ -20,6 +20,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import RollingNumber from '../RollingNumber';
 import RadialProgressRing from '../RadialProgressRing';
@@ -111,6 +112,7 @@ export default function DashboardTab({ onNavigateTab }) {
     markSkillVideoCompleted
   } = useData();
 
+  const { isGoogleAuthenticated, openAuthModal } = useAuth();
   const { theme, setTheme, themes } = useTheme();
 
   const [isAddRoutineModalOpen, setIsAddRoutineModalOpen] = useState(false);
@@ -253,30 +255,32 @@ export default function DashboardTab({ onNavigateTab }) {
       updateSubjectHours(safeSubjects[0].id, 0.5);
     }
 
-    // Automatically background-sync +30m study log to real-time Leaderboard
-    const activeSubject = safeSubjects[0]?.name || 'General Studies';
-    const nextTodayHours = Number(((safeStreakData.todayHours || 0) + 0.5).toFixed(1));
-    const nextWeeklyHours = Number(((safeStreakData.weeklyVelocityHours || 0) + 0.5).toFixed(1));
-    const nextStreak = (safeStreakData.streakCount || 0) === 0 ? 1 : safeStreakData.streakCount;
-    const updatedSubjects = safeSubjects.map((s, idx) =>
-      idx === 0 ? { ...s, completedHours: Number(((s.completedHours || 0) + 0.5).toFixed(1)) } : s
-    );
+    // Automatically background-sync +30m study log to real-time Leaderboard (Google-authenticated users only)
+    if (isGoogleAuthenticated) {
+      const activeSubject = safeSubjects[0]?.name || 'General Studies';
+      const nextTodayHours = Number(((safeStreakData.todayHours || 0) + 0.5).toFixed(1));
+      const nextWeeklyHours = Number(((safeStreakData.weeklyVelocityHours || 0) + 0.5).toFixed(1));
+      const nextStreak = (safeStreakData.streakCount || 0) === 0 ? 1 : safeStreakData.streakCount;
+      const updatedSubjects = safeSubjects.map((s, idx) =>
+        idx === 0 ? { ...s, completedHours: Number(((s.completedHours || 0) + 0.5).toFixed(1)) } : s
+      );
 
-    syncStudentToLeaderboard(
-      TELEMETRY_URL,
-      {
-        subjectsList: updatedSubjects,
-        subjects: updatedSubjects,
-        dailyActivity,
-        streakData: {
-          ...safeStreakData,
-          todayHours: nextTodayHours,
-          weeklyVelocityHours: nextWeeklyHours,
-          streakCount: nextStreak
-        }
-      },
-      { activeSubject }
-    );
+      syncStudentToLeaderboard(
+        TELEMETRY_URL,
+        {
+          subjectsList: updatedSubjects,
+          subjects: updatedSubjects,
+          dailyActivity,
+          streakData: {
+            ...safeStreakData,
+            todayHours: nextTodayHours,
+            weeklyVelocityHours: nextWeeklyHours,
+            streakCount: nextStreak
+          }
+        },
+        { activeSubject }
+      );
+    }
   };
 
   const handleToggleRoutineSlot = (slotId) => {
@@ -556,9 +560,21 @@ export default function DashboardTab({ onNavigateTab }) {
             >
               <Sparkles className="w-3 h-3 text-amber-500" />
               <span>AI Study Coach</span>
+              {!isGoogleAuthenticated && (
+                <span
+                  id="ai-coach-guest-lock-icon"
+                  title="Sign in with Google to unlock personalized AI Study Coach & Burnout Diagnostics"
+                  aria-label="Locked for guests"
+                  className="opacity-75"
+                >
+                  🔒
+                </span>
+              )}
             </span>
             <p className="text-xs sm:text-sm font-medium truncate" style={{ color: 'var(--text-main)' }}>
-              {coachDiagnostics.headline}
+              {isGoogleAuthenticated
+                ? coachDiagnostics.headline
+                : 'Sign in with Google to unlock personalized AI Study Coach & Burnout Diagnostics.'}
             </p>
           </div>
 
@@ -580,76 +596,107 @@ export default function DashboardTab({ onNavigateTab }) {
 
         {/* Expanded Burnout & Pace Diagnostics Details */}
         {isDiagnosticsExpanded && (
-          <div
-            id="ai-coach-diagnostics-body"
-            className="mt-4 pt-4 grid grid-cols-1 md:grid-cols-3 gap-3.5 animate-fadeIn"
-            style={{ borderTop: '1px solid var(--border-glow)' }}
-          >
+          !isGoogleAuthenticated ? (
             <div
-              className="rounded-xl p-3.5 space-y-1"
-              style={{
-                backgroundColor: 'var(--bg-sidebar)',
-                border: '1px solid var(--border-glow)'
-              }}
+              id="ai-coach-diagnostics-body"
+              className="mt-4 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn"
+              style={{ borderTop: '1px solid var(--border-glow)' }}
             >
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                Burnout Diagnostics
-              </span>
-              <p className={`text-sm font-extrabold ${coachDiagnostics.burnoutTone}`}>
-                {coachDiagnostics.burnoutLevel}
-              </p>
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Calculated strictly from your real daily logged focus hours.
-              </p>
-            </div>
-
-            <div
-              className="rounded-xl p-3.5 space-y-1"
-              style={{
-                backgroundColor: 'var(--bg-sidebar)',
-                border: '1px solid var(--border-glow)'
-              }}
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                Pace &amp; Consistency
-              </span>
-              <p className="text-sm font-extrabold font-mono-numbers" style={{ color: 'var(--text-main)' }}>
-                {safeStreakData.weeklyVelocityHours || 0}h this week
-              </p>
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                {coachDiagnostics.paceNote}
-              </p>
-            </div>
-
-            <div
-              className="rounded-xl p-3.5 flex flex-col justify-between gap-2"
-              style={{
-                backgroundColor: 'var(--bg-sidebar)',
-                border: '1px solid var(--border-glow)'
-              }}
-            >
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-                  Recommended Next Step
-                </span>
-                <p className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
-                  Keep your streak building with deliberate sessions.
+              <div className="space-y-1">
+                <p className="text-xs sm:text-sm font-bold flex items-center gap-1.5" style={{ color: 'var(--text-main)' }}>
+                  <span>🔒</span>
+                  <span>AI Study Coach &amp; Burnout Diagnostics Locked</span>
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Sign in with Google to track burnout velocity, pace consistency, and personalized revision recommendations across devices.
                 </p>
               </div>
               <button
+                id="ai-coach-signin-btn"
                 type="button"
-                onClick={() => navigate(coachDiagnostics.actionTab)}
-                className="w-full py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition-all active:scale-95"
+                onClick={() => openAuthModal('ai-coach', '#dashboard')}
+                className="btn-primary-action px-4 py-2 rounded-xl text-xs font-extrabold shrink-0 cursor-pointer transition-all active:scale-95"
                 style={{
                   backgroundColor: 'var(--primary)',
                   color: '#FFFFFF',
+                  border: '1.5px solid var(--border-glow)'
+                }}
+              >
+                Sign In with Google
+              </button>
+            </div>
+          ) : (
+            <div
+              id="ai-coach-diagnostics-body"
+              className="mt-4 pt-4 grid grid-cols-1 md:grid-cols-3 gap-3.5 animate-fadeIn"
+              style={{ borderTop: '1px solid var(--border-glow)' }}
+            >
+              <div
+                className="rounded-xl p-3.5 space-y-1"
+                style={{
+                  backgroundColor: 'var(--bg-sidebar)',
                   border: '1px solid var(--border-glow)'
                 }}
               >
-                {coachDiagnostics.actionLabel} &rarr;
-              </button>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Burnout Diagnostics
+                </span>
+                <p className={`text-sm font-extrabold ${coachDiagnostics.burnoutTone}`}>
+                  {coachDiagnostics.burnoutLevel}
+                </p>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  Calculated strictly from your real daily logged focus hours.
+                </p>
+              </div>
+
+              <div
+                className="rounded-xl p-3.5 space-y-1"
+                style={{
+                  backgroundColor: 'var(--bg-sidebar)',
+                  border: '1px solid var(--border-glow)'
+                }}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Pace &amp; Consistency
+                </span>
+                <p className="text-sm font-extrabold font-mono-numbers" style={{ color: 'var(--text-main)' }}>
+                  {safeStreakData.weeklyVelocityHours || 0}h this week
+                </p>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {coachDiagnostics.paceNote}
+                </p>
+              </div>
+
+              <div
+                className="rounded-xl p-3.5 flex flex-col justify-between gap-2"
+                style={{
+                  backgroundColor: 'var(--bg-sidebar)',
+                  border: '1px solid var(--border-glow)'
+                }}
+              >
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Recommended Next Step
+                  </span>
+                  <p className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
+                    Keep your streak building with deliberate sessions.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(coachDiagnostics.actionTab)}
+                  className="w-full py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition-all active:scale-95"
+                  style={{
+                    backgroundColor: 'var(--primary)',
+                    color: '#FFFFFF',
+                    border: '1px solid var(--border-glow)'
+                  }}
+                >
+                  {coachDiagnostics.actionLabel} &rarr;
+                </button>
+              </div>
             </div>
-          </div>
+          )
         )}
       </div>
 

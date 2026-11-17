@@ -187,7 +187,7 @@ export default function CollapsibleSidebar({
     streakData 
   } = useData();
 
-  const { isAuthenticated, openAuthModal, isDemo } = useAuth();
+  const { isAuthenticated, isGoogleAuthenticated, openAuthModal, isDemo } = useAuth();
   const { isFeatureCoded } = useTheme();
 
   // Feedback Modal and Toast State
@@ -266,18 +266,20 @@ export default function CollapsibleSidebar({
               });
             }
 
-            // Stop 3-minute live presence heartbeat and sync completed focus session
+            // Stop 3-minute live presence heartbeat and sync completed focus session (Google-authenticated users only)
             stopLivePresenceHeartbeat({ sendIdlePing: false });
-            syncStudentToLeaderboard(TELEMETRY_URL, {
-              streakData: {
-                ...(streakData || {}),
-                todayHours: Number(((streakData?.todayHours || 0) + durationMin / 60).toFixed(1)),
-                weeklyVelocityHours: Number(((streakData?.weeklyVelocityHours || 0) + durationMin / 60).toFixed(1))
-              }
-            }, {
-              activeSubject: subject,
-              isLiveNow: false
-            });
+            if (isGoogleAuthenticated) {
+              syncStudentToLeaderboard(TELEMETRY_URL, {
+                streakData: {
+                  ...(streakData || {}),
+                  todayHours: Number(((streakData?.todayHours || 0) + durationMin / 60).toFixed(1)),
+                  weeklyVelocityHours: Number(((streakData?.weeklyVelocityHours || 0) + durationMin / 60).toFixed(1))
+                }
+              }, {
+                activeSubject: subject,
+                isLiveNow: false
+              });
+            }
 
             // 3. Celebrate
             celebrateTaskCompletion();
@@ -439,6 +441,9 @@ export default function CollapsibleSidebar({
                   const isDemoLockedNotes = isDemo && item.id === 'notes';
                   const isGuestLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(item.id);
                   const isLocked = isDemoLockedNotes || isGuestLocked;
+                  const isGuestProfileDemo = !isGoogleAuthenticated && item.id === 'profile';
+                  const isGuestLeaderboardSyncLocked = !isGoogleAuthenticated && item.id === 'leaderboard';
+                  const showLockIndicator = isLocked || isGuestLeaderboardSyncLocked;
                   const isTimer = item.id === 'timer';
 
                   // Solid glowing pill highlight styling
@@ -539,10 +544,18 @@ export default function CollapsibleSidebar({
                             )}
 
                             {/* Minimal Lock Dot */}
-                            {isLocked && (
+                            {showLockIndicator && (
                               <span className="absolute -top-1 -right-1.5 text-[9px] leading-none opacity-75" aria-label="Locked">
                                 🔒
                               </span>
+                            )}
+
+                            {/* Minimal Demo Dot on Collapsed Profile */}
+                            {isGuestProfileDemo && (
+                              <span
+                                title="My Profile (Demo Preview)"
+                                className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-theme-surface"
+                              />
                             )}
                           </>
                         )}
@@ -597,12 +610,42 @@ export default function CollapsibleSidebar({
                             </span>
                           )}
 
-                          {/* Minimal 🔒 Icon for Locked Tabs */}
-                          {isLocked && (
+                          {/* Read-Only Demo Badge for My Profile when not Google signed in */}
+                          {isGuestProfileDemo && (
+                            <span
+                              id="sidebar-profile-demo-badge"
+                              title="Read-only Demo Preview — Sign in with Google to edit"
+                              className="text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 ml-auto select-none"
+                              style={
+                                isActive
+                                  ? {
+                                      backgroundColor: 'rgba(255, 255, 255, 0.22)',
+                                      color: '#FFFFFF',
+                                      border: '1px solid rgba(255, 255, 255, 0.4)'
+                                    }
+                                  : {
+                                      backgroundColor: 'var(--bg-card)',
+                                      color: 'var(--text-main)',
+                                      border: '1px solid var(--border-glow)'
+                                    }
+                              }
+                            >
+                              Demo
+                            </span>
+                          )}
+
+                          {/* Minimal 🔒 Icon for Account-Bound / Sync-Locked Tabs */}
+                          {showLockIndicator && (
                             <span 
-                              title={isDemoLockedNotes ? "Locked in demo mode" : "Sign in with Google to unlock"}
+                              title={
+                                isDemoLockedNotes
+                                  ? "Locked in demo mode"
+                                  : isGuestLeaderboardSyncLocked
+                                    ? "Leaderboard sync locked — Sign in with Google to sync your hours"
+                                    : "Sign in with Google to unlock"
+                              }
                               className="text-xs opacity-60 shrink-0 ml-auto select-none"
-                              aria-label="Locked"
+                              aria-label={isGuestLeaderboardSyncLocked ? "Leaderboard sync locked" : "Locked"}
                             >
                               🔒
                             </span>
