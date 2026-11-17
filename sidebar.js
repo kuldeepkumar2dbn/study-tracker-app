@@ -1,24 +1,49 @@
 /**
  * Sidebar Navigation Controller (sidebar.js)
  * StudyFlow Zero-Reload SPA Architecture
+ *
+ * Organized into 3 clean groups:
+ * - DAILY FLOW: Dashboard, Focus Timer, Daily Routine, Calendar
+ * - EXAM PREP: Subjects & Syllabus, Revision Queue, Mock Logbook, Exam Radar
+ * - GROWTH & SYNC: Skill Tracker, Leaderboard, Drive Notes, My Profile
  */
 
 import { switchView, normalizeViewName } from './router.js';
 
-export const SIDEBAR_ITEMS = [
-  { id: 'dashboard', name: 'Dashboard', href: '#dashboard', targetView: 'dashboard', tooltip: 'Dashboard & Overview' },
-  { id: 'routine', name: 'Daily Routine', href: '#routine', targetView: 'routine', tooltip: 'Daily Study Routine' },
-  { id: 'calendar', name: 'Calendar', href: '#calendar', targetView: 'calendar', tooltip: 'Academic Calendar' },
-  { id: 'syllabus', name: 'Subjects & Syllabus', href: '#syllabus', targetView: 'syllabus', isProtected: true, tooltip: 'Course Syllabus & Subjects' },
-  { id: 'revision', name: 'Revision Queue', href: '#revision', targetView: 'revision', isProtected: true, tooltip: 'Spaced Repetition Queue' },
-  { id: 'radar', name: 'Exam Radar', href: '#radar', targetView: 'radar', isProtected: true, tooltip: 'Exam Radar & Deadlines' },
-  { id: 'mock-logbook', name: 'Mock Logbook', href: '#mock-logbook', targetView: 'mock-logbook', tooltip: 'Mock Test & Mistake Logbook' },
-  { id: 'leaderboard', name: 'Leaderboard', href: '#leaderboard', targetView: 'leaderboard', tooltip: 'Real-Time Student Leaderboard' },
-  { id: 'skills', name: 'Skill Tracker', href: '#skills', targetView: 'skills', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
-  { id: 'notes', name: 'Drive Notes', href: '#notes', targetView: 'notes', isProtected: true, tooltip: 'Google Drive Notes Vault' },
-  { id: 'timer', name: 'Focus Timer', href: '#timer', targetView: 'timer', tooltip: 'Focus Timer & Deep Work' },
-  { id: 'profile', name: 'My Profile', href: '#profile', targetView: 'profile', tooltip: 'My Student Profile & ID Card' }
+export const SIDEBAR_GROUPS = [
+  {
+    id: 'daily-flow',
+    label: 'DAILY FLOW',
+    items: [
+      { id: 'dashboard', name: 'Dashboard', href: '#dashboard', targetView: 'dashboard', tooltip: 'Dashboard & Overview' },
+      { id: 'timer', name: 'Focus Timer', href: '#timer', targetView: 'timer', tooltip: 'Focus Timer & Deep Work' },
+      { id: 'routine', name: 'Daily Routine', href: '#routine', targetView: 'routine', tooltip: 'Daily Study Routine' },
+      { id: 'calendar', name: 'Calendar', href: '#calendar', targetView: 'calendar', tooltip: 'Academic Calendar' }
+    ]
+  },
+  {
+    id: 'exam-prep',
+    label: 'EXAM PREP',
+    items: [
+      { id: 'syllabus', name: 'Subjects & Syllabus', href: '#syllabus', targetView: 'syllabus', isProtected: true, tooltip: 'Course Syllabus & Subjects' },
+      { id: 'revision', name: 'Revision Queue', href: '#revision', targetView: 'revision', isProtected: true, tooltip: 'Spaced Repetition Queue' },
+      { id: 'mock-logbook', name: 'Mock Logbook', href: '#mock-logbook', targetView: 'mock-logbook', tooltip: 'Mock Test & Mistake Logbook' },
+      { id: 'radar', name: 'Exam Radar', href: '#radar', targetView: 'radar', isProtected: true, tooltip: 'Exam Radar & Deadlines' }
+    ]
+  },
+  {
+    id: 'growth-sync',
+    label: 'GROWTH & SYNC',
+    items: [
+      { id: 'skills', name: 'Skill Tracker', href: '#skills', targetView: 'skills', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
+      { id: 'leaderboard', name: 'Leaderboard', href: '#leaderboard', targetView: 'leaderboard', tooltip: 'Real-Time Student Leaderboard' },
+      { id: 'notes', name: 'Drive Notes', href: '#notes', targetView: 'notes', isProtected: true, tooltip: 'Google Drive Notes Vault' },
+      { id: 'profile', name: 'My Profile', href: '#profile', targetView: 'profile', tooltip: 'My Student Profile & ID Card' }
+    ]
+  }
 ];
+
+export const SIDEBAR_ITEMS = SIDEBAR_GROUPS.flatMap((g) => g.items);
 
 export function setupSidebarNav(container = document) {
   if (typeof container === 'undefined' || !container.querySelectorAll) return;
@@ -55,8 +80,8 @@ export function updateActiveSidebarItem(activeView) {
 }
 
 export default {
+  SIDEBAR_GROUPS,
   SIDEBAR_ITEMS,
   setupSidebarNav,
   updateActiveSidebarItem
 };
-

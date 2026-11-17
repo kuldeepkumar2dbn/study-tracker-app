@@ -115,6 +115,7 @@ export default function DashboardTab({ onNavigateTab }) {
   const [isAddRoutineModalOpen, setIsAddRoutineModalOpen] = useState(false);
   const [syllabusPrompt, setSyllabusPrompt] = useState(null);
   const [skillPrompt, setSkillPrompt] = useState(null);
+  const [isDiagnosticsExpanded, setIsDiagnosticsExpanded] = useState(false);
 
   // Ensure on component mount / theme update, currently saved theme in localStorage receives .is-active immediately
   useEffect(() => {
@@ -196,6 +197,52 @@ export default function DashboardTab({ onNavigateTab }) {
   }, [safeStreakData.streakCount]);
 
   const completedRoutineSlots = safeRoutineSlots.filter(s => s.completed).length;
+
+  // Real-data AI Study Coach & Burnout Diagnostics (defaults to compact 1-line insight bar)
+  const coachDiagnostics = useMemo(() => {
+    const logged = Number(safeStreakData.todayHours || 0);
+    const targetHrs = Number(safeStreakData.dailyTarget || (safeDailyTarget / 60) || 4.0);
+    const ratio = targetHrs > 0 ? logged / targetHrs : 0;
+
+    if (logged === 0) {
+      return {
+        burnoutLevel: 'Fresh & Rested',
+        burnoutTone: 'text-emerald-500',
+        headline: 'Ready to begin: Launch a 25m Focus Timer session to ignite today’s study momentum.',
+        paceNote: `0.0h logged of your ${targetHrs.toFixed(1)}h daily target.`,
+        actionLabel: 'Launch Focus Timer',
+        actionTab: 'timer'
+      };
+    }
+    if (ratio >= 1.5 || logged >= 10) {
+      return {
+        burnoutLevel: 'High Fatigue Watch',
+        burnoutTone: 'text-rose-500',
+        headline: `Heavy focus load (${logged.toFixed(1)}h today) — schedule a 15-minute recovery break to protect retention.`,
+        paceNote: `${Math.round(ratio * 100)}% of daily target reached. Prioritize light revision next.`,
+        actionLabel: 'Open Revision Queue',
+        actionTab: 'revision'
+      };
+    }
+    if (ratio >= 0.85) {
+      return {
+        burnoutLevel: 'Peak Sustainable Pace',
+        burnoutTone: 'text-emerald-500',
+        headline: `Strong execution (${logged.toFixed(1)}h / ${targetHrs.toFixed(1)}h) — lock in today’s gains with spaced repetition.`,
+        paceNote: `${todayRevisionQueue.length} revision topic${todayRevisionQueue.length === 1 ? '' : 's'} due today.`,
+        actionLabel: todayRevisionQueue.length > 0 ? 'Review Due Topics' : 'Log a Mock Test',
+        actionTab: todayRevisionQueue.length > 0 ? 'revision' : 'mock-logbook'
+      };
+    }
+    return {
+      burnoutLevel: 'Low Risk • Balanced',
+      burnoutTone: 'text-indigo-400',
+      headline: `${logged.toFixed(1)}h logged so far (${dailyProgressPct}% of ${targetHrs.toFixed(1)}h goal) — stay steady with one more focus block.`,
+      paceNote: `${completedRoutineSlots}/${safeRoutineSlots.length} routine blocks completed today.`,
+      actionLabel: safeRoutineSlots.length === 0 ? 'Plan Routine' : 'Resume Focus Timer',
+      actionTab: safeRoutineSlots.length === 0 ? 'routine' : 'timer'
+    };
+  }, [safeStreakData.todayHours, safeStreakData.dailyTarget, safeDailyTarget, dailyProgressPct, todayRevisionQueue.length, completedRoutineSlots, safeRoutineSlots.length]);
 
   const handleQuickLog = () => {
     if (typeof logStudyHours === 'function') {
@@ -349,42 +396,7 @@ export default function DashboardTab({ onNavigateTab }) {
         </div>
       </div>
 
-      {/* Theme Switcher Controller Bar */}
-      <div className="flex flex-col gap-2.5 px-4 py-3 rounded-2xl glass-panel border border-theme-border shadow-sm w-full mx-0">
-        <div className="flex items-center gap-2 text-xs text-theme-muted font-medium">
-          <Sparkles className="w-3.5 h-3.5 text-theme-accent" />
-          <span className="font-semibold text-theme-text">Select Color Theme:</span>
-        </div>
-        <div className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" id="dashboard-theme-switcher">
-          {(themes || []).map((t) => {
-            const isSelected = theme === t.id;
-            return (
-              <button
-                key={t.id}
-                data-theme-id={t.id}
-                onClick={() => {
-                  setTheme(t.id);
-                  applySelectedTheme(t.id);
-                }}
-                className={`theme-pill w-full flex-1 flex items-center justify-center text-center truncate gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 ${
-                  isSelected
-                    ? 'is-active bg-theme-accent text-white shadow-glow-accent'
-                    : 'bg-theme-surface/80 hover:bg-theme-cardHover text-theme-muted hover:text-theme-text border border-theme-border/60'
-                }`}
-                title={`Switch to ${t.name}`}
-              >
-                <span 
-                  className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0" 
-                  style={{ backgroundColor: t.primaryColor }} 
-                />
-                <span className="truncate">{t.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* KPI Cards Grid */}
+      {/* KPI Cards Grid (Strict airy space-y-6 rhythm — Theme Selector moved to Header Dropdown & My Profile) */}
       <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-none mx-0">
         {/* Metric 1: Today's Target Circular Mini Card with Interactive SVG Radial Progress Ring */}
         <div 
@@ -511,6 +523,126 @@ export default function DashboardTab({ onNavigateTab }) {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Collapsible AI Study Coach & Burnout Diagnostics (Defaults to compact 1-line insight bar) */}
+      <div
+        id="ai-coach-diagnostics-card"
+        className="w-full rounded-2xl px-4 sm:px-5 py-3.5 shadow-sm transition-all max-w-none mx-0"
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1.5px solid var(--border-glow)',
+          color: 'var(--text-main)'
+        }}
+      >
+        {/* Compact 1-Line Insight Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider shrink-0"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                border: '1px solid var(--border-glow)',
+                color: 'var(--text-main)'
+              }}
+            >
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              <span>AI Study Coach</span>
+            </span>
+            <p className="text-xs sm:text-sm font-medium truncate" style={{ color: 'var(--text-main)' }}>
+              {coachDiagnostics.headline}
+            </p>
+          </div>
+
+          <button
+            id="toggle-coach-diagnostics-btn"
+            type="button"
+            aria-expanded={isDiagnosticsExpanded}
+            onClick={() => setIsDiagnosticsExpanded((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer transition-all active:scale-95"
+            style={{
+              backgroundColor: 'var(--bg-sidebar)',
+              border: '1px solid var(--border-glow)',
+              color: 'var(--text-main)'
+            }}
+          >
+            <span>{isDiagnosticsExpanded ? 'Hide Diagnostics ▴' : 'Expand Diagnostics ▾'}</span>
+          </button>
+        </div>
+
+        {/* Expanded Burnout & Pace Diagnostics Details */}
+        {isDiagnosticsExpanded && (
+          <div
+            id="ai-coach-diagnostics-body"
+            className="mt-4 pt-4 grid grid-cols-1 md:grid-cols-3 gap-3.5 animate-fadeIn"
+            style={{ borderTop: '1px solid var(--border-glow)' }}
+          >
+            <div
+              className="rounded-xl p-3.5 space-y-1"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                border: '1px solid var(--border-glow)'
+              }}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Burnout Diagnostics
+              </span>
+              <p className={`text-sm font-extrabold ${coachDiagnostics.burnoutTone}`}>
+                {coachDiagnostics.burnoutLevel}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                Calculated strictly from your real daily logged focus hours.
+              </p>
+            </div>
+
+            <div
+              className="rounded-xl p-3.5 space-y-1"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                border: '1px solid var(--border-glow)'
+              }}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                Pace &amp; Consistency
+              </span>
+              <p className="text-sm font-extrabold font-mono-numbers" style={{ color: 'var(--text-main)' }}>
+                {safeStreakData.weeklyVelocityHours || 0}h this week
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {coachDiagnostics.paceNote}
+              </p>
+            </div>
+
+            <div
+              className="rounded-xl p-3.5 flex flex-col justify-between gap-2"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                border: '1px solid var(--border-glow)'
+              }}
+            >
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                  Recommended Next Step
+                </span>
+                <p className="text-xs font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
+                  Keep your streak building with deliberate sessions.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(coachDiagnostics.actionTab)}
+                className="w-full py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition-all active:scale-95"
+                style={{
+                  backgroundColor: 'var(--primary)',
+                  color: '#FFFFFF',
+                  border: '1px solid var(--border-glow)'
+                }}
+              >
+                {coachDiagnostics.actionLabel} &rarr;
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Consistency Radar: 30-Day Study Activity Vertical Bar Graph */}

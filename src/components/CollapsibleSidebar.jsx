@@ -56,23 +56,45 @@ export function StopwatchIcon({ className = "w-4 h-4", active = false }) {
 }
 
 /**
- * 9 Core Views in Clean Order
- * Ensure Skill Tracker appears strictly once
+ * 3 Clean Sidebar Navigation Groups
+ * - DAILY FLOW: Dashboard, Focus Timer, Daily Routine, Calendar
+ * - EXAM PREP: Subjects & Syllabus, Revision Queue, Mock Logbook, Exam Radar
+ * - GROWTH & SYNC: Skill Tracker, Leaderboard, Drive Notes, My Profile
  */
-export const SIDEBAR_ITEMS = [
-  { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, href: '/index.html', tooltip: 'Dashboard & Overview' },
-  { id: 'routine', name: 'Daily Routine', icon: Clock, href: '/routine.html', tooltip: 'Daily Study Routine' },
-  { id: 'calendar', name: 'Calendar', icon: CalendarIcon, href: '/calendar.html', tooltip: 'Academic Calendar' },
-  { id: 'syllabus', name: 'Subjects & Syllabus', icon: BookOpen, href: '/syllabus.html', isProtected: true, tooltip: 'Course Syllabus & Subjects' },
-  { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', isProtected: true, tooltip: 'Spaced Repetition Queue' },
-  { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', isProtected: true, tooltip: 'Exam Radar & Deadlines' },
-  { id: 'mock-logbook', name: 'Mock Logbook', icon: Target, href: '/mock-logbook.html', isProtected: false, tooltip: 'Mock Test & Mistake Logbook' },
-  { id: 'leaderboard', name: 'Leaderboard', icon: Trophy, href: '/leaderboard.html', isProtected: false, tooltip: 'Real-Time Student Leaderboard' },
-  { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
-  { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', isProtected: true, tooltip: 'Google Drive Notes Vault' },
-  { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', tooltip: 'Focus Timer & Deep Work' },
-  { id: 'profile', name: 'My Profile', icon: User, href: '/profile.html', isProtected: false, tooltip: 'My Student Profile & ID Card' }
+export const SIDEBAR_GROUPS = [
+  {
+    id: 'daily-flow',
+    label: 'DAILY FLOW',
+    items: [
+      { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, href: '/index.html', tooltip: 'Dashboard & Overview' },
+      { id: 'timer', name: 'Focus Timer', icon: StopwatchIcon, href: '/timer.html', tooltip: 'Focus Timer & Deep Work' },
+      { id: 'routine', name: 'Daily Routine', icon: Clock, href: '/routine.html', tooltip: 'Daily Study Routine' },
+      { id: 'calendar', name: 'Calendar', icon: CalendarIcon, href: '/calendar.html', tooltip: 'Academic Calendar' }
+    ]
+  },
+  {
+    id: 'exam-prep',
+    label: 'EXAM PREP',
+    items: [
+      { id: 'syllabus', name: 'Subjects & Syllabus', icon: BookOpen, href: '/syllabus.html', isProtected: true, tooltip: 'Course Syllabus & Subjects' },
+      { id: 'revision', name: 'Revision Queue', icon: Repeat, href: '/revision.html', isProtected: true, tooltip: 'Spaced Repetition Queue' },
+      { id: 'mock-logbook', name: 'Mock Logbook', icon: Target, href: '/mock-logbook.html', isProtected: false, tooltip: 'Mock Test & Mistake Logbook' },
+      { id: 'radar', name: 'Exam Radar', icon: CalendarIcon, href: '/radar.html', isProtected: true, tooltip: 'Exam Radar & Deadlines' }
+    ]
+  },
+  {
+    id: 'growth-sync',
+    label: 'GROWTH & SYNC',
+    items: [
+      { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
+      { id: 'leaderboard', name: 'Leaderboard', icon: Trophy, href: '/leaderboard.html', isProtected: false, tooltip: 'Real-Time Student Leaderboard' },
+      { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', isProtected: true, tooltip: 'Google Drive Notes Vault' },
+      { id: 'profile', name: 'My Profile', icon: User, href: '/profile.html', isProtected: false, tooltip: 'My Student Profile & ID Card' }
+    ]
+  }
 ];
+
+export const SIDEBAR_ITEMS = SIDEBAR_GROUPS.flatMap((group) => group.items);
 
 export const LOCKED_TAB_IDS = ['syllabus', 'revision', 'radar', 'skills', 'notes'];
 
@@ -395,199 +417,216 @@ export default function CollapsibleSidebar({
           </div>
         </div>
 
-        {/* Navigation Items (Core 9 views in clean order) */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
-          {SIDEBAR_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.id === activeTabId;
-            const isDemoLockedNotes = isDemo && item.id === 'notes';
-            const isGuestLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(item.id);
-            const isLocked = isDemoLockedNotes || isGuestLocked;
-            const isTimer = item.id === 'timer';
+        {/* Navigation Items organized into 3 clean groups */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1 custom-scrollbar">
+          {SIDEBAR_GROUPS.map((group, groupIdx) => (
+            <div key={group.id} data-sidebar-group={group.id} className={groupIdx > 0 ? 'pt-2' : ''}>
+              {isDrawerExpanded ? (
+                <p
+                  className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider opacity-50 select-none"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {group.label}
+                </p>
+              ) : (
+                groupIdx > 0 && <div className="my-1.5 mx-2 border-t border-theme-border/50" />
+              )}
 
-            // Solid glowing pill highlight styling
-            const pillStyle = ACTIVE_PILL_STYLES[item.id];
-            const itemActiveStyle = isActive && pillStyle ? {
-              background: pillStyle.bg,
-              boxShadow: pillStyle.shadow,
-              borderColor: pillStyle.border
-            } : undefined;
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.id === activeTabId;
+                  const isDemoLockedNotes = isDemo && item.id === 'notes';
+                  const isGuestLocked = !isAuthenticated && LOCKED_TAB_IDS.includes(item.id);
+                  const isLocked = isDemoLockedNotes || isGuestLocked;
+                  const isTimer = item.id === 'timer';
 
-            const handleClick = (e) => {
-              e.preventDefault();
-              logFeatureUse(item.name);
-              if (isMobileOpen && onCloseMobile) {
-                onCloseMobile();
-              }
-              if (typeof document !== 'undefined') {
-                document.body.style.overflow = '';
-              }
-              if (isDemoLockedNotes) {
-                if (onOpenDriveNotesDemoModal) onOpenDriveNotesDemoModal();
-                return;
-              }
-              if (isGuestLocked) {
-                openAuthModal(item.id, `#${item.id}`);
-                return;
-              }
+                  // Solid glowing pill highlight styling
+                  const pillStyle = ACTIVE_PILL_STYLES[item.id];
+                  const itemActiveStyle = isActive && pillStyle ? {
+                    background: pillStyle.bg,
+                    boxShadow: pillStyle.shadow,
+                    borderColor: pillStyle.border
+                  } : undefined;
 
-              if (onSelectTab) {
-                onSelectTab(item.id);
-              }
-              if (typeof window !== 'undefined') {
-                if (window.switchView) {
-                  window.switchView(item.id);
-                } else {
-                  window.location.hash = item.id;
-                }
-              }
-            };
+                  const handleClick = (e) => {
+                    e.preventDefault();
+                    logFeatureUse(item.name);
+                    if (isMobileOpen && onCloseMobile) {
+                      onCloseMobile();
+                    }
+                    if (typeof document !== 'undefined') {
+                      document.body.style.overflow = '';
+                    }
+                    if (isDemoLockedNotes) {
+                      if (onOpenDriveNotesDemoModal) onOpenDriveNotesDemoModal();
+                      return;
+                    }
+                    if (isGuestLocked) {
+                      openAuthModal(item.id, `#${item.id}`);
+                      return;
+                    }
 
-            return (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                data-target-view={item.id}
-                onClick={handleClick}
-                title={!isDrawerExpanded ? item.tooltip : undefined}
-                style={itemActiveStyle}
-                className={`group relative flex items-center rounded-xl transition-all duration-200 ${
-                  isDrawerExpanded ? 'px-3 py-2.5 gap-3' : 'px-0 py-2.5 justify-center'
-                } ${
-                  isActive
-                    ? 'text-white font-semibold border shadow-lg is-active active-sidebar-item'
-                    : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
-                } ${
-                  isTimer && isTimerRunning && !isActive
-                    ? 'border border-violet-500/40 bg-violet-500/10 text-violet-300'
-                    : ''
-                }`}
-              >
-                {/* Item Icon */}
-                <div className="relative shrink-0 flex items-center justify-center">
-                  <Icon className={`w-4 h-4 transition-transform group-hover:scale-110 ${
-                    isActive 
-                      ? 'text-white' 
-                      : isTimer && isTimerRunning
-                        ? 'text-violet-400'
-                        : 'text-theme-muted group-hover:text-theme-text'
-                  }`} />
+                    if (onSelectTab) {
+                      onSelectTab(item.id);
+                    }
+                    if (typeof window !== 'undefined') {
+                      if (window.switchView) {
+                        window.switchView(item.id);
+                      } else {
+                        window.location.hash = item.id;
+                      }
+                    }
+                  };
 
-                  {/* Collapsed Rail Indicators */}
-                  {!isDrawerExpanded && (
-                    <>
-                      {/* Live Running Timer: Small pulsing dot & minute counter (● 24m) */}
-                      {isTimer && isTimerRunning && (
-                        <span 
-                          title={`Focus session running: ${timerMinutesLeft}m remaining`}
-                          className="absolute -top-1.5 -right-3 flex items-center gap-0.5 px-1 py-0.2 rounded-full bg-violet-600 text-white font-mono-numbers text-[8px] font-bold shadow-sm ring-1 ring-theme-surface"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                          <span>{timerMinutesLeft}m</span>
-                        </span>
-                      )}
+                  return (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      data-target-view={item.id}
+                      onClick={handleClick}
+                      title={!isDrawerExpanded ? item.tooltip : undefined}
+                      style={itemActiveStyle}
+                      className={`group relative flex items-center rounded-xl transition-all duration-200 ${
+                        isDrawerExpanded ? 'px-3 py-2 gap-3' : 'px-0 py-2.5 justify-center'
+                      } ${
+                        isActive
+                          ? 'text-white font-semibold border shadow-lg is-active active-sidebar-item'
+                          : 'text-theme-muted hover:text-theme-text hover:bg-theme-cardHover'
+                      } ${
+                        isTimer && isTimerRunning && !isActive
+                          ? 'border border-violet-500/40 bg-violet-500/10 text-violet-300'
+                          : ''
+                      }`}
+                    >
+                      {/* Item Icon */}
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <Icon className={`w-4 h-4 transition-transform group-hover:scale-110 ${
+                          isActive 
+                            ? 'text-white' 
+                            : isTimer && isTimerRunning
+                              ? 'text-violet-400'
+                              : 'text-theme-muted group-hover:text-theme-text'
+                        }`} />
 
-                      {/* Routine Pending Dot */}
-                      {!isLocked && item.id === 'routine' && pendingRoutineCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-theme-surface" />
-                      )}
+                        {/* Collapsed Rail Indicators */}
+                        {!isDrawerExpanded && (
+                          <>
+                            {/* Live Running Timer: Small pulsing dot & minute counter (● 24m) */}
+                            {isTimer && isTimerRunning && (
+                              <span 
+                                title={`Focus session running: ${timerMinutesLeft}m remaining`}
+                                className="absolute -top-1.5 -right-3 flex items-center gap-0.5 px-1 py-0.2 rounded-full bg-violet-600 text-white font-mono-numbers text-[8px] font-bold shadow-sm ring-1 ring-theme-surface"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                                <span>{timerMinutesLeft}m</span>
+                              </span>
+                            )}
 
-                      {/* Revision Due Dot */}
-                      {!isLocked && item.id === 'revision' && dueRevisionCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-violet-500 ring-2 ring-theme-surface" />
-                      )}
+                            {/* Routine Pending Dot */}
+                            {!isLocked && item.id === 'routine' && pendingRoutineCount > 0 && (
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-theme-surface" />
+                            )}
 
-                      {/* Exam Urgent Dot */}
-                      {!isLocked && item.id === 'radar' && urgentExamsCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-theme-surface" />
-                      )}
+                            {/* Revision Due Dot */}
+                            {!isLocked && item.id === 'revision' && dueRevisionCount > 0 && (
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-violet-500 ring-2 ring-theme-surface" />
+                            )}
 
-                      {/* Lock Dot */}
-                      {isLocked && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500/30 border border-amber-400 flex items-center justify-center">
-                          <Lock className="w-2 h-2 text-amber-300" />
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
+                            {/* Exam Urgent Dot */}
+                            {!isLocked && item.id === 'radar' && urgentExamsCount > 0 && (
+                              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-theme-surface" />
+                            )}
 
-                {/* Expanded Drawer: Item Label & Badges */}
-                {isDrawerExpanded && (
-                  <>
-                    <span className="text-xs font-medium tracking-tight truncate flex-1">
-                      {item.name}
-                    </span>
-
-                    {/* Focus Timer Live Running Badge: Live ticking seconds (24:15) */}
-                    {isTimer && isTimerRunning && (
-                      <div 
-                        title="Focus session actively running"
-                        className={`ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono-numbers font-bold text-[10px] shadow-sm animate-pulse-soft shrink-0 ${
-                          isActive
-                            ? 'bg-white/20 border border-white/40 text-white'
-                            : 'bg-violet-500/20 border border-violet-500/40 text-violet-300 dark:text-violet-200'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        <span>{formatTimerClock(timerSecondsLeft)}</span>
+                            {/* Minimal Lock Dot */}
+                            {isLocked && (
+                              <span className="absolute -top-1 -right-1.5 text-[9px] leading-none opacity-75" aria-label="Locked">
+                                🔒
+                              </span>
+                            )}
+                          </>
+                        )}
                       </div>
-                    )}
 
-                    {/* Routine Pending Badge [Badge: 1] */}
-                    {!isLocked && item.id === 'routine' && pendingRoutineCount > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers shrink-0 ${
-                        isActive ? 'bg-white text-emerald-800' : 'bg-emerald-500 text-white'
-                      }`}>
-                        {pendingRoutineCount}
-                      </span>
-                    )}
+                      {/* Expanded Drawer: Item Label & Badges */}
+                      {isDrawerExpanded && (
+                        <>
+                          <span className="text-xs font-medium tracking-tight truncate flex-1">
+                            {item.name}
+                          </span>
 
-                    {/* Revision Due Badge [Badge: 4] */}
-                    {!isLocked && item.id === 'revision' && dueRevisionCount > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers shrink-0 ${
-                        isActive ? 'bg-white text-purple-900' : 'bg-violet-600 text-white'
-                      }`}>
-                        {dueRevisionCount}
-                      </span>
-                    )}
+                          {/* Focus Timer Live Running Badge: Live ticking seconds (24:15) */}
+                          {isTimer && isTimerRunning && (
+                            <div 
+                              title="Focus session actively running"
+                              className={`ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono-numbers font-bold text-[10px] shadow-sm animate-pulse-soft shrink-0 ${
+                                isActive
+                                  ? 'bg-white/20 border border-white/40 text-white'
+                                  : 'bg-violet-500/20 border border-violet-500/40 text-violet-300 dark:text-violet-200'
+                              }`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                              <span>{formatTimerClock(timerSecondsLeft)}</span>
+                            </div>
+                          )}
 
-                    {/* Exam Radar Urgent Badge [Badge: 2 or 3] */}
-                    {!isLocked && item.id === 'radar' && urgentExamsCount > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers shrink-0 ${
-                        isActive ? 'bg-white text-rose-800' : 'bg-rose-500 text-white'
-                      }`}>
-                        {urgentExamsCount}
-                      </span>
-                    )}
+                          {/* Routine Pending Badge */}
+                          {!isLocked && item.id === 'routine' && pendingRoutineCount > 0 && (
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers shrink-0 ${
+                              isActive ? 'bg-white text-emerald-800' : 'bg-emerald-500 text-white'
+                            }`}>
+                              {pendingRoutineCount}
+                            </span>
+                          )}
 
-                    {/* Lock Indicator for Drive Notes or Guest Tabs */}
-                    {isLocked && (
-                      <span 
-                        title={isDemoLockedNotes ? "Locked in demo mode" : "Sign in with Google required"}
-                        className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0 ml-auto"
-                      >
-                        <Lock className="w-2.5 h-2.5" />
-                        <span className="text-[8px] uppercase font-bold tracking-wider">Locked</span>
-                      </span>
-                    )}
-                  </>
-                )}
+                          {/* Revision Due Badge */}
+                          {!isLocked && item.id === 'revision' && dueRevisionCount > 0 && (
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers shrink-0 ${
+                              isActive ? 'bg-white text-purple-900' : 'bg-violet-600 text-white'
+                            }`}>
+                              {dueRevisionCount}
+                            </span>
+                          )}
 
-                {/* Tooltip for Collapsed Mode on Desktop Hover */}
-                {!isDrawerExpanded && (
-                  <div className="hidden lg:group-hover:flex absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-theme-surface/95 border border-theme-border shadow-xl text-xs font-medium text-theme-text whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
-                    <span>{item.tooltip}</span>
-                    {isTimer && isTimerRunning && (
-                      <span className="ml-1.5 font-mono-numbers text-violet-400 font-bold">
-                        ({formatTimerClock(timerSecondsLeft)})
-                      </span>
-                    )}
-                  </div>
-                )}
-              </a>
-            );
-          })}
+                          {/* Exam Radar Urgent Badge */}
+                          {!isLocked && item.id === 'radar' && urgentExamsCount > 0 && (
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono-numbers shrink-0 ${
+                              isActive ? 'bg-white text-rose-800' : 'bg-rose-500 text-white'
+                            }`}>
+                              {urgentExamsCount}
+                            </span>
+                          )}
+
+                          {/* Minimal 🔒 Icon for Locked Tabs */}
+                          {isLocked && (
+                            <span 
+                              title={isDemoLockedNotes ? "Locked in demo mode" : "Sign in with Google to unlock"}
+                              className="text-xs opacity-60 shrink-0 ml-auto select-none"
+                              aria-label="Locked"
+                            >
+                              🔒
+                            </span>
+                          )}
+                        </>
+                      )}
+
+                      {/* Tooltip for Collapsed Mode on Desktop Hover */}
+                      {!isDrawerExpanded && (
+                        <div className="hidden lg:group-hover:flex absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-theme-surface/95 border border-theme-border shadow-xl text-xs font-medium text-theme-text whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
+                          <span>{item.tooltip}</span>
+                          {isTimer && isTimerRunning && (
+                            <span className="ml-1.5 font-mono-numbers text-violet-400 font-bold">
+                              ({formatTimerClock(timerSecondsLeft)})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
           {/* Feedback Navigation Item directly below Focus Timer */}
           <button

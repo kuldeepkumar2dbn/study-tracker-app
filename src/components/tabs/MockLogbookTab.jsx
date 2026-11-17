@@ -56,35 +56,8 @@ function getInitialMockTests() {
     console.warn('Error reading mock tests from storage:', err);
   }
 
-  // Pre-populated initial benchmark test so the dashboard looks functional immediately
-  const today = getLocalDateString(new Date());
-  return [
-    {
-      id: 'mock-sample-1',
-      date: today,
-      title: 'GATE Full Length Mock #01',
-      subject: 'Full Syllabus',
-      totalQuestions: 65,
-      marksPerCorrect: 2,
-      negativeMarks: 0.66,
-      correctCount: 46,
-      incorrectCount: 12,
-      timeMinutes: 155,
-      positiveMarks: 92,
-      penaltyMarks: 7.92,
-      netScore: 84.08,
-      maxMarks: 130,
-      scorePct: 64.68,
-      accuracyPct: 79.31,
-      attemptRatePct: 89.23,
-      avgTimePerQuestionSec: 160,
-      mistakes: [
-        { id: 'm-1', topicNote: 'Bode plot phase crossover frequency calculation sign error', category: 'Conceptual Gap' },
-        { id: 'm-2', topicNote: 'Silly math mistake in 3x3 matrix determinant calculation', category: 'Silly Calculation Error' },
-        { id: 'm-3', topicNote: 'Rushed final network flow question in the last 2 minutes', category: 'Time Pressure' }
-      ]
-    }
-  ];
+  // Strictly clean zero-state: return [] until the student logs a real mock test
+  return [];
 }
 
 export default function MockLogbookTab({ onNavigateTab }) {
@@ -93,6 +66,7 @@ export default function MockLogbookTab({ onNavigateTab }) {
   const { theme } = useTheme();
 
   const [tests, setTests] = useState(() => getInitialMockTests());
+  const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'log'
   const [toastMessage, setToastMessage] = useState(null);
   const [expandedTestId, setExpandedTestId] = useState(null);
   const [hoveredTrendItem, setHoveredTrendItem] = useState(null);
@@ -338,9 +312,10 @@ export default function MockLogbookTab({ onNavigateTab }) {
       showToast('🎯 Mock test logged successfully!');
     }
 
-    // Reset Form
+    // Reset Form and return to Overview & History to view updated metrics & trend chart
     setTitle('');
     setMistakes([{ id: 'm-' + Date.now(), topicNote: '', category: 'Conceptual Gap' }]);
+    setActiveSubTab('overview');
   };
 
   const handleDeleteTest = (id) => {
@@ -391,11 +366,9 @@ export default function MockLogbookTab({ onNavigateTab }) {
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={() => {
-                const formEl = document.getElementById('mock-entry-form');
-                if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all duration-200 active:scale-95"
+              type="button"
+              onClick={() => setActiveSubTab('log')}
+              className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all duration-200 active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4 fill-white" />
               <span>+ Log New Mock Test</span>
@@ -404,6 +377,66 @@ export default function MockLogbookTab({ onNavigateTab }) {
         </div>
       </div>
 
+      {/* CLEAN SUB-TAB TOGGLE BAR: Overview & History vs. Log New Mock Test */}
+      <div
+        id="mock-logbook-subtabs"
+        role="tablist"
+        aria-label="Mock Logbook Sections"
+        className="inline-flex flex-wrap items-center gap-2 p-1.5 rounded-2xl shadow-sm"
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1.5px solid var(--border-glow)'
+        }}
+      >
+        <button
+          id="mock-subtab-overview"
+          type="button"
+          role="tab"
+          aria-selected={activeSubTab === 'overview'}
+          onClick={() => setActiveSubTab('overview')}
+          className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95"
+          style={
+            activeSubTab === 'overview'
+              ? {
+                  backgroundColor: 'var(--primary)',
+                  color: '#FFFFFF',
+                  border: '1.5px solid var(--border-glow)'
+                }
+              : {
+                  backgroundColor: 'transparent',
+                  color: 'var(--text-main)'
+                }
+          }
+        >
+          📊 Overview &amp; History
+        </button>
+
+        <button
+          id="mock-subtab-log"
+          type="button"
+          role="tab"
+          aria-selected={activeSubTab === 'log'}
+          onClick={() => setActiveSubTab('log')}
+          className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95"
+          style={
+            activeSubTab === 'log'
+              ? {
+                  backgroundColor: 'var(--primary)',
+                  color: '#FFFFFF',
+                  border: '1.5px solid var(--border-glow)'
+                }
+              : {
+                  backgroundColor: 'transparent',
+                  color: 'var(--text-main)'
+                }
+          }
+        >
+          ➕ Log New Mock Test
+        </button>
+      </div>
+
+      {/* SUB-TAB 1: OVERVIEW & HISTORY (4 KPI Cards + Dual-Bar Chart) */}
+      <div className={activeSubTab === 'overview' ? 'space-y-6 w-full max-w-none mx-0' : 'hidden'}>
       {/* TOP SUMMARY METRICS (4 Columns) */}
       <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-none mx-0">
         
@@ -659,9 +692,10 @@ export default function MockLogbookTab({ onNavigateTab }) {
           </div>
         )}
       </div>
+      </div>
 
-      {/* INTERACTIVE MOCK ENTRY FORM & LIVE CALCULATOR (2 Columns) */}
-      <div id="mock-entry-form" className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-none mx-0">
+      {/* SUB-TAB 2: INTERACTIVE MOCK ENTRY FORM & LIVE CALCULATOR (2 Columns) */}
+      <div id="mock-entry-form" className={activeSubTab === 'log' ? 'grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-none mx-0 animate-fadeIn' : 'hidden'}>
         
         {/* Left Column: Test Inputs Form */}
         <div className="lg:col-span-7 rounded-2xl glass-panel p-6 border border-theme-border flex flex-col justify-between">
@@ -1021,8 +1055,8 @@ export default function MockLogbookTab({ onNavigateTab }) {
 
       </div>
 
-      {/* HISTORY & MOCK TEST LOGBOOK TABLE / LIST */}
-      <div className="rounded-2xl glass-panel p-6 border border-theme-border w-full max-w-none mx-0">
+      {/* HISTORY & MOCK TEST LOGBOOK TABLE / LIST (Shown in Overview & History sub-tab) */}
+      <div className={activeSubTab === 'overview' ? 'rounded-2xl glass-panel p-6 border border-theme-border w-full max-w-none mx-0' : 'hidden'}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-2 border-b border-theme-border/60">
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4 text-theme-accent" />
@@ -1131,10 +1165,7 @@ export default function MockLogbookTab({ onNavigateTab }) {
               <p>Log your first real mock exam to calculate live negative marking penalties and visualize Score % vs. Accuracy % trends.</p>
               <button
                 type="button"
-                onClick={() => {
-                  const formEl = document.getElementById('mock-entry-form');
-                  if (formEl) formEl.scrollIntoView({ behavior: 'smooth' });
-                }}
+                onClick={() => setActiveSubTab('log')}
                 className="btn-primary-action mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-theme-accent text-white font-semibold text-xs shadow-glow-accent hover:bg-theme-accentHover transition-all cursor-pointer active:scale-95"
               >
                 <Plus className="w-3.5 h-3.5" />

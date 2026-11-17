@@ -19,11 +19,15 @@ import {
   Download,
   Trash2,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  LogOut,
+  LogIn,
+  Palette
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { applySelectedTheme } from './DashboardTab';
 import { TELEMETRY_URL } from '../../../admin-config.js';
 import {
   TARGET_EXAM_PRESETS,
@@ -58,8 +62,8 @@ export default function ProfileTab() {
     dailyTargetMinutes,
     setDailyTargetMinutes
   } = useData();
-  const { userProfile } = useAuth();
-  const { theme } = useTheme();
+  const { userProfile, isAuthenticated, signOut, openAuthModal, isDemo } = useAuth();
+  const { theme, setTheme, themes } = useTheme();
 
   const initialProfile = useMemo(() => {
     const saved = getStudentProfile(userProfile);
@@ -358,25 +362,58 @@ export default function ProfileTab() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined' && window.switchView) {
-                window.switchView('leaderboard');
-              } else if (typeof window !== 'undefined') {
-                window.location.hash = 'leaderboard';
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95 shrink-0"
-            style={{
-              backgroundColor: 'var(--bg-sidebar)',
-              border: '1.5px solid var(--border-glow)',
-              color: 'var(--text-main)'
-            }}
-          >
-            <Trophy className="w-4 h-4 text-amber-500" />
-            <span>View Public Leaderboard</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.switchView) {
+                  window.switchView('leaderboard');
+                } else if (typeof window !== 'undefined') {
+                  window.location.hash = 'leaderboard';
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95"
+              style={{
+                backgroundColor: 'var(--bg-sidebar)',
+                border: '1.5px solid var(--border-glow)',
+                color: 'var(--text-main)'
+              }}
+            >
+              <Trophy className="w-4 h-4 text-amber-500" />
+              <span>View Public Leaderboard</span>
+            </button>
+
+            {isAuthenticated ? (
+              <button
+                id="profile-signout-btn"
+                type="button"
+                onClick={() => signOut()}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-rose-500 transition-all cursor-pointer active:scale-95"
+                style={{
+                  backgroundColor: 'var(--bg-sidebar)',
+                  border: '1.5px solid #f43f5e'
+                }}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>{isDemo ? 'End Demo Session' : 'Sign Out'}</span>
+              </button>
+            ) : (
+              <button
+                id="profile-signin-btn"
+                type="button"
+                onClick={() => openAuthModal('general')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95"
+                style={{
+                  backgroundColor: 'var(--primary)',
+                  color: '#FFFFFF',
+                  border: '1.5px solid var(--border-glow)'
+                }}
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In with Google</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -908,6 +945,70 @@ export default function ProfileTab() {
           </form>
         </section>
       </div>
+
+      {/* COLOR THEME APPEARANCE SELECTOR (Moved off Dashboard into Header Dropdown & My Profile) */}
+      <section
+        id="profile-theme-card"
+        aria-label="Color Theme Appearance"
+        className="w-full rounded-2xl p-6 space-y-4 shadow-glow-card max-w-none mx-0"
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1.5px solid var(--border-glow)',
+          color: 'var(--text-main)'
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <Palette className="w-4 h-4" style={{ color: 'var(--text-main)' }} />
+          <div>
+            <h2 className="font-display font-bold text-base" style={{ color: 'var(--text-main)' }}>
+              Color Theme &amp; Appearance
+            </h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Choose your workspace color theme — also available anytime from the top header dropdown.
+            </p>
+          </div>
+        </div>
+
+        <div id="profile-theme-switcher" className="w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {(themes || []).map((t) => {
+            const isSelected = theme === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                data-theme-id={t.id}
+                onClick={() => {
+                  setTheme(t.id);
+                  applySelectedTheme(t.id);
+                }}
+                className={`theme-pill w-full flex items-center justify-center text-center truncate gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 ${
+                  isSelected ? 'is-active' : ''
+                }`}
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: 'var(--primary)',
+                        color: '#FFFFFF',
+                        border: '1.5px solid var(--border-glow)'
+                      }
+                    : {
+                        backgroundColor: 'var(--bg-sidebar)',
+                        color: 'var(--text-main)',
+                        border: '1px solid var(--border-glow)'
+                      }
+                }
+                title={`Switch to ${t.name}`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full border border-white/30 shrink-0"
+                  style={{ backgroundColor: t.primaryColor }}
+                />
+                <span className="truncate">{t.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {/* PRIVACY & DATA SECURITY PANEL */}
       <section
