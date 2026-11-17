@@ -98,10 +98,11 @@ export function SharedHeader({
 }) {
   const { theme, setTheme, themes, currentThemeMeta } = useTheme();
   const { streakData, driveAccessToken, syncStatus, syncNowToDrive, importantLinks, subjects, dailyActivity } = useData();
-  const { isAuthenticated, isGoogleAuthenticated, userProfile, signOut, openAuthModal, isDemo } = useAuth();
+  const { isAuthenticated, isGoogleAuthenticated, userProfile, signOut, openAuthModal, loginWithGoogle, isDemo } = useAuth();
   
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
   const [toolsPopoverOpen, setToolsPopoverOpen] = useState(false);
+  const [isHeaderAuthLoading, setIsHeaderAuthLoading] = useState(false);
   const [demoRemainingSec, setDemoRemainingSec] = useState(() => getDemoRemainingSeconds());
   const [relativeSyncTime, setRelativeSyncTime] = useState(() => {
     return formatRelativeSyncTime(getLastSyncedTimestamp());
@@ -132,6 +133,30 @@ export function SharedHeader({
       } else {
         window.location.hash = 'profile';
       }
+    }
+  };
+
+  const handleHeaderAuthClick = async () => {
+    setToolsPopoverOpen(false);
+    setThemeDropdownOpen(false);
+
+    if (isGoogleAuthenticated) {
+      signOut();
+      return;
+    }
+
+    if (typeof window !== 'undefined' && window.google?.accounts?.oauth2 && typeof loginWithGoogle === 'function') {
+      setIsHeaderAuthLoading(true);
+      try {
+        await loginWithGoogle();
+      } catch {
+        // Fallback to AuthModal if popup was blocked or user prefers modal controls
+        openAuthModal('general');
+      } finally {
+        setIsHeaderAuthLoading(false);
+      }
+    } else {
+      openAuthModal('general');
     }
   };
 
@@ -225,7 +250,7 @@ export function SharedHeader({
     <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200">
       <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
         
-        {/* Brand Logo & Sidebar Hamburger Toggle */}
+        {/* Left: Sidebar Toggle, Brand Logo & Compact Tools Popover */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             id="sidebar-toggle-btn"
@@ -240,10 +265,104 @@ export function SharedHeader({
           <a href="/index.html" className="focus:outline-none flex items-center">
             <Logo />
           </a>
+
+          {/* Compact "Tools ▾" Popover (Reminders + Quick Links + Cloud Sync) */}
+          <div className="relative hidden sm:block" ref={toolsPopoverRef}>
+            <button
+              id="header-tools-popover-btn"
+              type="button"
+              onClick={() => {
+                setToolsPopoverOpen((prev) => !prev);
+                setThemeDropdownOpen(false);
+              }}
+              aria-expanded={toolsPopoverOpen}
+              title="Reminders, Quick Links & Sync Tools"
+              className="top-action-link flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all active:scale-95 shadow-sm cursor-pointer"
+            >
+              <Wrench className="w-3.5 h-3.5 text-theme-accent" />
+              <span>Tools</span>
+              <ChevronDown className={`w-3 h-3 text-theme-muted transition-transform duration-200 ${toolsPopoverOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {toolsPopoverOpen && (
+              <div
+                id="header-tools-popover-menu"
+                className="absolute left-0 mt-2 w-60 rounded-2xl glass-dropdown p-2 shadow-2xl z-50 animate-fadeIn border border-theme-border space-y-1"
+              >
+                <div className="px-3 py-1.5 border-b border-theme-border/60 mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-theme-muted">
+                    Workspace Tools
+                  </p>
+                </div>
+
+                {/* Reminders Toggle inside Tools Popover */}
+                <button
+                  id="notification-reminder-toggle"
+                  type="button"
+                  onClick={() => {
+                    handleToggleNotifications();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Bell className={`w-3.5 h-3.5 ${notifPermission === 'granted' ? 'text-amber-500' : 'text-theme-muted'}`} />
+                    <span>Reminders</span>
+                  </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    notifPermission === 'granted'
+                      ? 'bg-emerald-500/15 text-emerald-500'
+                      : 'bg-theme-surface text-theme-muted border border-theme-border'
+                  }`}>
+                    {notifPermission === 'granted' ? 'Active' : 'Off'}
+                  </span>
+                </button>
+
+                {/* Quick Links Hub inside Tools Popover */}
+                <button
+                  id="header-quick-links-btn"
+                  type="button"
+                  onClick={() => {
+                    setToolsPopoverOpen(false);
+                    if (onOpenLinksModal) onOpenLinksModal();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Link2 className="w-3.5 h-3.5 text-theme-accent" />
+                    <span>Quick Links</span>
+                  </span>
+                  {(importantLinks || []).length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-theme-surface text-theme-accent border border-theme-border font-mono-numbers">
+                      {(importantLinks || []).length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Sync Now inside Tools Popover */}
+                <button
+                  id="header-sync-now-btn"
+                  type="button"
+                  onClick={() => {
+                    setToolsPopoverOpen(false);
+                    handleTriggerCloudAndLeaderboardSync();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <RefreshCw className={`w-3.5 h-3.5 text-theme-accent ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                    <span>Sync Now</span>
+                  </span>
+                  <span className="text-[10px] text-theme-muted font-mono-numbers">
+                    {relativeSyncTime || 'Now'}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Streamlined Header Right Actions: Sync Pill, Tools ▾ Popover, Theme Dropdown, @username Profile Pill */}
-        <div className="flex items-center gap-2 sm:gap-2.5 ml-auto">
+        {/* Top-Right Header Action Group (Exact Order): 1. Sync Status Pill, 2. Theme Dropdown, 3. Sign In/Out Button (#header-auth-btn), 4. My Profile Pill (#header-profile-pill) */}
+        <div id="header-right-actions" className="flex items-center gap-2 sm:gap-2.5 ml-auto">
           
           {/* 1. Compact Sync Status Pill */}
           {isAuthenticated && !isDemo ? (
@@ -324,101 +443,7 @@ export function SharedHeader({
             </button>
           )}
 
-          {/* 2. Single "Tools ▾" Popover (Reminders + Quick Links + Cloud Sync) */}
-          <div className="relative" ref={toolsPopoverRef}>
-            <button
-              id="header-tools-popover-btn"
-              type="button"
-              onClick={() => {
-                setToolsPopoverOpen((prev) => !prev);
-                setThemeDropdownOpen(false);
-              }}
-              aria-expanded={toolsPopoverOpen}
-              title="Reminders, Quick Links & Sync Tools"
-              className="top-action-link flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-semibold text-theme-text transition-all active:scale-95 shadow-sm cursor-pointer"
-            >
-              <Wrench className="w-3.5 h-3.5 text-theme-accent" />
-              <span>Tools</span>
-              <ChevronDown className={`w-3 h-3 text-theme-muted transition-transform duration-200 ${toolsPopoverOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {toolsPopoverOpen && (
-              <div
-                id="header-tools-popover-menu"
-                className="absolute right-0 mt-2 w-60 rounded-2xl glass-dropdown p-2 shadow-2xl z-50 animate-fadeIn border border-theme-border space-y-1"
-              >
-                <div className="px-3 py-1.5 border-b border-theme-border/60 mb-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-theme-muted">
-                    Workspace Tools
-                  </p>
-                </div>
-
-                {/* Reminders Toggle inside Tools Popover */}
-                <button
-                  id="notification-reminder-toggle"
-                  type="button"
-                  onClick={() => {
-                    handleToggleNotifications();
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <Bell className={`w-3.5 h-3.5 ${notifPermission === 'granted' ? 'text-amber-500' : 'text-theme-muted'}`} />
-                    <span>Reminders</span>
-                  </span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                    notifPermission === 'granted'
-                      ? 'bg-emerald-500/15 text-emerald-500'
-                      : 'bg-theme-surface text-theme-muted border border-theme-border'
-                  }`}>
-                    {notifPermission === 'granted' ? 'Active' : 'Off'}
-                  </span>
-                </button>
-
-                {/* Quick Links Hub inside Tools Popover */}
-                <button
-                  id="header-quick-links-btn"
-                  type="button"
-                  onClick={() => {
-                    setToolsPopoverOpen(false);
-                    if (onOpenLinksModal) onOpenLinksModal();
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <Link2 className="w-3.5 h-3.5 text-theme-accent" />
-                    <span>Quick Links</span>
-                  </span>
-                  {(importantLinks || []).length > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-theme-surface text-theme-accent border border-theme-border font-mono-numbers">
-                      {(importantLinks || []).length}
-                    </span>
-                  )}
-                </button>
-
-                {/* Sync Now inside Tools Popover */}
-                <button
-                  id="header-sync-now-btn"
-                  type="button"
-                  onClick={() => {
-                    setToolsPopoverOpen(false);
-                    handleTriggerCloudAndLeaderboardSync();
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-semibold text-theme-text hover:bg-theme-cardHover transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <RefreshCw className={`w-3.5 h-3.5 text-theme-accent ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
-                    <span>Sync Now</span>
-                  </span>
-                  <span className="text-[10px] text-theme-muted font-mono-numbers">
-                    {relativeSyncTime || 'Now'}
-                  </span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Theme Dropdown Selector */}
+          {/* 2. Compact Theme Dropdown Selector */}
           <div className="relative" ref={themeDropdownRef}>
             <button
               id="header-theme-dropdown-btn"
@@ -503,41 +528,80 @@ export function SharedHeader({
             )}
           </div>
 
-          {/* 4. @username Profile Pill (or Guest Demo pill when not logged in; clicking opens #view-profile) */}
+          {/* 3. Sign In / Sign Out Button (#header-auth-btn) — directly to the left of My Profile Pill */}
+          <button
+            id="header-auth-btn"
+            type="button"
+            disabled={isHeaderAuthLoading}
+            data-auth-state={isGoogleAuthenticated ? 'signed-in' : 'signed-out'}
+            onClick={handleHeaderAuthClick}
+            title={isGoogleAuthenticated ? 'Sign out of your Google account' : 'Sign in with Google'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all duration-200 active:scale-95 focus:outline-none cursor-pointer disabled:opacity-60 ${
+              isGoogleAuthenticated ? '' : 'btn-primary-action'
+            }`}
+            style={
+              isGoogleAuthenticated
+                ? {
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1.5px solid var(--border-glow)',
+                    color: 'var(--text-main)'
+                  }
+                : {
+                    backgroundColor: 'var(--primary)',
+                    border: '1.5px solid var(--border-glow)',
+                    color: '#FFFFFF'
+                  }
+            }
+          >
+            {isHeaderAuthLoading ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : isGoogleAuthenticated ? (
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <LogIn className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span data-header-auth-label="true">
+              {isHeaderAuthLoading ? 'Signing In...' : (isGoogleAuthenticated ? 'Sign Out' : 'Sign In')}
+            </span>
+          </button>
+
+          {/* 4. My Profile Pill (#header-profile-pill) — Guest Demo when signed out, @username + monogram when signed in */}
           <button
             id="header-profile-pill"
             type="button"
             data-target-view="profile"
+            data-auth-state={isGoogleAuthenticated ? 'signed-in' : 'signed-out'}
             onClick={handleOpenProfileView}
-            className="flex items-center space-x-2 px-2.5 py-1 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
+            className="flex items-center space-x-2 px-2.5 py-1 rounded-xl text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1.5px solid var(--border-glow)',
+              color: 'var(--text-main)'
+            }}
             title={
               isGoogleAuthenticated
                 ? `Open My Profile (${studentProfile?.handle || '@focused_scholar'})`
                 : 'Open My Profile (Read-Only Guest Demo Preview)'
             }
           >
-            {isGoogleAuthenticated && userProfile?.picture ? (
-              <img 
-                src={userProfile.picture} 
-                alt={studentProfile?.handle || userProfile.name} 
-                referrerPolicy="no-referrer"
-                className="w-6 h-6 rounded-full object-cover ring-1 ring-emerald-500/30"
-              />
-            ) : (
-              <div
-                className="w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px]"
-                style={{
-                  backgroundColor: 'var(--primary)',
-                  color: '#FFFFFF',
-                  border: '1px solid var(--border-glow)'
-                }}
-              >
-                {isGoogleAuthenticated
-                  ? getUsernameMonogram(studentProfile?.username, userProfile?.name || 'ST')
-                  : 'GD'}
-              </div>
-            )}
-            <span className="font-bold text-theme-text font-mono-numbers truncate max-w-[120px]">
+            <div
+              id="header-profile-monogram"
+              className="w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px] shrink-0"
+              style={{
+                backgroundColor: 'var(--primary)',
+                color: '#FFFFFF',
+                border: '1px solid var(--border-glow)'
+              }}
+            >
+              {isGoogleAuthenticated
+                ? getUsernameMonogram(studentProfile?.username, userProfile?.name || 'ST')
+                : 'GD'}
+            </div>
+            <span
+              data-header-profile-label="true"
+              className="font-bold font-mono-numbers truncate max-w-[120px]"
+              style={{ color: 'var(--text-main)' }}
+            >
               {isGoogleAuthenticated ? (studentProfile?.handle || '@focused_scholar') : 'Guest Demo'}
             </span>
           </button>

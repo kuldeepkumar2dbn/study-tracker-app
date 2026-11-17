@@ -1353,6 +1353,44 @@ html[data-theme="black-gold"] #profile-guest-demo-badge {
   cursor: not-allowed;
 }
 
+/* 11. Header Auth Button (#header-auth-btn) & My Profile Pill (#header-profile-pill) in Onyx & Gold */
+[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-out"],
+html[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-out"] {
+  background: #0F0F0F !important;
+  background-color: #0F0F0F !important;
+  color: #FFFFFF !important;
+  border: 1.5px solid #FFFFFF !important;
+}
+
+[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-out"] *,
+html[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-out"] * {
+  color: #FFFFFF !important;
+}
+
+[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-in"],
+html[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-in"],
+[data-theme="black-gold"] #header-profile-pill,
+html[data-theme="black-gold"] #header-profile-pill {
+  background: #ECD9AE !important;
+  background-color: #ECD9AE !important;
+  color: #000000 !important;
+  border: 1.5px solid #FFFFFF !important;
+}
+
+[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-in"] *,
+html[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-in"] *,
+[data-theme="black-gold"] #header-profile-pill span,
+html[data-theme="black-gold"] #header-profile-pill span {
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] #header-profile-monogram,
+html[data-theme="black-gold"] #header-profile-monogram {
+  background-color: #0F0F0F !important;
+  color: #FFFFFF !important;
+  border: 1px solid #FFFFFF !important;
+}
+
 
 
 

@@ -338,4 +338,84 @@ assert(authedLbSync.success === true && !authedLbSync.blocked && fetchPostCalls 
 assert(lastPostBody && lastPostBody.displayName === '@kuldeep_real', 'Authenticated leaderboard sync must carry custom @username');
 console.log('✔ Test 3.4: Automatic profile unlock, banner hiding, profile save, and Leaderboard sync upon Google OAuth Sign-In verified');
 
+// -------------------------------------------------------------
+// SECTION 4: Top Header Action Order & Dynamic Auth State Sync
+// -------------------------------------------------------------
+console.log('\n--- SECTION 4: Top Header Layout Order & #header-auth-btn Dynamic Sync ---');
+
+const rightActionsIdx = appShell.indexOf('id="header-right-actions"');
+const syncPillIdx = appShell.indexOf('id="header-sync-status-pill"', rightActionsIdx);
+const themeDropIdx = appShell.indexOf('id="header-theme-dropdown-btn"', rightActionsIdx);
+const authBtnIdx = appShell.indexOf('id="header-auth-btn"', rightActionsIdx);
+const profilePillIdx = appShell.indexOf('id="header-profile-pill"', rightActionsIdx);
+
+assert(
+  rightActionsIdx !== -1 && syncPillIdx !== -1 && themeDropIdx !== -1 && authBtnIdx !== -1 && profilePillIdx !== -1,
+  'Header right action group must contain #header-sync-status-pill, #header-theme-dropdown-btn, #header-auth-btn, and #header-profile-pill'
+);
+assert(
+  syncPillIdx < themeDropIdx && themeDropIdx < authBtnIdx && authBtnIdx < profilePillIdx,
+  'Header right controls must follow exact left-to-right order: Sync Status Pill -> Theme Dropdown -> #header-auth-btn -> #header-profile-pill'
+);
+assert(
+  appShell.includes("backgroundColor: 'var(--bg-card)'") && appShell.includes("border: '1.5px solid var(--border-glow)'"),
+  '#header-auth-btn signed-in state must style cleanly with var(--bg-card) and var(--border-glow)'
+);
+assert(
+  indexCss.includes('[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-out"]') &&
+  indexCss.includes('[data-theme="black-gold"] #header-auth-btn[data-auth-state="signed-in"]') &&
+  indexCss.includes('[data-theme="black-gold"] #header-profile-pill'),
+  'src/index.css must include crisp Onyx & Gold rules for #header-auth-btn and #header-profile-pill'
+);
+
+// Runtime verification of auth-guard.js syncHeaderAuthControls
+const authBtnClasses = new Set();
+const authBtnAttrs = new Map();
+const authLabelEl = { textContent: '' };
+const mockAuthBtn = {
+  style: {},
+  classList: {
+    add: (...c) => c.forEach((x) => authBtnClasses.add(x)),
+    remove: (...c) => c.forEach((x) => authBtnClasses.delete(x)),
+    contains: (x) => authBtnClasses.has(x)
+  },
+  setAttribute: (k, v) => authBtnAttrs.set(k, v),
+  querySelector: (sel) => (sel === '[data-header-auth-label]' ? authLabelEl : null)
+};
+const pillAttrs = new Map();
+const pillLabelEl = { textContent: '' };
+const pillMonogramEl = { textContent: '' };
+const mockProfilePill = {
+  setAttribute: (k, v) => pillAttrs.set(k, v),
+  querySelector: (sel) => {
+    if (sel === '[data-header-profile-label]') return pillLabelEl;
+    if (sel === '#header-profile-monogram') return pillMonogramEl;
+    return null;
+  }
+};
+const mockHeaderRoot = {
+  querySelector: (sel) => {
+    if (sel === '#header-auth-btn') return mockAuthBtn;
+    if (sel === '#header-profile-pill') return mockProfilePill;
+    return null;
+  }
+};
+
+// Signed-in state (from Test 3.4 Google OAuth session + @kuldeep_real saved profile)
+const signedInSync = authGuard.syncHeaderAuthControls(mockHeaderRoot);
+assert(signedInSync.isAuthenticated === true && signedInSync.authButtonLabel === 'Sign Out', 'Signed-in #header-auth-btn must display Sign Out');
+assert(authLabelEl.textContent === 'Sign Out' && authBtnAttrs.get('data-auth-state') === 'signed-in', 'DOM #header-auth-btn must switch to Sign Out');
+assert(mockAuthBtn.style.backgroundColor === 'var(--bg-card)' && mockAuthBtn.style.border === '1.5px solid var(--border-glow)', 'Signed-in #header-auth-btn must use var(--bg-card) and var(--border-glow)');
+assert(!authBtnClasses.has('btn-primary-action'), 'Signed-in #header-auth-btn must remove primary accent button class');
+assert(pillLabelEl.textContent === '@kuldeep_real' && pillMonogramEl.textContent === 'KU', 'Signed-in #header-profile-pill must show @username and monogram initial');
+
+// Sign out -> Signed-out state
+authGuard.clearAuthTokens();
+const signedOutSync = authGuard.syncHeaderAuthControls(mockHeaderRoot);
+assert(signedOutSync.isAuthenticated === false && signedOutSync.authButtonLabel === 'Sign In', 'Signed-out #header-auth-btn must display Sign In');
+assert(authLabelEl.textContent === 'Sign In' && authBtnAttrs.get('data-auth-state') === 'signed-out', 'DOM #header-auth-btn must switch to Sign In');
+assert(mockAuthBtn.style.backgroundColor === 'var(--primary)' && authBtnClasses.has('btn-primary-action'), 'Signed-out #header-auth-btn must use primary accent styling');
+assert(pillLabelEl.textContent === 'Guest Demo' && pillMonogramEl.textContent === 'GD', 'Signed-out #header-profile-pill must show Guest Demo and GD monogram');
+console.log('✔ Test 4.1: Header layout order (Sync -> Theme -> #header-auth-btn -> #header-profile-pill) and dynamic Sign In / Sign Out sync verified');
+
 console.log('\n=== ALL ROLE-BASED ACCESS GATING & DEMO PREVIEW TESTS PASSED SUCCESSFULLY! ===\n');

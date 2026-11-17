@@ -393,6 +393,108 @@ export function isUserAuthenticated(explicitProfile = undefined) {
 }
 
 /**
+ * Resolves the display handle (@username) and 2-letter monogram for the header profile pill.
+ */
+function resolveHeaderIdentity(profile) {
+  let username = '';
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('studytracker_student_profile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.username) {
+          username = String(parsed.username).trim().replace(/^@+/, '').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+        }
+      }
+    }
+  } catch {}
+
+  if (!username && profile?.email) {
+    username = String(profile.email).split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+  }
+  if (!username && profile?.name) {
+    username = String(profile.name).toLowerCase().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+  }
+  if (!username) username = 'focused_scholar';
+
+  const alpha = username.replace(/_/g, '');
+  const monogram = alpha.length >= 2
+    ? alpha.slice(0, 2).toUpperCase()
+    : ((alpha[0] || 'S') + 'T').toUpperCase();
+
+  return {
+    handle: `@${username}`,
+    monogram
+  };
+}
+
+/**
+ * Synchronizes the top header Sign In / Sign Out button (`#header-auth-btn`) and
+ * My Profile pill (`#header-profile-pill`) with live Google OAuth login status.
+ *
+ * @param {Document|HTMLElement|null} [root]
+ * @param {Object|null} [explicitProfile]
+ * @returns {{ isAuthenticated: boolean, authButtonLabel: string, profilePillLabel: string, monogram: string }}
+ */
+export function syncHeaderAuthControls(root = typeof document !== 'undefined' ? document : null, explicitProfile = undefined) {
+  const profile = explicitProfile !== undefined ? explicitProfile : getUserProfile();
+  const authed = isUserAuthenticated(profile);
+  const identity = authed ? resolveHeaderIdentity(profile) : { handle: 'Guest Demo', monogram: 'GD' };
+  const authButtonLabel = authed ? 'Sign Out' : 'Sign In';
+
+  if (root && typeof root.querySelector === 'function') {
+    const authBtn = root.querySelector('#header-auth-btn');
+    if (authBtn) {
+      authBtn.setAttribute('data-auth-state', authed ? 'signed-in' : 'signed-out');
+      const labelEl = authBtn.querySelector('[data-header-auth-label]');
+      if (labelEl) {
+        labelEl.textContent = authButtonLabel;
+      } else {
+        authBtn.textContent = authButtonLabel;
+      }
+      if (authBtn.classList) {
+        if (authed) {
+          authBtn.classList.remove('btn-primary-action');
+        } else {
+          authBtn.classList.add('btn-primary-action');
+        }
+      }
+      if (authBtn.style) {
+        if (authed) {
+          authBtn.style.backgroundColor = 'var(--bg-card)';
+          authBtn.style.border = '1.5px solid var(--border-glow)';
+          authBtn.style.color = 'var(--text-main)';
+        } else {
+          authBtn.style.backgroundColor = 'var(--primary)';
+          authBtn.style.border = '1.5px solid var(--border-glow)';
+          authBtn.style.color = '#FFFFFF';
+        }
+      }
+    }
+
+    const profilePill = root.querySelector('#header-profile-pill');
+    if (profilePill) {
+      profilePill.setAttribute('data-auth-state', authed ? 'signed-in' : 'signed-out');
+      const pillLabel = profilePill.querySelector('[data-header-profile-label]');
+      if (pillLabel) {
+        pillLabel.textContent = identity.handle;
+      }
+      const pillMonogram = profilePill.querySelector('#header-profile-monogram');
+      if (pillMonogram) {
+        pillMonogram.textContent = identity.monogram;
+      }
+    }
+  }
+
+  return {
+    isAuthenticated: authed,
+    authButtonLabel,
+    profilePillLabel: identity.handle,
+    monogram: identity.monogram
+  };
+}
+
+/**
  * Retrieves the currently active Google Drive OAuth access token from sessionStorage or memory.
  * Never retrieves from long-lived localStorage or cookies.
  */
@@ -503,6 +605,7 @@ export function saveUserSession(userData, token = null, expiresInSec = 3600) {
     }
 
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      syncHeaderAuthControls(typeof document !== 'undefined' ? document : null, sanitized);
       window.dispatchEvent(new CustomEvent('studyflow-auth-changed', {
         detail: {
           isAuthenticated: Boolean(sanitized),
@@ -732,6 +835,7 @@ export function clearAuthTokens() {
     sessionStorage.removeItem(AUTH_KEYS.DRIVE_USER);
 
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent !== 'undefined') {
+      syncHeaderAuthControls(typeof document !== 'undefined' ? document : null, null);
       window.dispatchEvent(new CustomEvent('studyflow-auth-changed', {
         detail: {
           isAuthenticated: false,
@@ -838,5 +942,6 @@ if (typeof window !== 'undefined') {
     }
   } catch {}
   window.isUserAuthenticated = isUserAuthenticated;
+  window.syncHeaderAuthControls = syncHeaderAuthControls;
   getUserProfile();
 }

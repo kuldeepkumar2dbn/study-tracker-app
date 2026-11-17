@@ -8,7 +8,7 @@
  * 3. Two-Way Syllabus Completion Sync & Unfinished Task Carryover
  */
 
-import { getActiveUserId, isDemoUser, isUserAuthenticated, getLocalDateString } from './auth-guard.js';
+import { getActiveUserId, isDemoUser, isUserAuthenticated, syncHeaderAuthControls, getLocalDateString } from './auth-guard.js';
 import { 
   getUserData, 
   handleEndOfDayRollover, 
@@ -53,6 +53,7 @@ import {
 
 export {
   isUserAuthenticated,
+  syncHeaderAuthControls,
   getProfileAccessState,
   applyProfileDemoMode,
   canSyncToLeaderboard,
@@ -95,6 +96,7 @@ export function applyGuestAccessGating(authUserProfile = undefined) {
   try {
     applyProfileDemoMode(null, authUserProfile);
     syncSidebarGuestBadges(typeof document !== 'undefined' ? document : null, authed);
+    syncHeaderAuthControls(typeof document !== 'undefined' ? document : null, authUserProfile);
   } catch (err) {
     console.warn('Non-fatal guest access gating sync warning:', err);
   }
