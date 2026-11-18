@@ -11,10 +11,14 @@
  */
 
 import { TELEMETRY_URL, isTelemetryConfigured } from './admin-config.js';
+import { encryptPayload, decryptPayload, getDefaultVaultSecret } from './crypto-vault.js';
 
 export const PIN_HASH_KEY = 'studytracker_pin_hash';
+export const PIN_UNLOCKED_KEY = 'studytracker_unlocked';
 export const PIN_UNLOCKED_SESSION_KEY = 'studytracker_pin_unlocked';
 export const USER_SECRET_KEY = 'studytracker_user_secret';
+export const IDLE_AUTO_LOCK_MS = 15 * 60 * 1000; // 15 minutes
+export const IDLE_ACTIVITY_EVENTS = ['mousemove', 'keydown', 'touchstart'];
 
 const HTML_ESCAPE_MAP = {
   '&': '&amp;',
@@ -206,7 +210,7 @@ export function isAppLocked() {
   if (!hasAppPin()) return false;
   if (typeof sessionStorage === 'undefined') return true;
   try {
-    return sessionStorage.getItem(PIN_UNLOCKED_SESSION_KEY) !== 'true';
+    return sessionStorage.getItem(PIN_UNLOCKED_KEY) !== 'true';
   } catch {
     return true;
   }
@@ -229,11 +233,15 @@ export async function setAppPin(pin) {
   // Keep current active session unlocked while setting PIN so the user isn't abruptly kicked out
   if (typeof sessionStorage !== 'undefined') {
     try {
+      sessionStorage.setItem(PIN_UNLOCKED_KEY, 'true');
       sessionStorage.setItem(PIN_UNLOCKED_SESSION_KEY, 'true');
     } catch {
       // ignore
     }
   }
+
+  // Activate 15-minute idle auto-lock watcher now that PIN protection is enabled
+  startIdleAutoLock();
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('studyflow-pin-changed', {
@@ -259,11 +267,15 @@ export async function verifyAppPin(pin) {
   if (matched) {
     if (typeof sessionStorage !== 'undefined') {
       try {
+        sessionStorage.setItem(PIN_UNLOCKED_KEY, 'true');
         sessionStorage.setItem(PIN_UNLOCKED_SESSION_KEY, 'true');
       } catch {
         // ignore
       }
     }
+    // Start 15-minute idle auto-lock watcher upon unlock
+    startIdleAutoLock();
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('studyflow-pin-changed', {
         detail: { enabled: true, locked: false }
@@ -277,10 +289,12 @@ export async function verifyAppPin(pin) {
 /**
  * Immediately locks the current session (requires PIN re-entry to continue).
  */
-export function lockAppNow() {
+export function lockAppNow(reason = 'manual') {
   if (!hasAppPin()) return false;
+  stopIdleAutoLock();
   if (typeof sessionStorage !== 'undefined') {
     try {
+      sessionStorage.removeItem('studytracker_unlocked');
       sessionStorage.removeItem(PIN_UNLOCKED_SESSION_KEY);
     } catch {
       // ignore
@@ -288,7 +302,7 @@ export function lockAppNow() {
   }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('studyflow-pin-changed', {
-      detail: { enabled: true, locked: true }
+      detail: { enabled: true, locked: true, reason }
     }));
   }
   return true;
@@ -298,6 +312,7 @@ export function lockAppNow() {
  * Removes the App PIN Lock hash from localStorage.
  */
 export function removeAppPin() {
+  stopIdleAutoLock();
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.removeItem(PIN_HASH_KEY);
@@ -307,6 +322,7 @@ export function removeAppPin() {
   }
   if (typeof sessionStorage !== 'undefined') {
     try {
+      sessionStorage.removeItem('studytracker_unlocked');
       sessionStorage.removeItem(PIN_UNLOCKED_SESSION_KEY);
     } catch {
       // ignore
@@ -318,6 +334,105 @@ export function removeAppPin() {
     }));
   }
   return { success: true };
+}
+
+// =========================================================================
+// 15-Minute Idle Auto-Lock Watcher (mousemove, keydown, touchstart)
+// =========================================================================
+let _idleLockTimerId = null;
+let _idleLockTimeoutMs = IDLE_AUTO_LOCK_MS;
+let _idleListenersAttached = false;
+
+function _handleUserActivityForIdleLock() {
+  if (!hasAppPin() || isAppLocked()) {
+    stopIdleAutoLock();
+    return;
+  }
+  resetIdleAutoLockTimer();
+}
+
+/**
+ * Resets the active 15-minute idle auto-lock countdown.
+ */
+export function resetIdleAutoLockTimer() {
+  if (_idleLockTimerId !== null) {
+    clearTimeout(_idleLockTimerId);
+    _idleLockTimerId = null;
+  }
+  if (!hasAppPin() || isAppLocked()) {
+    return false;
+  }
+
+  _idleLockTimerId = setTimeout(() => {
+    _idleLockTimerId = null;
+    if (!hasAppPin()) return;
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        sessionStorage.removeItem('studytracker_unlocked');
+        sessionStorage.removeItem(PIN_UNLOCKED_SESSION_KEY);
+      } catch {
+        // ignore
+      }
+    }
+    stopIdleAutoLock();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('studyflow-pin-changed', {
+        detail: { enabled: true, locked: true, reason: 'idle_timeout' }
+      }));
+    }
+  }, _idleLockTimeoutMs);
+
+  return true;
+}
+
+/**
+ * Starts the 15-minute idle auto-lock timer listening to `mousemove`, `keydown`, and `touchstart`
+ * when SHA-256 App PIN Lock is enabled.
+ *
+ * @param {number} [timeoutMs=IDLE_AUTO_LOCK_MS]
+ * @returns {{ active: boolean, timeoutMs: number }}
+ */
+export function startIdleAutoLock(timeoutMs = IDLE_AUTO_LOCK_MS) {
+  if (!hasAppPin()) {
+    stopIdleAutoLock();
+    return { active: false, timeoutMs: _idleLockTimeoutMs };
+  }
+
+  _idleLockTimeoutMs = Math.max(50, Number(timeoutMs) || IDLE_AUTO_LOCK_MS);
+
+  if (typeof window !== 'undefined' && !_idleListenersAttached) {
+    IDLE_ACTIVITY_EVENTS.forEach((evtName) => {
+      window.addEventListener(evtName, _handleUserActivityForIdleLock, { passive: true });
+    });
+    _idleListenersAttached = true;
+  }
+
+  resetIdleAutoLockTimer();
+  return { active: true, timeoutMs: _idleLockTimeoutMs };
+}
+
+/**
+ * Stops the idle auto-lock timer and cleans up activity event listeners.
+ */
+export function stopIdleAutoLock() {
+  if (_idleLockTimerId !== null) {
+    clearTimeout(_idleLockTimerId);
+    _idleLockTimerId = null;
+  }
+  if (typeof window !== 'undefined' && _idleListenersAttached) {
+    IDLE_ACTIVITY_EVENTS.forEach((evtName) => {
+      window.removeEventListener(evtName, _handleUserActivityForIdleLock);
+    });
+    _idleListenersAttached = false;
+  }
+  return { active: false };
+}
+
+/**
+ * Returns whether the 15-minute idle auto-lock timer is currently running.
+ */
+export function isIdleAutoLockRunning() {
+  return _idleLockTimerId !== null;
 }
 
 /**
@@ -381,7 +496,7 @@ export function collectAllLocalStudyData() {
       const len = typeof localStorage.length === 'number' ? localStorage.length : 0;
       for (let i = 0; i < len; i++) {
         const key = typeof localStorage.key === 'function' ? localStorage.key(i) : null;
-        if (!key || excludedKeys.has(key)) continue;
+        if (!key || excludedKeys.has(key) || key.startsWith('studytracker_vault_')) continue;
         const raw = localStorage.getItem(key);
         if (raw === null) continue;
         try {
@@ -426,6 +541,61 @@ export function exportAllStudyDataAsJson() {
   }
 
   return { success: true, filename, payload };
+}
+
+/**
+ * Encrypts all local study data using PBKDF2 + AES-256-GCM and triggers a 1-click
+ * `.enc.json` Encrypted Vault Backup download.
+ *
+ * @param {string} [passphrase=''] - Optional custom passphrase (defaults to device vault secret)
+ * @returns {Promise<{ success: boolean, filename: string, envelope: Object }>}
+ */
+export async function exportEncryptedVaultBackup(passphrase = '') {
+  const payload = collectAllLocalStudyData();
+  const customPass = String(passphrase || '').trim();
+  const secret = customPass || getDefaultVaultSecret();
+  const ciphertext = await encryptPayload(payload, secret);
+
+  const dateStamp = new Date().toISOString().split('T')[0];
+  const filename = `studyflow-vault-backup-${dateStamp}.enc.json`;
+  const envelope = {
+    app: 'StudyFlow Study Tracker Pro',
+    format: 'studyflow-encrypted-vault',
+    version: 1,
+    algorithm: 'AES-256-GCM',
+    kdf: 'PBKDF2-SHA256',
+    keySource: customPass ? 'passphrase' : 'device-vault-key',
+    exportedAt: new Date().toISOString(),
+    ciphertext
+  };
+
+  const jsonString = JSON.stringify(envelope, null, 2);
+
+  if (typeof document !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined') {
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  return { success: true, filename, envelope };
+}
+
+/**
+ * Decrypts a previously exported `.enc.json` Encrypted Vault Backup envelope.
+ */
+export async function decryptEncryptedVaultBackup(envelopeOrJson, passphrase = '') {
+  const parsed = typeof envelopeOrJson === 'string' ? JSON.parse(envelopeOrJson) : envelopeOrJson;
+  const secret = String(passphrase || '').trim() || getDefaultVaultSecret();
+  if (parsed && typeof parsed === 'object' && typeof parsed.ciphertext === 'string') {
+    return decryptPayload(parsed.ciphertext, secret);
+  }
+  return decryptPayload(parsed, secret);
 }
 
 /**
@@ -530,7 +700,11 @@ if (typeof window !== 'undefined') {
   window.sanitizeText = sanitizeText;
   window.SecurityPrivacy = {
     PIN_HASH_KEY,
+    PIN_UNLOCKED_KEY,
+    PIN_UNLOCKED_SESSION_KEY,
     USER_SECRET_KEY,
+    IDLE_AUTO_LOCK_MS,
+    IDLE_ACTIVITY_EVENTS,
     sanitizeText,
     stripHtmlTags,
     validatePinFormat,
@@ -541,17 +715,26 @@ if (typeof window !== 'undefined') {
     verifyAppPin,
     lockAppNow,
     removeAppPin,
+    startIdleAutoLock,
+    stopIdleAutoLock,
+    resetIdleAutoLockTimer,
+    isIdleAutoLockRunning,
     getOrCreateUserSecret,
     collectAllLocalStudyData,
     exportAllStudyDataAsJson,
+    exportEncryptedVaultBackup,
+    decryptEncryptedVaultBackup,
     deleteLeaderboardDataAndWipeLocal
   };
 }
 
 export default {
   PIN_HASH_KEY,
+  PIN_UNLOCKED_KEY,
   PIN_UNLOCKED_SESSION_KEY,
   USER_SECRET_KEY,
+  IDLE_AUTO_LOCK_MS,
+  IDLE_ACTIVITY_EVENTS,
   sanitizeText,
   stripHtmlTags,
   validatePinFormat,
@@ -562,9 +745,15 @@ export default {
   verifyAppPin,
   lockAppNow,
   removeAppPin,
+  startIdleAutoLock,
+  stopIdleAutoLock,
+  resetIdleAutoLockTimer,
+  isIdleAutoLockRunning,
   getOrCreateUserSecret,
   collectAllLocalStudyData,
   exportAllStudyDataAsJson,
+  exportEncryptedVaultBackup,
+  decryptEncryptedVaultBackup,
   deleteLeaderboardDataAndWipeLocal
 };
 

@@ -12,6 +12,7 @@
 import { patchUserData } from './storage-helper.js';
 import { getActiveUserId, isUserAuthenticated } from './auth-guard.js';
 import { sanitizeText, stripHtmlTags } from './security-privacy.js';
+import { syncEncryptedVaultMirror, getDefaultVaultSecret } from './crypto-vault.js';
 
 export { sanitizeText, isUserAuthenticated };
 
@@ -291,6 +292,7 @@ export function saveStudentProfile(input = {}, { userId = null, requireAuth = fa
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(savedProfile));
+      syncEncryptedVaultMirror(STUDENT_PROFILE_KEY, savedProfile, getDefaultVaultSecret(userId));
     } catch (e) {
       console.warn('Error saving student profile to localStorage:', e);
     }

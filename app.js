@@ -50,6 +50,24 @@ import {
   startMidnightExamPurgeScheduler,
   stopMidnightExamPurgeScheduler
 } from './exam-radar.js';
+import {
+  encryptPayload,
+  decryptPayload,
+  saveEncryptedStorageItem,
+  loadEncryptedStorageItem,
+  encryptSensitiveFieldsForSync,
+  decryptSensitiveFieldsFromSync,
+  migrateSensitiveLocalStorageToVault
+} from './crypto-vault.js';
+import {
+  hasAppPin,
+  isAppLocked,
+  startIdleAutoLock,
+  stopIdleAutoLock,
+  isIdleAutoLockRunning,
+  IDLE_AUTO_LOCK_MS,
+  exportEncryptedVaultBackup
+} from './security-privacy.js';
 
 export {
   isUserAuthenticated,
@@ -85,7 +103,19 @@ export {
   isExamExpired,
   getDaysUntilExam,
   startMidnightExamPurgeScheduler,
-  stopMidnightExamPurgeScheduler
+  stopMidnightExamPurgeScheduler,
+  encryptPayload,
+  decryptPayload,
+  saveEncryptedStorageItem,
+  loadEncryptedStorageItem,
+  encryptSensitiveFieldsForSync,
+  decryptSensitiveFieldsFromSync,
+  migrateSensitiveLocalStorageToVault,
+  startIdleAutoLock,
+  stopIdleAutoLock,
+  isIdleAutoLockRunning,
+  IDLE_AUTO_LOCK_MS,
+  exportEncryptedVaultBackup
 };
 
 /**
@@ -189,6 +219,17 @@ if (typeof window !== 'undefined') {
       window.addEventListener('hashchange', handleExamPurgeOnViewSwitch);
     } catch (err) {
       console.warn('Error initializing expired exam deadline auto-purge in app.js:', err);
+    }
+
+    // Initialize 15-minute Idle Auto-Lock watcher when SHA-256 App PIN Lock is enabled
+    // and migrate legacy sensitive localStorage entries to AES-256-GCM encrypted vault mirrors
+    try {
+      if (hasAppPin() && !isAppLocked()) {
+        startIdleAutoLock(IDLE_AUTO_LOCK_MS);
+      }
+      migrateSensitiveLocalStorageToVault().catch(() => {});
+    } catch (err) {
+      console.warn('Error initializing crypto vault or idle auto-lock in app.js:', err);
     }
 
     // Resume Focus Timer 3-minute Live Presence Heartbeat ONLY for Google-authenticated users

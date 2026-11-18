@@ -1,19 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, ShieldCheck, AlertCircle, KeyRound } from 'lucide-react';
 import {
+  hasAppPin,
   isAppLocked,
-  verifyAppPin
+  verifyAppPin,
+  startIdleAutoLock,
+  stopIdleAutoLock
 } from '../../security-privacy.js';
 
 export default function PinLockOverlay() {
   const [locked, setLocked] = useState(() => isAppLocked());
+  const [lockReason, setLockReason] = useState(null);
   const [pinInput, setPinInput] = useState('');
   const [error, setError] = useState(null);
   const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
-    const syncLockState = () => {
-      setLocked(isAppLocked());
+    const syncLockState = (evt) => {
+      const currentlyLocked = isAppLocked();
+      setLocked(currentlyLocked);
+      if (evt?.detail?.reason) {
+        setLockReason(evt.detail.reason);
+      } else if (!currentlyLocked) {
+        setLockReason(null);
+      }
+      if (hasAppPin() && !currentlyLocked) {
+        startIdleAutoLock();
+      } else {
+        stopIdleAutoLock();
+      }
     };
     syncLockState();
     window.addEventListener('studyflow-pin-changed', syncLockState);
@@ -21,6 +36,7 @@ export default function PinLockOverlay() {
     return () => {
       window.removeEventListener('studyflow-pin-changed', syncLockState);
       window.removeEventListener('storage', syncLockState);
+      stopIdleAutoLock();
     };
   }, []);
 
@@ -84,7 +100,9 @@ export default function PinLockOverlay() {
             StudyFlow Locked
           </h2>
           <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            Enter your 4–6 digit App PIN to unlock your study workspace.
+            {lockReason === 'idle_timeout'
+              ? 'Auto-locked after 15 minutes of inactivity. Enter your 4–6 digit App PIN to resume.'
+              : 'Enter your 4–6 digit App PIN to unlock your study workspace.'}
           </p>
         </div>
 

@@ -13,6 +13,7 @@
 
 import { debounceSaveToDrive, populateGranularStorage, isBlankZeroState } from './cloud-sync.js';
 import { getActiveUserId, isDemoUser, getLocalDateString } from './auth-guard.js';
+import { syncEncryptedVaultMirror, getDefaultVaultSecret } from './crypto-vault.js';
 
 export { isBlankZeroState };
 
@@ -170,6 +171,25 @@ export function patchUserData(userId, updates = {}) {
     populateGranularStorage(targetUserId, updated);
   } catch (err) {
     console.warn('Error populating granular storage after patch:', err);
+  }
+
+  // Encrypt sensitive personal datasets (profile, mock tests, flashcards, notes) into AES-256-GCM vault mirrors
+  try {
+    const vaultSecret = getDefaultVaultSecret(targetUserId);
+    if (updates.studentProfile !== undefined) {
+      syncEncryptedVaultMirror('studytracker_student_profile', updated.studentProfile, vaultSecret);
+    }
+    if (updates.mockTests !== undefined) {
+      syncEncryptedVaultMirror('studytracker_mock_tests', updated.mockTests, vaultSecret);
+    }
+    if (updates.flashcards !== undefined) {
+      syncEncryptedVaultMirror('studytracker_flashcards', updated.flashcards, vaultSecret);
+    }
+    if (updates.notes !== undefined) {
+      syncEncryptedVaultMirror('studytracker_personal_notes', updated.notes, vaultSecret);
+    }
+  } catch (err) {
+    console.warn('Non-fatal encrypted vault sync warning in patchUserData:', err);
   }
 
   // Dispatch events to notify UI across all tabs

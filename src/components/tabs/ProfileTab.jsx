@@ -52,6 +52,7 @@ import {
   validatePinFormat,
   getOrCreateUserSecret,
   exportAllStudyDataAsJson,
+  exportEncryptedVaultBackup,
   deleteLeaderboardDataAndWipeLocal
 } from '../../../security-privacy.js';
 
@@ -107,6 +108,8 @@ export default function ProfileTab() {
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
   const [confirmWipeStep, setConfirmWipeStep] = useState(false);
   const [isWiping, setIsWiping] = useState(false);
+  const [vaultBackupPassphrase, setVaultBackupPassphrase] = useState('');
+  const [isExportingEncrypted, setIsExportingEncrypted] = useState(false);
   const [userSecretPreview] = useState(() => {
     const secret = getOrCreateUserSecret();
     return secret ? `${secret.slice(0, 8)}••••${secret.slice(-4)}` : 'Active';
@@ -216,6 +219,22 @@ export default function ProfileTab() {
     const res = exportAllStudyDataAsJson();
     if (res.success) {
       showToast(`📦 Exported backup: ${res.filename}`);
+    }
+  };
+
+  const handleExportEncryptedVault = async () => {
+    setIsExportingEncrypted(true);
+    try {
+      const res = await exportEncryptedVaultBackup(vaultBackupPassphrase);
+      if (res.success) {
+        setVaultBackupPassphrase('');
+        showToast(`🔐 Exported AES-256-GCM Encrypted Vault: ${res.filename}`);
+      }
+    } catch (err) {
+      console.error('Error exporting encrypted vault backup:', err);
+      showToast('⚠️ Could not create encrypted backup in this browser context.');
+    } finally {
+      setIsExportingEncrypted(false);
     }
   };
 
@@ -1263,7 +1282,7 @@ export default function ProfileTab() {
             </div>
 
             <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              Ideal for shared or library computers. Your PIN is stored locally as a one-way SHA-256 hash (<code className="font-mono">studytracker_pin_hash</code>) and locks the screen on initial page load.
+              Ideal for shared or library computers. Your PIN is stored locally as a one-way SHA-256 hash (<code className="font-mono">studytracker_pin_hash</code>), locks on page load, and <strong style={{ color: 'var(--text-main)' }}>auto-locks after 15 minutes of inactivity</strong>.
             </p>
 
             <form onSubmit={handleSetAppPin} className="space-y-3">
@@ -1373,31 +1392,65 @@ export default function ProfileTab() {
               border: '1.5px solid var(--border-glow)'
             }}
           >
-            {/* 1-Click Export My Data (.json) */}
-            <div className="space-y-2.5">
+            {/* 1-Click Export My Data: Encrypted Vault Backup (.enc.json) + Standard JSON */}
+            <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Download className="w-4 h-4" style={{ color: 'var(--text-main)' }} />
                 <h3 className="font-display font-bold text-sm sm:text-base" style={{ color: 'var(--text-main)' }}>
-                  Data Portability &amp; Right to Erasure
+                  Data Portability &amp; Encrypted Vault Backup
                 </h3>
               </div>
               <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                Download a full JSON archive of your local study history, mock tests, syllabus, routine, and profile anytime.
+                Download an <strong style={{ color: 'var(--text-main)' }}>AES-256-GCM Encrypted Vault Backup (.enc.json)</strong> or a standard JSON archive of your local study history, mock tests, syllabus, routine, and profile anytime.
               </p>
-              <button
-                id="export-data-json-btn"
-                type="button"
-                onClick={handleExportData}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer active:scale-95"
+
+              <input
+                id="vault-backup-passphrase-input"
+                type="password"
+                autoComplete="new-password"
+                value={vaultBackupPassphrase}
+                onChange={(e) => setVaultBackupPassphrase(e.target.value)}
+                placeholder="Optional vault passphrase (defaults to device key)"
+                className="w-full px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none"
                 style={{
-                  backgroundColor: 'var(--primary)',
-                  color: '#FFFFFF',
-                  border: '1.5px solid var(--border-glow)'
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1.5px solid var(--border-glow)',
+                  color: 'var(--text-main)'
                 }}
-              >
-                <Download className="w-4 h-4" />
-                <span>1-Click Export My Data (.json)</span>
-              </button>
+              />
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  id="export-encrypted-vault-btn"
+                  type="button"
+                  disabled={isExportingEncrypted}
+                  onClick={handleExportEncryptedVault}
+                  className="btn-primary-action flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer active:scale-95 disabled:opacity-60"
+                  style={{
+                    backgroundColor: 'var(--primary)',
+                    color: '#FFFFFF',
+                    border: '1.5px solid var(--border-glow)'
+                  }}
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{isExportingEncrypted ? 'Encrypting Vault...' : 'Encrypted Vault Backup (.enc.json)'}</span>
+                </button>
+
+                <button
+                  id="export-data-json-btn"
+                  type="button"
+                  onClick={handleExportData}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer active:scale-95"
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    color: 'var(--text-main)',
+                    border: '1.5px solid var(--border-glow)'
+                  }}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>1-Click Export My Data (.json)</span>
+                </button>
+              </div>
             </div>
 
             {/* Delete My Leaderboard Data & Wipe Local Storage */}

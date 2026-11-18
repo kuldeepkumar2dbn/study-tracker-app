@@ -30,6 +30,11 @@ import {
   isDemoUser,
   getUserDataStorageKey 
 } from './auth-guard.js';
+import {
+  encryptSensitiveFieldsForSync,
+  decryptSensitiveFieldsFromSync,
+  getDefaultVaultSecret
+} from './crypto-vault.js';
 
 export const SYNC_FILE_NAME = 'studyflow_user_data.json';
 export const SYNC_STORAGE_FILE_ID_KEY = 'studyflow_cloud_sync_file_id';
@@ -308,7 +313,13 @@ export async function downloadSyncFile(accessToken, fileId) {
     throw new Error(`Download from Google Drive failed: ${errorText}`);
   }
 
-  return await response.json();
+  const parsed = await response.json();
+  try {
+    return await decryptSensitiveFieldsFromSync(parsed, getDefaultVaultSecret(parsed?.userId));
+  } catch {
+    // Graceful fallback to legacy unencrypted JSON if decryption is unavailable
+    return parsed;
+  }
 }
 
 /**
@@ -329,7 +340,14 @@ export async function createSyncFile(accessToken, payload, parentFolderId = null
     metadata.parents = [parentFolderId];
   }
 
-  const contentJson = JSON.stringify(payload, null, 2);
+  let uploadPayload = payload;
+  try {
+    uploadPayload = await encryptSensitiveFieldsForSync(payload, getDefaultVaultSecret(payload?.userId));
+  } catch (encErr) {
+    console.warn('Non-fatal Drive encryption warning (falling back cleanly):', encErr);
+  }
+
+  const contentJson = JSON.stringify(uploadPayload, null, 2);
   const multipartRequestBody =
     delimiter +
     'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
@@ -381,7 +399,14 @@ export async function updateSyncFile(accessToken, fileId, payload) {
   }
 
   const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
-  const contentJson = JSON.stringify(payload, null, 2);
+  let uploadPayload = payload;
+  try {
+    uploadPayload = await encryptSensitiveFieldsForSync(payload, getDefaultVaultSecret(payload?.userId));
+  } catch (encErr) {
+    console.warn('Non-fatal Drive encryption warning (falling back cleanly):', encErr);
+  }
+
+  const contentJson = JSON.stringify(uploadPayload, null, 2);
 
   const response = await fetch(uploadUrl, {
     method: 'PATCH',
