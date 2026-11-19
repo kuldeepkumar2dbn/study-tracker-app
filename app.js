@@ -15,8 +15,8 @@ import {
   checkAndTriggerEndOfDayRollover, 
   patchUserData 
 } from './storage-helper.js';
-import { applySelectedTheme } from './src/components/tabs/DashboardTab.jsx';
-import { switchView, navigateTo, getCurrentView, initRouter, VIEW_IDS } from './router.js';
+import { applySelectedTheme } from './settings.js';
+import { switchView, navigateTo, getCurrentView, initRouter, isViewVisible, VIEW_IDS } from './router.js';
 import {
   SIDEBAR_ITEMS,
   GUEST_LOCAL_VIEWS,
@@ -41,7 +41,8 @@ import {
   isLivePresenceHeartbeatRunning,
   syncStudentToLeaderboard,
   fetchLeaderboard,
-  filterLeaderboardEntries
+  filterLeaderboardEntries,
+  renderLeaderboardFragment
 } from './leaderboard.js';
 import {
   getProfileAccessState,
@@ -56,6 +57,10 @@ import {
   stopMidnightExamPurgeScheduler
 } from './exam-radar.js';
 import {
+  cachedDerivedKey,
+  getCachedDerivedKey,
+  clearDerivedKeyCache,
+  debouncePatchUserData,
   encryptPayload,
   decryptPayload,
   saveEncryptedStorageItem,
@@ -73,6 +78,46 @@ import {
   IDLE_AUTO_LOCK_MS,
   exportEncryptedVaultBackup
 } from './security-privacy.js';
+
+/**
+ * Updates ONLY the clock digit elements (textContent) in the DOM without
+ * dispatching state events or re-rendering the entire Dashboard or Consistency Radar chart.
+ *
+ * @param {number} secondsLeft
+ * @param {Array<string>} [targetIds]
+ * @returns {string} Formatted MM:SS
+ */
+export function updateTimerDigitsOnly(secondsLeft, targetIds = null) {
+  const mins = Math.floor(Math.max(0, secondsLeft) / 60);
+  const secs = Math.floor(Math.max(0, secondsLeft) % 60);
+  const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  if (typeof document !== 'undefined') {
+    const ids = targetIds || [
+      'sidebar-timer-digits',
+      'sidebar-timer-display',
+      'timer-clock-digits',
+      'timer-display-clock',
+      'focus-timer-clock',
+      'focus-timer-digits'
+    ];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && el.textContent !== formatted) {
+        el.textContent = formatted;
+      }
+    });
+
+    const digitNodes = document.querySelectorAll('[data-timer-digits]');
+    digitNodes.forEach((node) => {
+      if (node && node.textContent !== formatted) {
+        node.textContent = formatted;
+      }
+    });
+  }
+
+  return formatted;
+}
 
 export {
   isUserAuthenticated,
@@ -93,6 +138,7 @@ export {
   navigateTo,
   getCurrentView,
   initRouter,
+  isViewVisible,
   VIEW_IDS,
   SIDEBAR_ITEMS,
   setupSidebarNav,
@@ -108,12 +154,17 @@ export {
   syncStudentToLeaderboard,
   fetchLeaderboard,
   filterLeaderboardEntries,
+  renderLeaderboardFragment,
   purgeExpiredExamDeadlines,
   filterActiveExamDeadlines,
   isExamExpired,
   getDaysUntilExam,
   startMidnightExamPurgeScheduler,
   stopMidnightExamPurgeScheduler,
+  cachedDerivedKey,
+  getCachedDerivedKey,
+  clearDerivedKeyCache,
+  debouncePatchUserData,
   encryptPayload,
   decryptPayload,
   saveEncryptedStorageItem,

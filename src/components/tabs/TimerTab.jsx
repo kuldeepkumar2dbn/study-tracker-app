@@ -25,6 +25,7 @@ import {
   startLivePresenceHeartbeat,
   stopLivePresenceHeartbeat
 } from '../../../leaderboard.js';
+import { updateTimerDigitsOnly } from '../../../app.js';
 
 const PRESETS = [
   { id: 'pomo', name: '25m Focus', durationSec: 25 * 60, label: '25m' },
@@ -117,6 +118,7 @@ export default function TimerTab() {
           const diffSec = Math.max(0, Math.ceil((Number(endTimeStr) - Date.now()) / 1000));
           setTimeLeft(diffSec);
           localStorage.setItem('focus_seconds_left', String(diffSec));
+          updateTimerDigitsOnly(diffSec);
           if (diffSec <= 0) {
             clearInterval(timerRef.current);
             handleSessionComplete();
@@ -130,6 +132,7 @@ export default function TimerTab() {
             }
             const next = prev - 1;
             localStorage.setItem('focus_seconds_left', String(next));
+            updateTimerDigitsOnly(next);
             return next;
           });
         }
@@ -375,7 +378,11 @@ export default function TimerTab() {
             <span className="text-xs font-semibold uppercase tracking-wider text-theme-muted mb-1">
               {activePreset.name}
             </span>
-            <div className="font-display font-extrabold text-5xl sm:text-6xl text-theme-text font-mono-numbers tracking-tight">
+            <div 
+              id="timer-clock-digits" 
+              data-timer-digits 
+              className="font-display font-extrabold text-5xl sm:text-6xl text-theme-text font-mono-numbers tracking-tight"
+            >
               {formatTime(timeLeft)}
             </div>
             <span className="text-xs text-theme-accent font-semibold mt-2 max-w-[200px] truncate flex items-center gap-1">

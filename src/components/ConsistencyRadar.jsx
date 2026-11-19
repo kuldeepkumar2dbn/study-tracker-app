@@ -67,12 +67,37 @@ function getLiveUserData() {
   return { dailyActivity: {}, streak: 0 };
 }
 
-export default function ConsistencyRadar({ dailyActivity, streak, className = '' }) {
+export default function ConsistencyRadar({ dailyActivity, streak, className = '', isActiveView = undefined }) {
   const [hoveredBar, setHoveredBar] = useState(null);
   const [tick, setTick] = useState(0);
   const [liveEventActivity, setLiveEventActivity] = useState(null);
+  const [isViewActive, setIsViewActive] = useState(() => {
+    if (typeof isActiveView === 'boolean') return isActiveView;
+    if (typeof document === 'undefined') return true;
+    const viewEl = document.getElementById('view-dashboard');
+    return !viewEl || viewEl.classList.contains('active-view');
+  });
 
-  // Live Refresh Hook: Listens to focus timer, session logs, and "studyDataUpdated"
+  // Track view visibility so heavy chart bar calculations pause when off-screen
+  useEffect(() => {
+    if (typeof isActiveView === 'boolean') {
+      setIsViewActive(isActiveView);
+      return;
+    }
+    const handleViewCheck = (e) => {
+      const v = e?.detail?.view;
+      if (v) {
+        setIsViewActive(v === 'dashboard');
+      } else if (typeof document !== 'undefined') {
+        const viewEl = document.getElementById('view-dashboard');
+        setIsViewActive(!viewEl || viewEl.classList.contains('active-view'));
+      }
+    };
+    window.addEventListener('studyflow-view-changed', handleViewCheck);
+    return () => window.removeEventListener('studyflow-view-changed', handleViewCheck);
+  }, [isActiveView]);
+
+  // Live Refresh Hook: Listens to session completion and real activity events (never ticking on timer digits)
   useEffect(() => {
     const handleActivityChange = (e) => {
       if (e?.detail?.dailyActivity) {
@@ -83,7 +108,6 @@ export default function ConsistencyRadar({ dailyActivity, streak, className = ''
 
     window.addEventListener('studyDataUpdated', handleActivityChange);
     window.addEventListener('studyflow-activity-updated', handleActivityChange);
-    window.addEventListener('studyflow-timer-sync', handleActivityChange);
     window.addEventListener('studyflow-data-changed', handleActivityChange);
     window.addEventListener('studyflow-data-patched', handleActivityChange);
     window.addEventListener('storage', handleActivityChange);
@@ -91,7 +115,6 @@ export default function ConsistencyRadar({ dailyActivity, streak, className = ''
     return () => {
       window.removeEventListener('studyDataUpdated', handleActivityChange);
       window.removeEventListener('studyflow-activity-updated', handleActivityChange);
-      window.removeEventListener('studyflow-timer-sync', handleActivityChange);
       window.removeEventListener('studyflow-data-changed', handleActivityChange);
       window.removeEventListener('studyflow-data-patched', handleActivityChange);
       window.removeEventListener('storage', handleActivityChange);

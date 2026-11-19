@@ -917,9 +917,134 @@ export function isLivePresenceHeartbeatRunning() {
 }
 
 // Expose global bindings for vanilla script/console access
+/**
+ * Renders Top 100 Leaderboard rows using a single DocumentFragment batch DOM update.
+ * Off-screen rows benefit from content-visibility: auto, and appending in a single
+ * batch eliminates layout recalculations, delivering smooth 60fps scrolling.
+ *
+ * @param {Array} entries Array of student ranking objects
+ * @param {HTMLElement} [container] Target <tbody> element
+ * @param {Object} [options]
+ * @returns {DocumentFragment|null}
+ */
+export function renderLeaderboardFragment(entries = [], container = null, options = {}) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const fragment = document.createDocumentFragment();
+  const currentStudentId = options?.currentStudentId || getStudentId();
+
+  (entries || []).forEach((student) => {
+    if (!student) return;
+    const isMe = Boolean(student.isCurrentUser || student.studentId === currentStudentId);
+    const tr = document.createElement('tr');
+    tr.className = 'leaderboard-row transition-colors';
+    tr.setAttribute('data-rank', String(student.rank || ''));
+    tr.setAttribute('data-current-user', isMe ? 'true' : 'false');
+    tr.style.backgroundColor = isMe ? 'var(--bg-sidebar)' : 'transparent';
+    tr.style.borderBottom = '1px solid var(--border-glow)';
+    if (isMe) {
+      tr.style.outline = '2px solid var(--primary)';
+      tr.style.outlineOffset = '-2px';
+    }
+
+    // Rank (#)
+    const tdRank = document.createElement('td');
+    tdRank.className = 'py-3.5 px-4 font-mono-numbers font-extrabold text-sm';
+    const rankBadge = document.createElement('span');
+    rankBadge.className = 'inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-lg text-xs font-bold';
+    rankBadge.style.backgroundColor = isMe ? 'var(--primary)' : 'var(--bg-sidebar)';
+    rankBadge.style.color = isMe ? '#FFFFFF' : 'var(--text-main)';
+    rankBadge.style.border = '1px solid var(--border-glow)';
+    rankBadge.textContent = `#${student.rank}`;
+    tdRank.appendChild(rankBadge);
+    tr.appendChild(tdRank);
+
+    // Student Name + Badges
+    const tdName = document.createElement('td');
+    tdName.className = 'py-3.5 px-4';
+    const nameWrap = document.createElement('div');
+    nameWrap.className = 'flex flex-wrap items-center gap-2';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'font-bold text-sm font-mono-numbers truncate max-w-[200px] sm:max-w-xs';
+    nameSpan.style.color = 'var(--text-main)';
+    nameSpan.textContent = student.displayName || 'Anonymous Student';
+    nameWrap.appendChild(nameSpan);
+
+    if (isMe) {
+      const youBadge = document.createElement('span');
+      youBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider';
+      youBadge.style.backgroundColor = 'var(--primary)';
+      youBadge.style.color = '#FFFFFF';
+      youBadge.style.border = '1px solid var(--border-glow)';
+      youBadge.textContent = 'You';
+      nameWrap.appendChild(youBadge);
+    }
+
+    if (student.targetExam) {
+      const examBadge = document.createElement('span');
+      examBadge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold';
+      examBadge.style.backgroundColor = 'var(--bg-card)';
+      examBadge.style.border = '1px solid var(--border-glow)';
+      examBadge.style.color = 'var(--text-muted)';
+      examBadge.textContent = student.targetExam;
+      nameWrap.appendChild(examBadge);
+    }
+    tdName.appendChild(nameWrap);
+    tr.appendChild(tdName);
+
+    // Status / Current Subject
+    const tdStatus = document.createElement('td');
+    tdStatus.className = 'py-3.5 px-4';
+    const statusWrap = document.createElement('div');
+    statusWrap.className = 'flex items-center gap-2 text-xs font-medium';
+    statusWrap.style.color = 'var(--text-muted)';
+    if (student.isLiveNow) {
+      const liveDot = document.createElement('span');
+      liveDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+      statusWrap.appendChild(liveDot);
+      const liveText = document.createElement('span');
+      liveText.className = 'font-bold text-emerald-400';
+      liveText.textContent = student.activeSubject ? `Studying ${student.activeSubject}` : 'Studying Now';
+      statusWrap.appendChild(liveText);
+    } else {
+      const subjSpan = document.createElement('span');
+      subjSpan.textContent = student.activeSubject || student.targetExam || 'General Studies';
+      statusWrap.appendChild(subjSpan);
+    }
+    tdStatus.appendChild(statusWrap);
+    tr.appendChild(tdStatus);
+
+    // Streak
+    const tdStreak = document.createElement('td');
+    tdStreak.className = 'py-3.5 px-4 text-center font-mono-numbers font-bold text-xs';
+    tdStreak.style.color = student.streak > 0 ? 'var(--primary)' : 'var(--text-muted)';
+    tdStreak.textContent = student.streak > 0 ? `🔥 ${student.streak}d` : '0d';
+    tr.appendChild(tdStreak);
+
+    // Hours Logged
+    const tdHours = document.createElement('td');
+    tdHours.className = 'py-3.5 px-4 text-right font-mono-numbers font-bold text-sm';
+    tdHours.style.color = 'var(--text-main)';
+    tdHours.textContent = `${Number(student.studyHours || 0).toFixed(1)}h`;
+    tr.appendChild(tdHours);
+
+    fragment.appendChild(tr);
+  });
+
+  if (container && typeof container.appendChild === 'function') {
+    container.innerHTML = '';
+    container.appendChild(fragment);
+  }
+
+  return fragment;
+}
+
 if (typeof window !== 'undefined') {
   window.syncStudentToLeaderboard = syncStudentToLeaderboard;
   window.fetchLeaderboard = fetchLeaderboard;
+  window.renderLeaderboardFragment = renderLeaderboardFragment;
   window.startLivePresenceHeartbeat = startLivePresenceHeartbeat;
   window.stopLivePresenceHeartbeat = stopLivePresenceHeartbeat;
   window.StudyLeaderboard = {
@@ -937,6 +1062,7 @@ if (typeof window !== 'undefined') {
     fetchLeaderboard,
     getLiveStudyingCount,
     filterLeaderboardEntries,
+    renderLeaderboardFragment,
     startLivePresenceHeartbeat,
     stopLivePresenceHeartbeat,
     isLivePresenceHeartbeatRunning
@@ -960,6 +1086,7 @@ export default {
   fetchLeaderboard,
   getLiveStudyingCount,
   filterLeaderboardEntries,
+  renderLeaderboardFragment,
   startLivePresenceHeartbeat,
   stopLivePresenceHeartbeat,
   isLivePresenceHeartbeatRunning

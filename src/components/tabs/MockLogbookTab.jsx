@@ -60,7 +60,7 @@ function getInitialMockTests() {
   return [];
 }
 
-export default function MockLogbookTab({ onNavigateTab }) {
+export default function MockLogbookTab({ onNavigateTab, isActiveView = true }) {
   const { subjects, addTopic } = useData();
   const { isAuthenticated } = useAuth();
   const { theme } = useTheme();
@@ -70,6 +70,30 @@ export default function MockLogbookTab({ onNavigateTab }) {
   const [toastMessage, setToastMessage] = useState(null);
   const [expandedTestId, setExpandedTestId] = useState(null);
   const [hoveredTrendItem, setHoveredTrendItem] = useState(null);
+  const [isViewActive, setIsViewActive] = useState(() => {
+    if (typeof isActiveView === 'boolean') return isActiveView;
+    if (typeof document === 'undefined') return true;
+    const viewEl = document.getElementById('view-mock-logbook');
+    return !viewEl || viewEl.classList.contains('active-view');
+  });
+
+  useEffect(() => {
+    if (typeof isActiveView === 'boolean') {
+      setIsViewActive(isActiveView);
+      return;
+    }
+    const handleViewCheck = (e) => {
+      const v = e?.detail?.view;
+      if (v) {
+        setIsViewActive(v === 'mock-logbook');
+      } else if (typeof document !== 'undefined') {
+        const viewEl = document.getElementById('view-mock-logbook');
+        setIsViewActive(!viewEl || viewEl.classList.contains('active-view'));
+      }
+    };
+    window.addEventListener('studyflow-view-changed', handleViewCheck);
+    return () => window.removeEventListener('studyflow-view-changed', handleViewCheck);
+  }, [isActiveView]);
 
   // Re-render when themeChanged or studyflow-theme-changed fires
   const [, setForceThemeRerender] = useState(0);
@@ -1073,7 +1097,7 @@ export default function MockLogbookTab({ onNavigateTab }) {
             return (
               <div 
                 key={test.id}
-                className="p-4 rounded-xl bg-theme-surface/70 border border-theme-border hover:border-theme-accent/40 transition-all space-y-3"
+                className="mock-history-item p-4 rounded-xl bg-theme-surface/70 border border-theme-border hover:border-theme-accent/40 transition-all space-y-3"
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">

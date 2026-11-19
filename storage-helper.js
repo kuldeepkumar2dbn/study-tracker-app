@@ -222,6 +222,40 @@ export function patchUserData(userId, updates = {}) {
   return updated;
 }
 
+if (typeof window !== 'undefined') {
+  window.patchUserData = patchUserData;
+}
+
+let _pendingBatchedStorageUpdates = {};
+let _batchStoragePatchTimer = null;
+let _batchStorageResolvers = [];
+
+/**
+ * Debounces localStorage + Google Drive patchUserData writes by 500ms
+ * so rapid clicks (like logging tasks or adjusting sliders) batch into a single background write.
+ */
+export function debouncePatchUserData(userId, updates = {}, delay = 500) {
+  _pendingBatchedStorageUpdates = { ..._pendingBatchedStorageUpdates, ...updates };
+
+  return new Promise((resolve) => {
+    _batchStorageResolvers.push(resolve);
+
+    if (_batchStoragePatchTimer) {
+      clearTimeout(_batchStoragePatchTimer);
+    }
+
+    _batchStoragePatchTimer = setTimeout(() => {
+      const mergedUpdates = { ..._pendingBatchedStorageUpdates };
+      _pendingBatchedStorageUpdates = {};
+      const currentResolvers = [..._batchStorageResolvers];
+      _batchStorageResolvers = [];
+
+      const result = patchUserData(userId, mergedUpdates);
+      currentResolvers.forEach((res) => res(result));
+    }, delay);
+  });
+}
+
 // Section-specific convenience helpers
 export function saveRoutine(userId, newRoutine) {
   return patchUserData(userId, { routine: newRoutine });

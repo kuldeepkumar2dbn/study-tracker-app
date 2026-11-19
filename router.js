@@ -173,6 +173,21 @@ export function switchView(targetView, updateHash = true) {
   return normalized;
 }
 
+/**
+ * Returns whether a given view container is currently visible with .active-view.
+ * Used for lazy chart rendering and targeted updates.
+ *
+ * @param {string} viewId
+ * @returns {boolean}
+ */
+export function isViewVisible(viewId) {
+  if (typeof document === 'undefined') return true;
+  const canonical = normalizeViewName(viewId);
+  const el = document.getElementById(`view-${canonical}`) || document.querySelector(`[data-view="${canonical}"]`);
+  if (!el) return getCurrentView() === canonical;
+  return el.classList.contains('active-view');
+}
+
 export function navigateTo(targetView) {
   return switchView(targetView, true);
 }
@@ -190,10 +205,12 @@ export function initRouter() {
   window.switchView = switchView;
   window.navigateToView = switchView;
   window.getCurrentView = getCurrentView;
+  window.isViewVisible = isViewVisible;
   window.router = {
     switchView,
     navigateTo,
     getCurrentView,
+    isViewVisible,
     VIEW_IDS,
     FEATURE_NAME_MAP
   };
@@ -243,6 +260,7 @@ export default {
   getCurrentView,
   switchView,
   navigateTo,
+  isViewVisible,
   initRouter
 };
 

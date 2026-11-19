@@ -83,7 +83,7 @@ if (typeof window !== 'undefined') {
   window.applySelectedTheme = applySelectedTheme;
 }
 
-export default function DashboardTab({ onNavigateTab }) {
+export default function DashboardTab({ onNavigateTab, isActiveView = true }) {
   const navigate = (tab) => {
     if (onNavigateTab) {
       onNavigateTab(tab);
@@ -705,6 +705,7 @@ export default function DashboardTab({ onNavigateTab }) {
         className="w-full max-w-none mx-0"
         dailyActivity={dailyActivity} 
         streak={safeStreakData.streakCount} 
+        isActiveView={isActiveView}
       />
 
       {/* Middle Grid: Routine Time-Blocks Checklist + Today's Revision Queue */}

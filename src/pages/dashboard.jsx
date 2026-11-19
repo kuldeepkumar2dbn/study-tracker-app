@@ -64,7 +64,7 @@ export function SPAApp() {
         className={`app-view w-full max-w-none mx-0 ${activeView === 'dashboard' ? 'active-view' : ''}`}
         data-view="dashboard"
       >
-        <DashboardTab onNavigateTab={handleNavigate} />
+        <DashboardTab onNavigateTab={handleNavigate} isActiveView={activeView === 'dashboard'} />
       </div>
 
       {/* 2. Daily Routine View */}
@@ -118,7 +118,7 @@ export function SPAApp() {
         className={`app-view w-full max-w-none mx-0 ${activeView === 'mock-logbook' ? 'active-view' : ''}`}
         data-view="mock-logbook"
       >
-        <MockLogbookTab onNavigateTab={handleNavigate} />
+        <MockLogbookTab onNavigateTab={handleNavigate} isActiveView={activeView === 'mock-logbook'} />
       </div>
 
       {/* Real-Time Student Leaderboard View */}

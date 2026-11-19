@@ -1264,7 +1264,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
                       ref={isMe ? currentUserRowRef : undefined}
                       data-rank={student.rank}
                       data-current-user={isMe ? 'true' : 'false'}
-                      className="transition-colors"
+                      className="leaderboard-row transition-colors"
                       style={{
                         backgroundColor: isMe ? 'var(--bg-sidebar)' : 'transparent',
                         borderBottom: '1px solid var(--border-glow)',

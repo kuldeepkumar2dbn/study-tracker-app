@@ -15,6 +15,40 @@ export const PBKDF2_ITERATIONS = 100000;
 export const SALT_LENGTH_BYTES = 16;
 export const IV_LENGTH_BYTES = 12;
 
+export let cachedDerivedKey = null;
+export const derivedKeyCache = new Map();
+const sessionSaltCache = new Map();
+
+/**
+ * Returns the currently active cached PBKDF2-derived CryptoKey from module memory.
+ */
+export function getCachedDerivedKey() {
+  return cachedDerivedKey;
+}
+
+/**
+ * Clears the session derived key and salt caches (used for tests and user sign-out).
+ */
+export function clearDerivedKeyCache() {
+  cachedDerivedKey = null;
+  derivedKeyCache.clear();
+  sessionSaltCache.clear();
+}
+
+/**
+ * Returns or generates a stable session salt for a given secret so subsequent encryptPayload
+ * calls reuse the PBKDF2-derived CryptoKey from memory while still generating fresh 12-byte random IVs.
+ */
+export function getSessionSalt(secret = getDefaultVaultSecret()) {
+  const norm = String(secret || '').trim();
+  if (!sessionSaltCache.has(norm)) {
+    const cryptoApi = getCryptoApi();
+    const newSalt = cryptoApi.getRandomValues(new Uint8Array(SALT_LENGTH_BYTES));
+    sessionSaltCache.set(norm, newSalt);
+  }
+  return sessionSaltCache.get(norm);
+}
+
 const MAGIC_BYTES = [0x53, 0x56, 0x31]; // "SV1" (StudyVault v1)
 const HEADER_LENGTH = MAGIC_BYTES.length + SALT_LENGTH_BYTES + IV_LENGTH_BYTES; // 31 bytes
 
@@ -69,12 +103,22 @@ function base64ToBytes(base64Str) {
 
 /**
  * Derives a 256-bit AES-GCM CryptoKey from a secret string and salt using PBKDF2-SHA256.
+ * Caches derived keys in module memory (cachedDerivedKey) to eliminate 100,000 PBKDF2 iterations on repeated calls.
  */
 async function deriveAes256Key(secret, salt) {
   const cryptoApi = getCryptoApi();
   const normalizedSecret = String(secret || '').trim();
   if (!normalizedSecret) {
     throw new Error('Encryption secret is required.');
+  }
+
+  const saltKey = bytesToBase64(salt);
+  const cacheKey = `${normalizedSecret}:${saltKey}`;
+
+  if (derivedKeyCache.has(cacheKey)) {
+    const key = derivedKeyCache.get(cacheKey);
+    cachedDerivedKey = key;
+    return key;
   }
 
   const keyMaterial = await cryptoApi.subtle.importKey(
@@ -85,7 +129,7 @@ async function deriveAes256Key(secret, salt) {
     ['deriveKey']
   );
 
-  return cryptoApi.subtle.deriveKey(
+  const derivedKey = await cryptoApi.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt,
@@ -100,6 +144,10 @@ async function deriveAes256Key(secret, salt) {
     false,
     ['encrypt', 'decrypt']
   );
+
+  derivedKeyCache.set(cacheKey, derivedKey);
+  cachedDerivedKey = derivedKey;
+  return derivedKey;
 }
 
 /**
@@ -169,6 +217,8 @@ export function isEncryptedPayload(value) {
 
 /**
  * Encrypts any JSON-serializable object/value using PBKDF2 + AES-256-GCM with a random 12-byte IV.
+ * Reuses the cached session key in memory to eliminate PBKDF2 lag while generating a fresh random IV
+ * for each write to maintain cryptographic uniqueness.
  *
  * @param {any} dataObj
  * @param {string} [secret]
@@ -176,7 +226,7 @@ export function isEncryptedPayload(value) {
  */
 export async function encryptPayload(dataObj, secret = getDefaultVaultSecret()) {
   const cryptoApi = getCryptoApi();
-  const salt = cryptoApi.getRandomValues(new Uint8Array(SALT_LENGTH_BYTES));
+  const salt = getSessionSalt(secret);
   const iv = cryptoApi.getRandomValues(new Uint8Array(IV_LENGTH_BYTES));
   const aesKey = await deriveAes256Key(secret, salt);
 
@@ -396,6 +446,56 @@ export async function migrateSensitiveLocalStorageToVault(secret = getDefaultVau
   return { migrated };
 }
 
+let _pendingBatchedPatchUpdates = {};
+let _batchPatchTimer = null;
+let _batchPatchResolvers = [];
+
+/**
+ * Debounces localStorage + Google Drive patchUserData writes by 500ms
+ * so rapid clicks (like logging tasks or adjusting sliders) batch into a single background write.
+ *
+ * @param {string} userId
+ * @param {Object} updates
+ * @param {number} [delay=500]
+ * @returns {Promise<Object>}
+ */
+export function debouncePatchUserData(userId, updates = {}, delay = 500) {
+  _pendingBatchedPatchUpdates = { ..._pendingBatchedPatchUpdates, ...updates };
+
+  return new Promise((resolve) => {
+    _batchPatchResolvers.push(resolve);
+
+    if (_batchPatchTimer) {
+      clearTimeout(_batchPatchTimer);
+    }
+
+    _batchPatchTimer = setTimeout(async () => {
+      const mergedUpdates = { ..._pendingBatchedPatchUpdates };
+      _pendingBatchedPatchUpdates = {};
+      const currentResolvers = [..._batchPatchResolvers];
+      _batchPatchResolvers = [];
+
+      let result = null;
+      try {
+        if (typeof globalThis !== 'undefined' && typeof globalThis.patchUserData === 'function') {
+          result = globalThis.patchUserData(userId, mergedUpdates);
+        } else if (typeof window !== 'undefined' && typeof window.patchUserData === 'function') {
+          result = window.patchUserData(userId, mergedUpdates);
+        } else {
+          const mod = await import('./storage-helper.js').catch(() => null);
+          if (mod && typeof mod.patchUserData === 'function') {
+            result = mod.patchUserData(userId, mergedUpdates);
+          }
+        }
+      } catch (err) {
+        console.warn('Debounced patchUserData batching error:', err);
+      }
+
+      currentResolvers.forEach((res) => res(result));
+    }, delay);
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.CryptoVault = {
     VAULT_VERSION,
@@ -403,6 +503,11 @@ if (typeof window !== 'undefined') {
     IV_LENGTH_BYTES,
     SENSITIVE_STORAGE_KEYS,
     SENSITIVE_SYNC_FIELDS,
+    get cachedDerivedKey() { return cachedDerivedKey; },
+    getCachedDerivedKey,
+    clearDerivedKeyCache,
+    getSessionSalt,
+    debouncePatchUserData,
     getDefaultVaultSecret,
     isEncryptedPayload,
     encryptPayload,
@@ -422,6 +527,11 @@ export default {
   IV_LENGTH_BYTES,
   SENSITIVE_STORAGE_KEYS,
   SENSITIVE_SYNC_FIELDS,
+  get cachedDerivedKey() { return cachedDerivedKey; },
+  getCachedDerivedKey,
+  clearDerivedKeyCache,
+  getSessionSalt,
+  debouncePatchUserData,
   getDefaultVaultSecret,
   isEncryptedPayload,
   encryptPayload,

@@ -28,6 +28,7 @@ import { soundEngine } from '../utils/audio';
 import { celebrateTaskCompletion } from '../utils/confetti';
 import { canAccessAdmin, AdminAuth, TELEMETRY_URL } from '../../admin-config';
 import { syncStudentToLeaderboard, stopLivePresenceHeartbeat } from '../../leaderboard.js';
+import { updateTimerDigitsOnly } from '../../app.js';
 import FeedbackModal from './FeedbackModal';
 import { logFeatureUse } from '../utils/telemetry';
 
@@ -243,6 +244,7 @@ export default function CollapsibleSidebar({
           setIsTimerRunning(true);
           setTimerSecondsLeft(diffSec);
           localStorage.setItem('focus_seconds_left', String(diffSec));
+          updateTimerDigitsOnly(diffSec);
 
           // When timer completes in background
           if (diffSec <= 0) {
@@ -580,7 +582,7 @@ export default function CollapsibleSidebar({
                               }`}
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                              <span>{formatTimerClock(timerSecondsLeft)}</span>
+                              <span id="sidebar-timer-digits" data-timer-digits>{formatTimerClock(timerSecondsLeft)}</span>
                             </div>
                           )}
 
@@ -659,7 +661,7 @@ export default function CollapsibleSidebar({
                         <div className="hidden lg:group-hover:flex absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-theme-surface/95 border border-theme-border shadow-xl text-xs font-medium text-theme-text whitespace-nowrap z-50 pointer-events-none animate-fadeIn">
                           <span>{item.tooltip}</span>
                           {isTimer && isTimerRunning && (
-                            <span className="ml-1.5 font-mono-numbers text-violet-400 font-bold">
+                            <span id="sidebar-compact-timer-digits" data-timer-digits className="ml-1.5 font-mono-numbers text-violet-400 font-bold">
                               ({formatTimerClock(timerSecondsLeft)})
                             </span>
                           )}
