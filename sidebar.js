@@ -135,16 +135,152 @@ export function syncSidebarGuestBadges(container = typeof document !== 'undefine
   });
 }
 
+export function isMobileSidebarOpen(container = typeof document !== 'undefined' ? document : null) {
+  if (!container) return false;
+  const sidebar = container.querySelector ? container.querySelector('#app-sidebar, .app-sidebar') : null;
+  if (!sidebar) return false;
+  return (
+    sidebar.classList.contains('is-open') ||
+    sidebar.classList.contains('mobile-open') ||
+    sidebar.getAttribute('aria-hidden') === 'false' ||
+    sidebar.style.transform === 'translateX(0px)' ||
+    sidebar.style.transform === 'translateX(0)'
+  );
+}
+
+export function openMobileSidebar(container = typeof document !== 'undefined' ? document : null) {
+  const root = container || (typeof document !== 'undefined' ? document : null);
+  if (!root || typeof root.querySelector !== 'function') return;
+  const sidebar = root.querySelector('#app-sidebar, .app-sidebar');
+  let backdrop = root.querySelector('#sidebar-backdrop, .sidebar-backdrop');
+
+  if (sidebar && sidebar.classList) {
+    sidebar.classList.add('is-open', 'mobile-open');
+    if (sidebar.setAttribute) sidebar.setAttribute('aria-hidden', 'false');
+    if (sidebar.style) sidebar.style.transform = 'translateX(0)';
+  }
+
+  if (!backdrop && typeof document !== 'undefined' && document.createElement) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'sidebar-backdrop';
+    backdrop.className = 'sidebar-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300';
+    if (document.body && document.body.appendChild) {
+      document.body.appendChild(backdrop);
+    }
+    backdrop.addEventListener('click', () => closeMobileSidebar(root));
+  }
+
+  if (backdrop && backdrop.classList) {
+    backdrop.classList.remove('pointer-events-none', 'opacity-0');
+    backdrop.classList.add('pointer-events-auto', 'opacity-100');
+    if (backdrop.style) backdrop.style.display = 'block';
+  }
+
+  if (typeof document !== 'undefined' && document.body && document.body.classList) {
+    document.body.classList.add('mobile-drawer-open');
+  }
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('studyflow-mobile-sidebar-toggle', { detail: { open: true } }));
+  }
+}
+
+export function closeMobileSidebar(container = typeof document !== 'undefined' ? document : null) {
+  const root = container || (typeof document !== 'undefined' ? document : null);
+  if (!root || typeof root.querySelector !== 'function') return;
+  const sidebar = root.querySelector('#app-sidebar, .app-sidebar');
+  const backdrop = root.querySelector('#sidebar-backdrop, .sidebar-backdrop');
+
+  if (sidebar && sidebar.classList) {
+    sidebar.classList.remove('is-open', 'mobile-open');
+    if (sidebar.setAttribute) sidebar.setAttribute('aria-hidden', 'true');
+    if (sidebar.style) {
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        sidebar.style.transform = 'translateX(-100%)';
+      } else {
+        sidebar.style.transform = '';
+      }
+    }
+  }
+
+  if (backdrop && backdrop.classList) {
+    backdrop.classList.remove('pointer-events-auto', 'opacity-100');
+    backdrop.classList.add('pointer-events-none', 'opacity-0');
+    if (backdrop.style) backdrop.style.display = 'none';
+  }
+
+  if (typeof document !== 'undefined' && document.body && document.body.classList) {
+    document.body.classList.remove('mobile-drawer-open');
+  }
+
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('studyflow-mobile-sidebar-toggle', { detail: { open: false } }));
+  }
+}
+
+export function toggleMobileSidebar(container = typeof document !== 'undefined' ? document : null) {
+  if (isMobileSidebarOpen(container)) {
+    closeMobileSidebar(container);
+  } else {
+    openMobileSidebar(container);
+  }
+}
+
+export function setupMobileSidebar(container = typeof document !== 'undefined' ? document : null) {
+  if (!container || typeof container.querySelector !== 'function') return;
+
+  const toggleBtn = container.querySelector('#sidebar-toggle-btn, .sidebar-hamburger-btn, [data-sidebar-toggle]');
+  if (toggleBtn && !toggleBtn._mobileToggleBound) {
+    toggleBtn._mobileToggleBound = true;
+    toggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleMobileSidebar(container);
+    });
+  }
+
+  const backdrop = container.querySelector('#sidebar-backdrop, .sidebar-backdrop');
+  if (backdrop && !backdrop._mobileBackdropBound) {
+    backdrop._mobileBackdropBound = true;
+    backdrop.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeMobileSidebar(container);
+    });
+  }
+
+  if (typeof window !== 'undefined' && !window._sidebarResizeBound) {
+    window._sidebarResizeBound = true;
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 768) {
+        closeMobileSidebar(container);
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isMobileSidebarOpen(container)) {
+        closeMobileSidebar(container);
+      }
+    });
+  }
+}
+
 export function setupSidebarNav(container = document) {
   if (typeof container === 'undefined' || !container.querySelectorAll) return;
 
-  const triggers = container.querySelectorAll('[data-target-view]');
+  // Initialize mobile sidebar toggle and backdrop listeners
+  setupMobileSidebar(container);
+
+  const triggers = container.querySelectorAll('[data-target-view], #app-sidebar a, .app-sidebar a');
   triggers.forEach((btn) => {
     if (btn._spaBound) return;
     btn._spaBound = true;
 
     btn.addEventListener('click', (e) => {
-      const targetView = btn.getAttribute('data-target-view');
+      // Auto-close mobile drawer when any sidebar link is clicked
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        closeMobileSidebar(container);
+      }
+
+      const targetView = btn.getAttribute('data-target-view') || (btn.getAttribute('href') || '').replace(/^#\/?/, '');
       if (targetView) {
         e.preventDefault();
         switchView(targetView);
@@ -179,5 +315,10 @@ export default {
   getSidebarGuestState,
   syncSidebarGuestBadges,
   setupSidebarNav,
+  setupMobileSidebar,
+  openMobileSidebar,
+  closeMobileSidebar,
+  toggleMobileSidebar,
+  isMobileSidebarOpen,
   updateActiveSidebarItem
 };

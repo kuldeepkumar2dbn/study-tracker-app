@@ -26,6 +26,11 @@ import {
   getSidebarGuestState,
   syncSidebarGuestBadges,
   setupSidebarNav,
+  setupMobileSidebar,
+  openMobileSidebar,
+  closeMobileSidebar,
+  toggleMobileSidebar,
+  isMobileSidebarOpen,
   updateActiveSidebarItem
 } from './sidebar.js';
 import { TELEMETRY_URL } from './admin-config.js';
@@ -91,6 +96,11 @@ export {
   VIEW_IDS,
   SIDEBAR_ITEMS,
   setupSidebarNav,
+  setupMobileSidebar,
+  openMobileSidebar,
+  closeMobileSidebar,
+  toggleMobileSidebar,
+  isMobileSidebarOpen,
   updateActiveSidebarItem,
   startLivePresenceHeartbeat,
   stopLivePresenceHeartbeat,

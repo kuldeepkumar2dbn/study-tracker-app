@@ -247,22 +247,22 @@ export function SharedHeader({
   const formattedDemoTimer = `${String(demoMins).padStart(2, '0')}:${String(demoSecs).padStart(2, '0')}`;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200">
-      <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+    <header className="sticky top-0 z-40 w-full border-b border-theme-border bg-theme-bg/85 backdrop-blur-md transition-colors duration-200 shrink-0">
+      <div className="w-full px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
         
         {/* Left: Sidebar Toggle, Brand Logo & Compact Tools Popover */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
           <button
             id="sidebar-toggle-btn"
             onClick={onToggleSidebar}
             title={isSidebarExpanded ? "Collapse Sidebar (64px rail)" : "Expand Sidebar (250px drawer)"}
             aria-label="Toggle navigation sidebar"
             aria-expanded={isSidebarExpanded}
-            className="p-2 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-cardHover border border-theme-border/60 transition-all cursor-pointer flex items-center justify-center active:scale-95"
+            className="p-1.5 sm:p-2 rounded-xl text-theme-muted hover:text-theme-text hover:bg-theme-cardHover border border-theme-border/60 transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
           >
             <Menu className="w-4 h-4" />
           </button>
-          <a href="/index.html" className="focus:outline-none flex items-center">
+          <a href="/index.html" className="focus:outline-none flex items-center shrink-0">
             <Logo />
           </a>
 
@@ -362,7 +362,7 @@ export function SharedHeader({
         </div>
 
         {/* Top-Right Header Action Group (Exact Order): 1. Sync Status Pill, 2. Theme Dropdown, 3. Sign In/Out Button (#header-auth-btn), 4. My Profile Pill (#header-profile-pill) */}
-        <div id="header-right-actions" className="flex items-center gap-2 sm:gap-2.5 ml-auto">
+        <div id="header-right-actions" className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0">
           
           {/* 1. Compact Sync Status Pill */}
           {isAuthenticated && !isDemo ? (
@@ -392,9 +392,10 @@ export function SharedHeader({
                 type="button"
                 onClick={handleTriggerCloudAndLeaderboardSync}
                 title={`Google Drive Synced (${relativeSyncTime || 'Just now'}). Click to sync now.`}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 hover:bg-emerald-500/15 text-xs font-bold shadow-sm cursor-pointer transition-all active:scale-95"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 hover:bg-emerald-500/15 text-xs font-bold shadow-sm cursor-pointer transition-all active:scale-95 shrink-0"
               >
-                <span>🟢 Synced</span>
+                <span className="hidden sm:inline">🟢 Synced</span>
+                <span className="sm:hidden">🟢</span>
               </button>
             ) : syncStatus === 'needs_auth' ? (
               <button
@@ -410,9 +411,9 @@ export function SharedHeader({
                   }
                 }}
                 title="Click to grant Google Drive permission for cloud sync"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 text-xs font-bold shadow-sm cursor-pointer transition-all"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 text-xs font-bold shadow-sm cursor-pointer transition-all shrink-0"
               >
-                <span>🟡 Sync Auth</span>
+                <span>🟡<span className="hidden sm:inline"> Sync Auth</span></span>
               </button>
             ) : (
               <button
@@ -420,9 +421,9 @@ export function SharedHeader({
                 type="button"
                 onClick={onOpenDriveModal}
                 title="Offline or local only — progress saved locally to your device"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-theme-border bg-theme-surface hover:bg-theme-cardHover text-xs font-semibold text-theme-muted hover:text-theme-text shadow-sm cursor-pointer transition-all"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-theme-border bg-theme-surface hover:bg-theme-cardHover text-xs font-semibold text-theme-muted hover:text-theme-text shadow-sm cursor-pointer transition-all shrink-0"
               >
-                <span>🟢 Local</span>
+                <span>🟢<span className="hidden sm:inline"> Local</span></span>
               </button>
             )
           ) : (
@@ -437,9 +438,9 @@ export function SharedHeader({
                 }
               }}
               title={isDemo ? `Demo session (${formattedDemoTimer})` : 'Saved locally — click to connect Google Drive sync'}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-theme-border bg-theme-surface hover:bg-theme-cardHover text-xs font-semibold text-theme-text shadow-sm cursor-pointer transition-all active:scale-95"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-theme-border bg-theme-surface hover:bg-theme-cardHover text-xs font-semibold text-theme-text shadow-sm cursor-pointer transition-all active:scale-95 shrink-0"
             >
-              <span>{isDemo ? `⏱️ ${formattedDemoTimer}` : '🟢 Synced'}</span>
+              <span>{isDemo ? `⏱️ ${formattedDemoTimer}` : (<><span className="hidden sm:inline">🟢 Synced</span><span className="sm:hidden">🟢</span></>)}</span>
             </button>
           )}
 
@@ -452,18 +453,18 @@ export function SharedHeader({
                 setThemeDropdownOpen(!themeDropdownOpen);
                 setToolsPopoverOpen(false);
               }}
-              className="top-action-link flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-medium text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95 shadow-sm focus:outline-none cursor-pointer"
+              className="top-action-link flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-theme-surface hover:bg-theme-cardHover border border-theme-border text-xs font-medium text-theme-text transition-all duration-200 hover:brightness-105 active:scale-95 shadow-sm focus:outline-none cursor-pointer shrink-0"
               aria-label="Toggle Theme"
               title={`Active Theme: ${currentThemeMeta.name}`}
             >
               {(() => {
                 const ThemeIcon = currentThemeMeta.icon || Sparkles;
-                return <ThemeIcon className="w-3.5 h-3.5 text-theme-accent" />;
+                return <ThemeIcon className="w-3.5 h-3.5 text-theme-accent shrink-0" />;
               })()}
               <span className="hidden md:inline font-semibold">
                 {currentThemeMeta.name}
               </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-theme-muted transition-transform duration-200 ${themeDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-theme-muted transition-transform duration-200 shrink-0 ${themeDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {themeDropdownOpen && (
@@ -536,7 +537,7 @@ export function SharedHeader({
             data-auth-state={isGoogleAuthenticated ? 'signed-in' : 'signed-out'}
             onClick={handleHeaderAuthClick}
             title={isGoogleAuthenticated ? 'Sign out of your Google account' : 'Sign in with Google'}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all duration-200 active:scale-95 focus:outline-none cursor-pointer disabled:opacity-60 ${
+            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all duration-200 active:scale-95 focus:outline-none cursor-pointer disabled:opacity-60 shrink-0 ${
               isGoogleAuthenticated ? '' : 'btn-primary-action'
             }`}
             style={
@@ -560,7 +561,7 @@ export function SharedHeader({
             ) : (
               <LogIn className="w-3.5 h-3.5 shrink-0" />
             )}
-            <span data-header-auth-label="true">
+            <span data-header-auth-label="true" className="whitespace-nowrap">
               {isHeaderAuthLoading ? 'Signing In...' : (isGoogleAuthenticated ? 'Sign Out' : 'Sign In')}
             </span>
           </button>
@@ -572,7 +573,7 @@ export function SharedHeader({
             data-target-view="profile"
             data-auth-state={isGoogleAuthenticated ? 'signed-in' : 'signed-out'}
             onClick={handleOpenProfileView}
-            className="flex items-center space-x-2 px-2.5 py-1 rounded-xl text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer"
+            className="flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-2.5 py-1 rounded-xl text-xs shadow-sm transition-all active:scale-95 focus:outline-none cursor-pointer shrink-0"
             style={{
               backgroundColor: 'var(--bg-card)',
               border: '1.5px solid var(--border-glow)',
@@ -586,7 +587,7 @@ export function SharedHeader({
           >
             <div
               id="header-profile-monogram"
-              className="w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px] shrink-0"
+              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full font-bold flex items-center justify-center text-[9px] sm:text-[10px] shrink-0"
               style={{
                 backgroundColor: 'var(--primary)',
                 color: '#FFFFFF',
@@ -599,7 +600,7 @@ export function SharedHeader({
             </div>
             <span
               data-header-profile-label="true"
-              className="font-bold font-mono-numbers truncate max-w-[120px]"
+              className="font-bold font-mono-numbers truncate max-w-[90px] md:max-w-[120px]"
               style={{ color: 'var(--text-main)' }}
             >
               {isGoogleAuthenticated ? (studentProfile?.handle || '@focused_scholar') : 'Guest Demo'}
@@ -986,7 +987,8 @@ export function AppLayout({ activeTabId, children }) {
 
   return (
     <div 
-      className="min-h-screen flex flex-col w-full bg-theme-bg text-theme-text transition-colors duration-200"
+      className="app-shell min-h-screen flex flex-col w-full bg-theme-bg text-theme-text transition-colors duration-200 overflow-hidden"
+      style={{ height: '100dvh', maxHeight: '100dvh', overflow: 'hidden' }}
       data-active-feature={currentTabId || 'dashboard'}
     >
       {/* SHA-256 App PIN Lock-Screen Overlay (blocks workspace on load when PIN is enabled) */}
@@ -1000,119 +1002,119 @@ export function AppLayout({ activeTabId, children }) {
           <div className="mesh-blob blob-3" />
         </div>
       )}
-      
-      {/* Top Utility Header */}
-      <SharedHeader 
-        onOpenDriveModal={() => setIsDriveModalOpen(true)}
-        onOpenLinksModal={() => setIsLinksModalOpen(true)}
+
+      {/* Left Collapsible Sidebar Navigation Rail across all pages - Pinned at height 100dvh */}
+      <CollapsibleSidebar 
+        activeTabId={currentTabId} 
+        isExpanded={isSidebarExpanded} 
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => {
+          setIsMobileSidebarOpen(false);
+          if (typeof document !== 'undefined') document.body.style.overflow = '';
+        }}
+        onToggle={handleToggleSidebar}
         onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
-        onToggleSidebar={handleToggleSidebar}
-        isSidebarExpanded={isSidebarExpanded}
+        onSelectTab={(tab) => setCurrentTabId(tab)}
       />
 
-      {/* Access Denied Alert Toast */}
-      {accessDeniedAlert && (
-        <div className="w-full bg-rose-600 text-white py-2.5 px-4 shadow-lg flex items-center justify-between text-xs sm:text-sm font-semibold animate-fadeIn z-50">
-          <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <ShieldAlert className="w-4 h-4 shrink-0 text-white" />
-              <span>{accessDeniedAlert}</span>
-            </div>
-            <button 
-              onClick={() => setAccessDeniedAlert(null)}
-              className="p-1 hover:bg-white/20 rounded cursor-pointer transition-colors"
-              aria-label="Dismiss access alert"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Global Announcement Banner across all pages */}
-      {announcement && !isAnnouncementDismissed && (
-        <aside 
-          role="alert" 
-          aria-label="Platform Announcement"
-          className={`w-full py-2 px-4 shadow-md backdrop-blur-md flex items-center justify-between text-xs sm:text-sm font-medium z-40 transition-all border-b ${
-            announcement.urgency === 'warning'
-              ? 'bg-gradient-to-r from-rose-900/90 via-amber-900/80 to-rose-900/90 border-rose-500/40 text-rose-100'
-              : announcement.urgency === 'motivational'
-              ? 'bg-gradient-to-r from-emerald-900/90 via-teal-900/80 to-emerald-900/90 border-emerald-500/40 text-emerald-100'
-              : 'bg-gradient-to-r from-indigo-900/90 via-blue-900/80 to-indigo-900/90 border-indigo-500/40 text-indigo-100'
-          }`}
-        >
-          <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              {announcement.urgency === 'warning' ? (
-                <span className="p-1 rounded-lg bg-rose-500/25 text-rose-300 shrink-0"><AlertTriangle className="w-4 h-4" /></span>
-              ) : announcement.urgency === 'motivational' ? (
-                <span className="p-1 rounded-lg bg-emerald-500/25 text-emerald-300 shrink-0"><Sparkles className="w-4 h-4" /></span>
-              ) : (
-                <span className="p-1 rounded-lg bg-blue-500/25 text-blue-300 shrink-0"><Bell className="w-4 h-4" /></span>
-              )}
-              <div className="flex items-center gap-2 truncate">
-                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
-                  announcement.urgency === 'warning'
-                    ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40'
-                    : announcement.urgency === 'motivational'
-                    ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
-                    : 'bg-indigo-500/30 text-indigo-200 border border-indigo-500/40'
-                }`}>
-                  {announcement.urgency === 'warning' ? 'Exam Warning' : announcement.urgency === 'motivational' ? 'Motivational' : 'Notice'}
-                </span>
-                <span className="truncate font-medium">{announcement.text}</span>
-              </div>
-            </div>
-            <button
-              onClick={handleDismissAnnouncement}
-              title="Dismiss announcement"
-              className="p-1 rounded-lg hover:bg-white/20 transition-colors shrink-0 text-white/80 hover:text-white cursor-pointer"
-              aria-label="Close announcement"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* Maintenance Mode Super Admin Warning Indicator */}
-      {killswitches.maintenanceMode && isAdminUser && (
-        <div className="w-full bg-amber-500/15 border-b border-amber-500/30 text-amber-300 py-1.5 px-4 text-xs font-semibold flex items-center justify-center gap-2 z-40 select-none">
-          <Wrench className="w-3.5 h-3.5 text-amber-400" />
-          <span>⚠️ Maintenance Mode Active: Regular students see the Platform Updating lock screen. Super Admin bypass enabled.</span>
-        </div>
-      )}
-
-      {/* Main Body with Left Collapsible Sidebar Navigation Rail and Main View */}
-      <div className="flex-1 flex w-full relative min-h-[calc(100vh-4rem)]">
-        {/* Left Collapsible Sidebar Navigation Rail across all pages */}
-        <CollapsibleSidebar 
-          activeTabId={currentTabId} 
-          isExpanded={isSidebarExpanded} 
-          isMobileOpen={isMobileSidebarOpen}
-          onCloseMobile={() => {
-            setIsMobileSidebarOpen(false);
-            if (typeof document !== 'undefined') document.body.style.overflow = '';
-          }}
-          onToggle={handleToggleSidebar}
+      {/* Right-side main content container: ONLY this container scrolls vertically */}
+      <div 
+        id="main-layout-wrapper"
+        className={`app-scroll-area flex-1 min-w-0 w-full flex flex-col h-[100dvh] max-h-[100dvh] overflow-y-auto overflow-x-hidden transition-all duration-300 ease-in-out ${
+          isSidebarExpanded ? 'md:ml-[250px]' : 'md:ml-16'
+        }`}
+        style={{ height: '100dvh', maxHeight: '100dvh' }}
+      >
+        {/* Top Utility Header - Sticky at the top of the scroll container */}
+        <SharedHeader 
+          onOpenDriveModal={() => setIsDriveModalOpen(true)}
+          onOpenLinksModal={() => setIsLinksModalOpen(true)}
           onOpenDriveNotesDemoModal={() => setIsDriveNotesDemoModalOpen(true)}
-          onSelectTab={(tab) => setCurrentTabId(tab)}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarExpanded={isSidebarExpanded}
         />
 
-        {/* Main Content Area - Desktop margin matches sidebar state with smooth transition */}
-        <div 
-          id="main-layout-wrapper"
-          className={`flex-1 min-w-0 w-full flex flex-col transition-all duration-300 ease-in-out ${
-            isSidebarExpanded ? 'md:ml-[250px]' : 'md:ml-16'
-          }`}
-        >
-          <main 
-            id="main-content" 
-            className="flex-1 w-full max-w-none min-w-0 p-6 pt-5 pb-8"
+        {/* Access Denied Alert Toast */}
+        {accessDeniedAlert && (
+          <div className="w-full bg-rose-600 text-white py-2.5 px-4 shadow-lg flex items-center justify-between text-xs sm:text-sm font-semibold animate-fadeIn z-50">
+            <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-white" />
+                <span>{accessDeniedAlert}</span>
+              </div>
+              <button 
+                onClick={() => setAccessDeniedAlert(null)}
+                className="p-1 hover:bg-white/20 rounded cursor-pointer transition-colors"
+                aria-label="Dismiss access alert"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Global Announcement Banner across all pages */}
+        {announcement && !isAnnouncementDismissed && (
+          <aside 
+            role="alert" 
+            aria-label="Platform Announcement"
+            className={`w-full py-2 px-4 shadow-md backdrop-blur-md flex items-center justify-between text-xs sm:text-sm font-medium z-40 transition-all border-b ${
+              announcement.urgency === 'warning'
+                ? 'bg-gradient-to-r from-rose-900/90 via-amber-900/80 to-rose-900/90 border-rose-500/40 text-rose-100'
+                : announcement.urgency === 'motivational'
+                ? 'bg-gradient-to-r from-emerald-900/90 via-teal-900/80 to-emerald-900/90 border-emerald-500/40 text-emerald-100'
+                : 'bg-gradient-to-r from-indigo-900/90 via-blue-900/80 to-indigo-900/90 border-indigo-500/40 text-indigo-100'
+            }`}
           >
-            {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
-            <div className="w-full transition-all duration-300 animate-tab-enter">
+            <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {announcement.urgency === 'warning' ? (
+                  <span className="p-1 rounded-lg bg-rose-500/25 text-rose-300 shrink-0"><AlertTriangle className="w-4 h-4" /></span>
+                ) : announcement.urgency === 'motivational' ? (
+                  <span className="p-1 rounded-lg bg-emerald-500/25 text-emerald-300 shrink-0"><Sparkles className="w-4 h-4" /></span>
+                ) : (
+                  <span className="p-1 rounded-lg bg-blue-500/25 text-blue-300 shrink-0"><Bell className="w-4 h-4" /></span>
+                )}
+                <div className="flex items-center gap-2 truncate">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
+                    announcement.urgency === 'warning'
+                      ? 'bg-rose-500/30 text-rose-200 border border-rose-500/40'
+                      : announcement.urgency === 'motivational'
+                      ? 'bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
+                      : 'bg-indigo-500/30 text-indigo-200 border border-indigo-500/40'
+                  }`}>
+                    {announcement.urgency === 'warning' ? 'Exam Warning' : announcement.urgency === 'motivational' ? 'Motivational' : 'Notice'}
+                  </span>
+                  <span className="truncate font-medium">{announcement.text}</span>
+                </div>
+              </div>
+              <button
+                onClick={handleDismissAnnouncement}
+                title="Dismiss announcement"
+                className="p-1 rounded-lg hover:bg-white/20 transition-colors shrink-0 text-white/80 hover:text-white cursor-pointer"
+                aria-label="Close announcement"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </aside>
+        )}
+
+        {/* Maintenance Mode Super Admin Warning Indicator */}
+        {killswitches.maintenanceMode && isAdminUser && (
+          <div className="w-full bg-amber-500/15 border-b border-amber-500/30 text-amber-300 py-1.5 px-4 text-xs font-semibold flex items-center justify-center gap-2 z-40 select-none">
+            <Wrench className="w-3.5 h-3.5 text-amber-400" />
+            <span>⚠️ Maintenance Mode Active: Regular students see the Platform Updating lock screen. Super Admin bypass enabled.</span>
+          </div>
+        )}
+
+        {/* Main Content Area */}
+        <main 
+          id="main-content" 
+          className="flex-1 w-full max-w-none min-w-0 p-4 sm:p-6 pt-4 pb-8"
+        >
+          {/* Page Content Container: If locked tab in guest mode, render frosted glass locked overlay */}
+          <div className="w-full transition-all duration-300 animate-tab-enter">
               {isPlatformMaintenanceLocked ? (
                 <div className="relative min-h-[520px] rounded-3xl overflow-hidden p-8 flex flex-col items-center justify-center text-center glass-panel border border-amber-500/40 shadow-2xl backdrop-blur-2xl bg-theme-surface/90">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-rose-500/20 border border-amber-500/40 flex items-center justify-center mb-4 text-amber-400 shadow-inner">
@@ -1182,7 +1184,6 @@ export function AppLayout({ activeTabId, children }) {
           {/* Persistent Shared Footer */}
           <SharedFooter />
         </div>
-      </div>
 
       {/* Google Drive Integration Modal */}
       <DriveModal

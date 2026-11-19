@@ -348,7 +348,7 @@ export default function CollapsibleSidebar({
           if (onCloseMobile) onCloseMobile();
           if (typeof document !== 'undefined') document.body.style.overflow = '';
         }}
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-all duration-300 ${
+        className={`sidebar-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-all duration-300 ${
           isMobileOpen 
             ? 'opacity-100 pointer-events-auto' 
             : 'opacity-0 pointer-events-none'
@@ -360,13 +360,14 @@ export default function CollapsibleSidebar({
       <aside 
         id="app-sidebar"
         aria-label="Sidebar Navigation Rail"
-        className={`md:sticky fixed top-16 md:top-0 bottom-0 left-0 z-40 border-r border-theme-border bg-theme-surface/90 backdrop-blur-xl transition-all duration-300 ease-in-out select-none flex flex-col shrink-0 ${
+        className={`app-sidebar md:sticky fixed top-0 bottom-0 left-0 z-50 md:z-40 border-r border-theme-border bg-theme-surface/95 backdrop-blur-xl transition-all duration-300 ease-in-out select-none flex flex-col shrink-0 h-[100dvh] max-h-[100dvh] overflow-y-auto overflow-x-hidden ${
           isMobileOpen 
-            ? 'translate-x-0 shadow-2xl w-[240px]' 
+            ? 'translate-x-0 shadow-2xl w-[250px]' 
             : '-translate-x-full md:translate-x-0'
         } ${
           isExpanded ? 'md:w-[240px]' : 'md:w-16'
         }`}
+        style={{ height: '100dvh', maxHeight: '100dvh' }}
       >
         {/* Sidebar Header with Hamburger / Close Toggle */}
         <div className="h-14 px-3 flex items-center justify-between border-b border-theme-border/60 shrink-0">
@@ -457,7 +458,7 @@ export default function CollapsibleSidebar({
                   const handleClick = (e) => {
                     e.preventDefault();
                     logFeatureUse(item.name);
-                    if (isMobileOpen && onCloseMobile) {
+                    if (onCloseMobile && (isMobileOpen || (typeof window !== 'undefined' && window.innerWidth < 768))) {
                       onCloseMobile();
                     }
                     if (typeof document !== 'undefined') {

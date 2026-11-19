@@ -82,15 +82,15 @@ export default function Logo({ onClick }) {
       role="button"
       tabIndex={0}
       title="Study Tracker - Back to Overview"
-      className="flex items-center space-x-2.5 cursor-pointer group select-none focus:outline-none transition-transform duration-200 active:scale-95"
+      className="flex items-center space-x-2 sm:space-x-2.5 cursor-pointer group select-none focus:outline-none transition-transform duration-200 active:scale-95"
     >
-      <div className="relative group-hover:scale-105 transition-transform duration-200">
-        <LogoMark size={38} />
+      <div className="relative group-hover:scale-105 transition-transform duration-200 shrink-0">
+        <LogoMark size={28} className="sm:w-[36px] sm:h-[36px]" />
       </div>
 
-      <div className="flex flex-col">
-        <div className="flex items-center gap-1.5">
-          <span className="font-display font-black text-base sm:text-lg tracking-tight text-theme-text leading-tight group-hover:text-theme-accent transition-colors">
+      <div className="flex flex-col min-w-0">
+        <div className="flex items-center gap-1 sm:gap-1.5">
+          <span className="font-display font-black text-sm sm:text-base tracking-tight text-theme-text leading-tight group-hover:text-theme-accent transition-colors truncate">
             STUDY <span className="bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 bg-clip-text text-transparent">TRACKER</span>
           </span>
           <span className="hidden sm:inline-flex text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider bg-theme-accent/10 text-theme-accent border border-theme-accent/20">
