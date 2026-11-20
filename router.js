@@ -123,15 +123,15 @@ export function switchView(targetView, updateHash = true) {
       targetEl.classList.add('active-view');
     }
 
-    // 3. Update sidebar active status across all data-target-view triggers
-    const sidebarItems = document.querySelectorAll('[data-target-view]');
-    sidebarItems.forEach((btn) => {
+    // 3. Update sidebar and mobile bottom nav active status across all data-target-view triggers
+    const navTriggers = document.querySelectorAll('[data-target-view]');
+    navTriggers.forEach((btn) => {
       const v = btn.getAttribute('data-target-view');
       if (v === normalized) {
-        btn.classList.add('active-sidebar-item', 'is-active');
+        btn.classList.add('active-sidebar-item', 'is-active', 'active');
         btn.setAttribute('aria-current', 'page');
       } else {
-        btn.classList.remove('active-sidebar-item', 'is-active');
+        btn.classList.remove('active-sidebar-item', 'is-active', 'active');
         btn.removeAttribute('aria-current');
       }
     });
@@ -225,9 +225,42 @@ export function initRouter() {
   window.addEventListener('hashchange', handleHashChange);
   window.addEventListener('popstate', handleHashChange);
 
-  // Click delegation for any element with data-target-view
+  // Click delegation for any element with data-target-view and mobile navigation
   if (typeof document !== 'undefined') {
     document.addEventListener('click', (e) => {
+      // Intercept More button to open mobile slide-over sidebar drawer
+      const moreBtn = e.target.closest && e.target.closest('#mobile-bottom-nav-more-btn, [data-mobile-action="open-sidebar"]');
+      if (moreBtn) {
+        e.preventDefault();
+        if (typeof window !== 'undefined' && typeof window.openMobileSidebar === 'function') {
+          window.openMobileSidebar();
+        } else if (typeof window !== 'undefined' && typeof window.toggleMobileSidebar === 'function') {
+          window.toggleMobileSidebar();
+        } else {
+          const sidebar = document.querySelector('#app-sidebar, .app-sidebar');
+          if (sidebar) sidebar.classList.add('is-open', 'mobile-open');
+          let backdrop = document.querySelector('#sidebar-backdrop, .sidebar-backdrop');
+          if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.id = 'sidebar-backdrop';
+            backdrop.className = 'sidebar-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300';
+            document.body.appendChild(backdrop);
+            backdrop.addEventListener('click', () => {
+              if (typeof window.closeMobileSidebar === 'function') {
+                window.closeMobileSidebar();
+              } else {
+                if (sidebar) sidebar.classList.remove('is-open', 'mobile-open');
+                backdrop.classList.add('opacity-0', 'pointer-events-none');
+              }
+            });
+          }
+          backdrop.classList.remove('opacity-0', 'pointer-events-none');
+          backdrop.classList.add('opacity-100', 'pointer-events-auto');
+          backdrop.style.display = 'block';
+        }
+        return;
+      }
+
       const trigger = e.target.closest && e.target.closest('[data-target-view]');
       if (trigger) {
         const view = trigger.getAttribute('data-target-view');

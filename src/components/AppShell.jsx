@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
   LayoutDashboard, 
+  Home,
   BookOpen, 
   Calendar as CalendarIcon, 
+  CalendarCheck,
   Award, 
   FileText, 
   Clock, 
@@ -796,9 +798,16 @@ export function AppLayout({ activeTabId, children }) {
       }
     };
     window.addEventListener('hashchange', handleHash);
+    const handleMobileSidebarToggle = (e) => {
+      if (e.detail?.open !== undefined) {
+        setIsMobileSidebarOpen(e.detail.open);
+      }
+    };
+    window.addEventListener('studyflow-mobile-sidebar-toggle', handleMobileSidebarToggle);
     return () => {
       window.removeEventListener('studyflow-view-changed', handleViewChange);
       window.removeEventListener('hashchange', handleHash);
+      window.removeEventListener('studyflow-mobile-sidebar-toggle', handleMobileSidebarToggle);
     };
   }, []);
 
@@ -1263,7 +1272,80 @@ export function AppLayout({ activeTabId, children }) {
         </div>
       )}
 
+      {/* Fixed Mobile Bottom Workspace Navigation Bar (< 768px) */}
+      <MobileBottomNav 
+        currentTabId={currentTabId} 
+        onOpenSidebar={() => setIsMobileSidebarOpen(true)} 
+      />
+
     </div>
+  );
+}
+
+/**
+ * Mobile Bottom Workspace Navigation Bar
+ * Pinned to the bottom on mobile devices (< 768px), hidden on desktop (>= 769px).
+ * 5 tabs: Home, Routine, Syllabus, Mocks, and More (opens slide-over sidebar drawer).
+ */
+export function MobileBottomNav({ currentTabId, onOpenSidebar }) {
+  const tabs = [
+    { id: 'dashboard', label: 'Home', icon: Home, href: '#dashboard' },
+    { id: 'routine', label: 'Routine', icon: CalendarCheck, href: '#routine' },
+    { id: 'syllabus', label: 'Syllabus', icon: BookOpen, href: '#syllabus' },
+    { id: 'mock-logbook', label: 'Mocks', icon: Award, href: '#mock-logbook' }
+  ];
+
+  return (
+    <nav 
+      id="mobile-bottom-nav" 
+      className="mobile-bottom-nav" 
+      aria-label="Mobile Bottom Navigation"
+    >
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const isActive = currentTabId === tab.id;
+        return (
+          <a
+            key={tab.id}
+            href={tab.href}
+            data-target-view={tab.id}
+            aria-current={isActive ? 'page' : undefined}
+            className={`mobile-bottom-tab ${isActive ? 'active is-active' : ''}`}
+            onClick={(e) => {
+              e.preventDefault();
+              if (typeof window !== 'undefined' && window.switchView) {
+                window.switchView(tab.id);
+              } else if (typeof window !== 'undefined') {
+                window.location.hash = tab.id;
+              }
+            }}
+          >
+            <Icon className="mobile-bottom-icon" />
+            <span className="mobile-bottom-label">{tab.label}</span>
+          </a>
+        );
+      })}
+
+      <button
+        id="mobile-bottom-nav-more-btn"
+        data-mobile-action="open-sidebar"
+        type="button"
+        aria-label="More navigation items"
+        title="More Views & Settings"
+        className="mobile-bottom-tab mobile-bottom-more-btn"
+        onClick={(e) => {
+          e.preventDefault();
+          if (onOpenSidebar) {
+            onOpenSidebar();
+          } else if (typeof window !== 'undefined' && typeof window.openMobileSidebar === 'function') {
+            window.openMobileSidebar();
+          }
+        }}
+      >
+        <Menu className="mobile-bottom-icon" />
+        <span className="mobile-bottom-label">More</span>
+      </button>
+    </nav>
   );
 }
 

@@ -542,7 +542,7 @@ export default function SubjectsTab() {
                               </div>
 
                               {/* Chapter Controls & Status */}
-                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                              <div className="chapter-action-row flex items-center gap-2 shrink-0 self-end sm:self-auto flex-nowrap overflow-x-auto max-w-full">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

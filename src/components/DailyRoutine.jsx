@@ -579,7 +579,7 @@ export default function DailyRoutine() {
                 key={slot.id}
                 id={`routine-slot-${slot.id}`}
                 onClick={() => handleToggleSlot(slot.id)}
-                className={`routine-block-item card-glow-hover p-3.5 rounded-xl border transition-all duration-300 cursor-pointer flex items-center justify-between gap-3 shadow-sm ${
+                className={`routine-block-item card-glow-hover p-3.5 rounded-xl border transition-all duration-300 cursor-pointer flex items-center justify-between gap-3 shadow-sm min-h-[44px] ${
                   fadingSlotId === slot.id
                     ? 'opacity-0 -translate-x-6 scale-95 pointer-events-none'
                     : slot.completed
@@ -590,7 +590,7 @@ export default function DailyRoutine() {
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <button className="shrink-0">
+                  <button className="shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center p-2" aria-label="Toggle slot complete">
                     {slot.completed ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-400 fill-emerald-400/20" />
                     ) : (

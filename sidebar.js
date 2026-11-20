@@ -229,14 +229,18 @@ export function toggleMobileSidebar(container = typeof document !== 'undefined' 
 export function setupMobileSidebar(container = typeof document !== 'undefined' ? document : null) {
   if (!container || typeof container.querySelector !== 'function') return;
 
-  const toggleBtn = container.querySelector('#sidebar-toggle-btn, .sidebar-hamburger-btn, [data-sidebar-toggle]');
-  if (toggleBtn && !toggleBtn._mobileToggleBound) {
-    toggleBtn._mobileToggleBound = true;
-    toggleBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      toggleMobileSidebar(container);
-    });
-  }
+  const toggleBtns = container.querySelectorAll(
+    '#sidebar-toggle-btn, .sidebar-hamburger-btn, [data-sidebar-toggle], #mobile-bottom-nav-more-btn, [data-mobile-action="open-sidebar"]'
+  );
+  toggleBtns.forEach((btn) => {
+    if (!btn._mobileToggleBound) {
+      btn._mobileToggleBound = true;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleMobileSidebar(container);
+      });
+    }
+  });
 
   const backdrop = container.querySelector('#sidebar-backdrop, .sidebar-backdrop');
   if (backdrop && !backdrop._mobileBackdropBound) {
@@ -296,10 +300,10 @@ export function updateActiveSidebarItem(activeView) {
   items.forEach((item) => {
     const view = item.getAttribute('data-target-view');
     if (view === canonical) {
-      item.classList.add('is-active', 'active-sidebar-item');
+      item.classList.add('is-active', 'active-sidebar-item', 'active');
       item.setAttribute('aria-current', 'page');
     } else {
-      item.classList.remove('is-active', 'active-sidebar-item');
+      item.classList.remove('is-active', 'active-sidebar-item', 'active');
       item.removeAttribute('aria-current');
     }
   });
