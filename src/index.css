@@ -1343,6 +1343,23 @@ html[data-theme="black-gold"] #profile-guest-demo-badge {
   color: #000000 !important;
 }
 
+/* Subtle Leaderboard Sync Diagnostic Badge */
+#lb-sync-diagnostic-badge {
+  font-size: 11px;
+  line-height: 1.2;
+  border: 1px solid var(--border-glow);
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  transition: all 0.2s ease-in-out;
+}
+
+[data-theme="black-gold"] #lb-sync-diagnostic-badge,
+html[data-theme="black-gold"] #lb-sync-diagnostic-badge {
+  background-color: #ECD9AE !important;
+  border-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
 [data-theme="black-gold"] #student-profile-form input:disabled,
 [data-theme="black-gold"] #student-profile-form select:disabled,
 [data-theme="black-gold"] #student-profile-form textarea:disabled {

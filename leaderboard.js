@@ -633,6 +633,69 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
 }
 
 /**
+ * Updates or dispatches sync diagnostics for #lb-sync-diagnostic-badge.
+ * - 'syncing': Pulsing amber dot, "Syncing Sheet..."
+ * - 'success': Green dot, "🟢 Sheet: [X] students • [HH:MM:SS]"
+ * - 'error': Subtle rose/red badge, "🔴 Sync Error: [message]" with full details in title
+ *
+ * @param {'syncing'|'success'|'error'} status
+ * @param {Object} [details={}]
+ * @returns {{status: string, count: number, timestamp: string, message: string, title: string}}
+ */
+export function updateLeaderboardDiagnosticBadge(status, { count = 0, timestamp = '', message = '', shortReason = '', title = '' } = {}) {
+  const now = new Date();
+  const timeStr = timestamp || [
+    String(now.getHours()).padStart(2, '0'),
+    String(now.getMinutes()).padStart(2, '0'),
+    String(now.getSeconds()).padStart(2, '0')
+  ].join(':');
+
+  let textContent = message;
+  let fullTitle = title;
+  let displayHtml = '';
+
+  if (status === 'syncing') {
+    textContent = 'Syncing Sheet...';
+    fullTitle = fullTitle || 'Fetching real-time rankings from Google Apps Script...';
+    displayHtml = '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span><span>Syncing Sheet...</span>';
+  } else if (status === 'success') {
+    const studentsLabel = `${count} student${count === 1 ? '' : 's'}`;
+    textContent = `🟢 Sheet: ${studentsLabel} • ${timeStr}`;
+    fullTitle = fullTitle || `Successfully fetched ${count} student rankings from Google Sheets at ${timeStr}`;
+    displayHtml = `<span class="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span><span>Sheet: ${studentsLabel} • ${timeStr}</span>`;
+  } else {
+    const errReason = shortReason || message.replace(/^🔴\s*Sync Error:\s*/, '') || 'Network error';
+    textContent = `🔴 Sync Error: ${errReason}`;
+    fullTitle = fullTitle || `Sync Error: ${errReason}`;
+    displayHtml = `<span class="inline-block w-2 h-2 rounded-full bg-rose-500 shrink-0"></span><span class="text-rose-500 font-semibold truncate">Sync Error: ${errReason}</span>`;
+  }
+
+  if (typeof document !== 'undefined') {
+    const badge = document.getElementById('lb-sync-diagnostic-badge');
+    if (badge) {
+      badge.innerHTML = displayHtml;
+      badge.setAttribute('title', fullTitle);
+      badge.setAttribute('data-status', status);
+      badge.setAttribute('data-count', String(count));
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('studyflow-leaderboard-diagnostic-updated', {
+      detail: {
+        status,
+        count,
+        timestamp: timeStr,
+        message: textContent,
+        title: fullTitle
+      }
+    }));
+  }
+
+  return { status, count, timestamp: timeStr, message: textContent, title: fullTitle };
+}
+
+/**
  * Fetches Top 100 Overall or Subject-Wise student rankings from TELEMETRY_URL,
  * merges the current user's live local state if opted in, and returns sorted rankings.
  *
@@ -642,7 +705,7 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
  * @param {string} [options.subject='']
  * @param {number} [options.limit=100]
  * @param {Object} [options.currentUserData=null]
- * @returns {Promise<{rankings: Array, currentUserRank: Object|null, totalParticipants: number, source: string, fetchedAt: string}>}
+ * @returns {Promise<{rankings: Array, currentUserRank: Object|null, totalParticipants: number, source: string, fetchedAt: string, diagnostic: Object|null}>}
  */
 export async function fetchLeaderboard(
   endpoint = TELEMETRY_URL,
@@ -655,9 +718,13 @@ export async function fetchLeaderboard(
 
   let rawEntries = null;
   let source = 'live';
+  let diagnostic = null;
 
   // 1. Attempt live GET fetch from TELEMETRY_URL
   if (isTelemetryConfigured(targetUrl) && typeof fetch !== 'undefined') {
+    // Show pulsing amber dot before fetching
+    diagnostic = updateLeaderboardDiagnosticBadge('syncing', { message: 'Syncing Sheet...' });
+
     try {
       const separator = targetUrl.includes('?') ? '&' : '?';
       const timestamp = Date.now();
@@ -674,60 +741,117 @@ export async function fetchLeaderboard(
 
       if (res && res.ok) {
         const text = await res.text();
-        try {
-          const parsed = JSON.parse(text);
-          let candidate = null;
+        const isHtml = /<html\b|<!DOCTYPE\b|<body\b/i.test(text);
 
-          if (Array.isArray(parsed)) {
-            candidate = parsed;
-          } else if (parsed && typeof parsed === 'object') {
-            if (normalizedMode === 'subject' && cleanSubject) {
-              if (Array.isArray(parsed.bySubject?.[cleanSubject])) {
-                candidate = parsed.bySubject[cleanSubject];
-              } else if (Array.isArray(parsed.data?.bySubject?.[cleanSubject])) {
-                candidate = parsed.data.bySubject[cleanSubject];
+        if (isHtml) {
+          const titleMatch = text.match(/<title[^>]*>([^<]+)<\/title>/i);
+          const snippet = titleMatch ? titleMatch[1].trim() : 'Google HTML permission error';
+          diagnostic = updateLeaderboardDiagnosticBadge('error', {
+            shortReason: 'HTML permission error',
+            message: '🔴 Sync Error: HTML permission error',
+            title: `Google Apps Script returned an HTML permission error instead of JSON: ${snippet}`
+          });
+        } else {
+          try {
+            const parsed = JSON.parse(text);
+            let candidate = null;
+
+            if (Array.isArray(parsed)) {
+              candidate = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+              if (normalizedMode === 'subject' && cleanSubject) {
+                if (Array.isArray(parsed.bySubject?.[cleanSubject])) {
+                  candidate = parsed.bySubject[cleanSubject];
+                } else if (Array.isArray(parsed.data?.bySubject?.[cleanSubject])) {
+                  candidate = parsed.data.bySubject[cleanSubject];
+                }
+              }
+              if (!candidate) {
+                candidate = Array.isArray(parsed.overallTop100)
+                  ? parsed.overallTop100
+                  : (Array.isArray(parsed.data?.overallTop100)
+                    ? parsed.data.overallTop100
+                    : (Array.isArray(parsed.rankings)
+                      ? parsed.rankings
+                      : (Array.isArray(parsed.leaderboard)
+                        ? parsed.leaderboard
+                        : (Array.isArray(parsed.data)
+                          ? parsed.data
+                          : null))));
               }
             }
-            if (!candidate) {
-              candidate = Array.isArray(parsed.overallTop100)
-                ? parsed.overallTop100
-                : (Array.isArray(parsed.data?.overallTop100)
-                  ? parsed.data.overallTop100
-                  : (Array.isArray(parsed.rankings)
-                    ? parsed.rankings
-                    : (Array.isArray(parsed.leaderboard)
-                      ? parsed.leaderboard
-                      : (Array.isArray(parsed.data)
-                        ? parsed.data
-                        : null))));
-            }
-          }
 
-          if (Array.isArray(candidate) && candidate.length > 0) {
-            rawEntries = candidate;
-            source = 'live';
+            if (Array.isArray(candidate)) {
+              rawEntries = candidate;
+              source = 'live';
 
-            // Cache live results
-            if (typeof localStorage !== 'undefined') {
-              try {
-                localStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify({
-                  mode: normalizedMode,
-                  subject: cleanSubject,
-                  entries: rawEntries,
-                  fetchedAt: new Date().toISOString()
-                }));
-              } catch {
-                // ignore
+              const count = candidate.length;
+              const now = new Date();
+              const timeStr = [
+                String(now.getHours()).padStart(2, '0'),
+                String(now.getMinutes()).padStart(2, '0'),
+                String(now.getSeconds()).padStart(2, '0')
+              ].join(':');
+
+              diagnostic = updateLeaderboardDiagnosticBadge('success', {
+                count,
+                timestamp: timeStr,
+                message: `🟢 Sheet: ${count} student${count === 1 ? '' : 's'} • ${timeStr}`,
+                title: `Successfully fetched ${count} student rankings from Google Sheets at ${timeStr}`
+              });
+
+              // Cache live results
+              if (typeof localStorage !== 'undefined') {
+                try {
+                  localStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify({
+                    mode: normalizedMode,
+                    subject: cleanSubject,
+                    entries: rawEntries,
+                    fetchedAt: new Date().toISOString()
+                  }));
+                } catch {
+                  // ignore
+                }
               }
+            } else {
+              diagnostic = updateLeaderboardDiagnosticBadge('error', {
+                shortReason: 'Unexpected schema',
+                message: '🔴 Sync Error: Unexpected schema',
+                title: 'Google Apps Script JSON response did not contain an array of student rankings'
+              });
             }
+          } catch (jsonErr) {
+            diagnostic = updateLeaderboardDiagnosticBadge('error', {
+              shortReason: 'Invalid JSON',
+              message: '🔴 Sync Error: Invalid JSON',
+              title: `Failed to parse response as JSON: ${jsonErr.message || ''} (${text.slice(0, 100)})`
+            });
           }
-        } catch {
-          // Response was not JSON array (e.g. basic Apps Script text response)
         }
+      } else {
+        const errReason = `HTTP ${res?.status || 'Unknown'}`;
+        diagnostic = updateLeaderboardDiagnosticBadge('error', {
+          shortReason: errReason,
+          message: `🔴 Sync Error: ${errReason}`,
+          title: `Google Apps Script returned HTTP status ${res?.status || ''} ${res?.statusText || ''}`.trim()
+        });
       }
-    } catch {
-      // Network or timeout — fall back cleanly below
+    } catch (fetchErr) {
+      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      const isTimeout = fetchErr?.name === 'AbortError';
+      const errReason = isOffline ? 'Offline' : (isTimeout ? 'Timeout' : (fetchErr?.message || 'Network error'));
+      diagnostic = updateLeaderboardDiagnosticBadge('error', {
+        shortReason: errReason,
+        message: `🔴 Sync Error: ${errReason}`,
+        title: `Fetch failed connecting to Google Apps Script: ${fetchErr?.message || errReason}`
+      });
     }
+  } else if (!isTelemetryConfigured(targetUrl)) {
+    diagnostic = updateLeaderboardDiagnosticBadge('error', {
+      shortReason: 'URL not configured',
+      message: '🔴 Sync Error: URL not configured',
+      title: 'TELEMETRY_URL is not configured in admin-config.js'
+    });
   }
 
   // 2. Fallback to cached live response if matching mode/subject
@@ -837,7 +961,8 @@ export async function fetchLeaderboard(
     mode: normalizedMode,
     subject: cleanSubject,
     source,
-    fetchedAt: new Date().toISOString()
+    fetchedAt: new Date().toISOString(),
+    diagnostic
   };
 }
 
@@ -1161,6 +1286,7 @@ if (typeof window !== 'undefined') {
   window.syncStudentToLeaderboard = syncStudentToLeaderboard;
   window.fetchLeaderboard = fetchLeaderboard;
   window.fetchTop100Leaderboard = fetchTop100Leaderboard;
+  window.updateLeaderboardDiagnosticBadge = updateLeaderboardDiagnosticBadge;
   window.getStudentId = getStudentId;
   window.getUserId = getUserId;
   window.renderLeaderboardFragment = renderLeaderboardFragment;
@@ -1181,6 +1307,7 @@ if (typeof window !== 'undefined') {
     syncStudentToLeaderboard,
     fetchLeaderboard,
     fetchTop100Leaderboard,
+    updateLeaderboardDiagnosticBadge,
     getLiveStudyingCount,
     filterLeaderboardEntries,
     renderLeaderboardFragment,
@@ -1207,6 +1334,7 @@ export default {
   syncStudentToLeaderboard,
   fetchLeaderboard,
   fetchTop100Leaderboard,
+  updateLeaderboardDiagnosticBadge,
   getLiveStudyingCount,
   filterLeaderboardEntries,
   renderLeaderboardFragment,

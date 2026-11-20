@@ -28,6 +28,7 @@ import {
   syncStudentToLeaderboard,
   fetchLeaderboard,
   fetchTop100Leaderboard,
+  updateLeaderboardDiagnosticBadge,
   getStudentId,
   getUserId,
   filterLeaderboardEntries,
@@ -101,6 +102,24 @@ export default function LeaderboardTab({ isActiveView = false }) {
   const [countdownSec, setCountdownSec] = useState(30);
   const [toastMessage, setToastMessage] = useState(null);
   const [, setThemeTick] = useState(0);
+
+  // Sync diagnostic state (syncing, success, error) for #lb-sync-diagnostic-badge
+  const [diagnostic, setDiagnostic] = useState({
+    status: 'idle',
+    message: '',
+    title: 'Leaderboard synchronization status',
+    count: 0
+  });
+
+  useEffect(() => {
+    const handleDiagnostic = (e) => {
+      if (e?.detail) {
+        setDiagnostic(e.detail);
+      }
+    };
+    window.addEventListener('studyflow-leaderboard-diagnostic-updated', handleDiagnostic);
+    return () => window.removeEventListener('studyflow-leaderboard-diagnostic-updated', handleDiagnostic);
+  }, []);
 
   // Track whether the current student's row/podium is visible in the viewport
   const currentUserRowRef = useRef(null);
@@ -928,6 +947,41 @@ export default function LeaderboardTab({ isActiveView = false }) {
               {isGuestSyncLocked ? <Lock className="w-3.5 h-3.5" /> : <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />}
               <span>{isSyncing ? 'Syncing Hours...' : (isGuestSyncLocked ? '🔒 Sync My Hours Now' : '🔄 Sync My Hours Now')}</span>
             </button>
+
+            {/* SYNC DIAGNOSTIC BADGE */}
+            <div
+              id="lb-sync-diagnostic-badge"
+              title={diagnostic.title || diagnostic.message || 'Real-time Leaderboard Google Sheets Sync Status'}
+              data-status={diagnostic.status}
+              data-count={diagnostic.count}
+              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-[var(--border-glow)] bg-[var(--bg-card)] font-mono-numbers font-medium transition-all select-none max-w-full truncate"
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                borderColor: 'var(--border-glow)',
+                color: 'var(--text-main)'
+              }}
+            >
+              {diagnostic.status === 'syncing' ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                  <span className="truncate">Syncing Sheet...</span>
+                </>
+              ) : diagnostic.status === 'error' ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                  <span className="truncate text-rose-500 font-semibold">
+                    {diagnostic.message ? diagnostic.message.replace(/^🔴\s*/, '') : 'Sync Error'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="truncate">
+                    {diagnostic.message ? diagnostic.message.replace(/^🟢\s*/, '') : `Sheet: ${rankings.length} students • ${formattedLastUpdate}`}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
