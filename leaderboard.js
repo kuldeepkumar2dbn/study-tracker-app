@@ -13,40 +13,57 @@ import { isUserAuthenticated } from './auth-guard.js';
 export { TELEMETRY_URL, sanitizeText, getOrCreateUserSecret, isUserAuthenticated };
 
 /**
- * Determines whether the caller is permitted to push entries to the public Leaderboard
- * tab in StudyTracker_Admin_DB. Guest and local Demo Preview sessions are strictly blocked
- * until authenticated via Google OAuth.
+ * Determines whether the caller is permitted to push entries to the public Leaderboard.
+ * Syncing is permitted whenever optedIn === true (even if a student hasn't opened #view-profile yet,
+ * their default leaderboard profile is auto-initialized so their logged hours push to the shared sheet).
+ * Demo sandbox sessions (isDemo === true) remain blocked to prevent test data pollution.
  *
  * @param {Object} [userData={}]
  * @param {Object} [options={}]
  * @returns {boolean}
  */
 export function canSyncToLeaderboard(userData = {}, options = {}) {
-  if (options?.isAuthenticated === false || userData?.isGuest === true) {
+  if (options?.isAuthenticated === false || userData?.isGuest === true || options?.isGuest === true) {
     return false;
   }
 
-  const candidateProfile = options?.userProfile !== undefined ? options.userProfile : userData?.userProfile;
+  const candidateProfile = options?.userProfile !== undefined
+    ? options.userProfile
+    : (userData?.userProfile !== undefined
+      ? userData.userProfile
+      : ((userData?.sub || userData?.email) ? userData : undefined));
+
   if (candidateProfile && (candidateProfile.isDemo === true || candidateProfile.sub === 'demo_sandbox_user')) {
     return false;
   }
-
-  const candidateId = String(options?.studentId || userData?.studentId || '').trim();
-  if (candidateId === 'guest' || candidateId === 'demo_sandbox_user' || candidateId === 'usr_anonymous') {
+  if (userData?.isDemo === true || options?.isDemo === true) {
     return false;
   }
 
-  // In browser environments (or when requireAuth is explicitly set), enforce genuine Google OAuth login
-  if (options?.requireAuth === true || typeof window !== 'undefined') {
-    if (options?.bypassAuthCheck === true) return true;
-    return isUserAuthenticated(candidateProfile !== undefined ? candidateProfile : undefined);
+  const candidateId = String(options?.studentId || options?.userId || userData?.studentId || userData?.userId || '').trim();
+  if (candidateId === 'demo_sandbox_user' || candidateId === 'guest') {
+    return false;
   }
 
-  // In headless Node unit-test environments, require an explicit non-guest studentId or authenticated profile
-  if (candidateProfile && isUserAuthenticated(candidateProfile)) {
+  // Allow syncing whenever optedIn is true (or defaulted to true)
+  const optedIn = options?.optedIn !== undefined
+    ? Boolean(options.optedIn)
+    : (userData?.optedIn !== undefined ? Boolean(userData.optedIn) : true);
+
+  if (!optedIn) {
+    return false;
+  }
+
+  // Allow syncing if explicit studentId/userId is present or user is authenticated
+  if (candidateId) {
     return true;
   }
-  return Boolean(candidateId);
+
+  if (typeof isUserAuthenticated === 'function' && isUserAuthenticated(candidateProfile)) {
+    return true;
+  }
+
+  return false;
 }
 
 export const LEADERBOARD_SETTINGS_KEY = 'studytracker_leaderboard_settings';
@@ -57,17 +74,42 @@ export const LIVE_HEARTBEAT_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes (180,000ms
 
 /**
  * Reads persisted student profile (username, targetExam, showOnLeaderboard) from localStorage.
+ * When autoInit is true, creates a clean default profile if none exists yet.
  */
-function getStoredStudentProfile() {
+export function getStoredStudentProfile(autoInit = false, userProfile = null) {
   if (typeof localStorage === 'undefined') return null;
   try {
     const raw = localStorage.getItem(STUDENT_PROFILE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
   } catch {
-    return null;
+    // ignore
   }
+
+  if (autoInit) {
+    const studentId = getStudentId(userProfile);
+    const profile = userProfile || (typeof getLoggedInUserProfile === 'function' ? getLoggedInUserProfile() : null);
+    const cleanHandle = profile?.email
+      ? `@${String(profile.email).split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 15)}`
+      : (profile?.name ? `@${String(profile.name).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 15)}` : `@scholar_${studentId.slice(-4)}`);
+    const initial = {
+      userId: studentId,
+      studentId: studentId,
+      username: cleanHandle,
+      displayName: cleanHandle,
+      showOnLeaderboard: true,
+      optedIn: true,
+      targetExam: 'General Studies'
+    };
+    try {
+      localStorage.setItem(STUDENT_PROFILE_KEY, JSON.stringify(initial));
+    } catch {}
+    return initial;
+  }
+
+  return null;
 }
 
 export const COMMON_LEADERBOARD_SUBJECTS = [
@@ -80,34 +122,80 @@ export const COMMON_LEADERBOARD_SUBJECTS = [
 ];
 
 /**
- * Generates or retrieves a stable unique student ID for leaderboard attribution.
+ * Computes a deterministic integer hash string for persistent user identification.
  */
-export function getStudentId(userProfile = null) {
-  const profile = userProfile || (typeof getLoggedInUserProfile === 'function' ? getLoggedInUserProfile() : null);
-  if (profile?.sub) return String(profile.sub).trim();
-  if (profile?.email) return String(profile.email).trim().toLowerCase();
-
-  if (typeof localStorage !== 'undefined') {
-    try {
-      let visitorId = localStorage.getItem('study_visitor_id');
-      if (!visitorId) {
-        visitorId = 'usr_' + Math.random().toString(36).substring(2, 10);
-        localStorage.setItem('study_visitor_id', visitorId);
-      }
-      return visitorId;
-    } catch {
-      // ignore storage errors
-    }
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
   }
-  return 'usr_anonymous';
+  return Math.abs(hash).toString(36);
 }
 
 /**
+ * Generates or retrieves a persistent, unique student ID for leaderboard attribution.
+ * Prefers signed-in Google email hash or sub, or persistent usr_ UUID in localStorage
+ * so two different devices/accounts NEVER collide on the same row.
+ */
+export function getStudentId(userProfile = null) {
+  const profile = userProfile || (typeof getLoggedInUserProfile === 'function' ? getLoggedInUserProfile() : null);
+
+  if (profile?.email && profile.email !== 'demo@studyflow.local') {
+    const cleanEmail = String(profile.email).trim().toLowerCase();
+    const emailPrefix = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 10);
+    const emailHash = hashString(cleanEmail);
+    const id = `usr_${emailPrefix}_${emailHash}`;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('study_user_id', id);
+        localStorage.setItem('studytracker_user_id', id);
+      } catch {}
+    }
+    return id;
+  }
+
+  if (profile?.sub && profile.sub !== 'demo_sandbox_user') {
+    const subHash = hashString(String(profile.sub).trim());
+    const id = `usr_sub_${subHash}`;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('study_user_id', id);
+        localStorage.setItem('studytracker_user_id', id);
+      } catch {}
+    }
+    return id;
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      let storedId = localStorage.getItem('studytracker_user_id') || localStorage.getItem('study_user_id') || localStorage.getItem('study_visitor_id');
+      if (storedId && storedId !== 'usr_anonymous' && storedId !== 'guest' && storedId !== 'demo_sandbox_user') {
+        return storedId;
+      }
+      const randomPart = Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 6);
+      const newId = `usr_${Date.now().toString(36)}_${randomPart}`;
+      localStorage.setItem('studytracker_user_id', newId);
+      localStorage.setItem('study_user_id', newId);
+      localStorage.setItem('study_visitor_id', newId);
+      return newId;
+    } catch {
+      // ignore
+    }
+  }
+
+  return 'usr_' + Math.random().toString(36).substring(2, 10);
+}
+
+export const getUserId = getStudentId;
+
+/**
  * Reads persisted leaderboard display name, opt-in privacy toggle, and auto-refresh setting.
+ * Auto-initializes student profile if not present so optedIn === true by default.
  */
 export function getLeaderboardSettings(userProfile = null) {
   const profile = userProfile || (typeof getLoggedInUserProfile === 'function' ? getLoggedInUserProfile() : null);
-  const studentProfile = getStoredStudentProfile();
+  const studentProfile = getStoredStudentProfile(false, profile);
   const profileHandle = studentProfile?.username
     ? `@${String(studentProfile.username).replace(/^@+/, '').trim()}`
     : '';
@@ -130,11 +218,9 @@ export function getLeaderboardSettings(userProfile = null) {
     if (!raw) return defaults;
     const parsed = JSON.parse(raw);
     return {
-      displayName: profileHandle || (
-        (typeof parsed.displayName === 'string' && parsed.displayName.trim())
-          ? parsed.displayName.trim()
-          : defaults.displayName
-      ),
+      displayName: (typeof parsed.displayName === 'string' && parsed.displayName.trim())
+        ? parsed.displayName.trim()
+        : (profileHandle || defaults.displayName),
       optedIn: parsed.optedIn !== undefined ? Boolean(parsed.optedIn) : defaults.optedIn,
       liveAutoRefresh: parsed.liveAutoRefresh !== undefined ? Boolean(parsed.liveAutoRefresh) : defaults.liveAutoRefresh
     };
@@ -268,7 +354,9 @@ export function buildStudentLeaderboardPayload(userData = {}, options = {}) {
   const displayName = stripHtmlTags(
     (options.displayName !== undefined && String(options.displayName).trim())
       ? String(options.displayName).trim()
-      : (profileHandle || (userData.displayName !== undefined && String(userData.displayName).trim()) || settings.displayName)
+      : ((userData.displayName !== undefined && String(userData.displayName).trim())
+        ? String(userData.displayName).trim()
+        : (profileHandle || settings.displayName))
   );
   const optedIn = options.optedIn !== undefined
     ? Boolean(options.optedIn)
@@ -341,6 +429,7 @@ export function buildStudentLeaderboardPayload(userData = {}, options = {}) {
   return {
     type: 'leaderboard_sync',
     action: 'leaderboard_sync',
+    userId: studentId,
     studentId,
     userSecret,
     username: cleanUsername || undefined,
@@ -351,6 +440,7 @@ export function buildStudentLeaderboardPayload(userData = {}, options = {}) {
     totalHours: Number(Math.max(weeklyHours, subjectsTotal).toFixed(1)),
     todayHours: Number(todayHours.toFixed(1)),
     streak,
+    streakDays: streak,
     activeSubject,
     lastSubject: activeSubject,
     isLiveNow,
@@ -446,7 +536,7 @@ export async function syncStudentToLeaderboard(endpoint = TELEMETRY_URL, userDat
         method: 'POST',
         mode: 'no-cors',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'text/plain;charset=utf-8'
         },
         body: JSON.stringify(payload)
       });
@@ -476,7 +566,7 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
   if (!raw || typeof raw !== 'object') return null;
   if (raw.optedIn === false) return null;
 
-  const studentId = String(raw.studentId || raw.id || raw.userId || raw.email || raw.displayName || '').trim();
+  const studentId = String(raw.userId || raw.studentId || raw.id || raw.email || raw.displayName || '').trim();
   if (!studentId) return null;
 
   const rawUsername = raw.username ? stripHtmlTags(String(raw.username)).trim().replace(/^@+/, '') : '';
@@ -511,7 +601,7 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
     hours = Number(raw.weeklyHours ?? raw.hours ?? raw.totalHours ?? 0) || 0;
   }
 
-  const streak = Math.max(0, Number(raw.streak ?? raw.streakCount ?? 0) || 0);
+  const streak = Math.max(0, Number(raw.streakDays ?? raw.streak ?? raw.streakCount ?? 0) || 0);
   const activeSubject = stripHtmlTags(String(raw.activeSubject || raw.currentSubject || raw.lastSubject || subject || 'General Studies')).trim() || 'General Studies';
 
   // Check if updated recently (within last 45 mins) when considering isLiveNow
@@ -524,13 +614,16 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
   }
 
   return {
+    userId: studentId,
     studentId,
     username: rawUsername || (displayName.startsWith('@') ? displayName.slice(1) : ''),
     displayName,
     targetExam,
     hours: Number(Math.max(0, hours).toFixed(1)),
     weeklyHours: Number(Math.max(0, Number(raw.weeklyHours ?? raw.hours ?? 0) || 0).toFixed(1)),
+    totalHours: Number(Math.max(0, Number(raw.totalHours ?? raw.weeklyHours ?? raw.hours ?? 0) || 0).toFixed(1)),
     streak,
+    streakDays: streak,
     activeSubject,
     lastSubject: String(raw.lastSubject || activeSubject).trim(),
     isLiveNow,
@@ -567,7 +660,8 @@ export async function fetchLeaderboard(
   if (isTelemetryConfigured(targetUrl) && typeof fetch !== 'undefined') {
     try {
       const separator = targetUrl.includes('?') ? '&' : '?';
-      const queryUrl = `${targetUrl}${separator}type=leaderboard&mode=${encodeURIComponent(normalizedMode)}&subject=${encodeURIComponent(cleanSubject)}&limit=${maxEntries}`;
+      const timestamp = Date.now();
+      const queryUrl = `${targetUrl}${separator}action=leaderboard&type=leaderboard&mode=${encodeURIComponent(normalizedMode)}&subject=${encodeURIComponent(cleanSubject)}&limit=${maxEntries}&t=${timestamp}`;
 
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = controller ? setTimeout(() => controller.abort(), 7000) : null;
@@ -582,13 +676,32 @@ export async function fetchLeaderboard(
         const text = await res.text();
         try {
           const parsed = JSON.parse(text);
-          const candidate = Array.isArray(parsed)
-            ? parsed
-            : (Array.isArray(parsed?.rankings)
-              ? parsed.rankings
-              : (Array.isArray(parsed?.leaderboard)
-                ? parsed.leaderboard
-                : (Array.isArray(parsed?.data) ? parsed.data : null)));
+          let candidate = null;
+
+          if (Array.isArray(parsed)) {
+            candidate = parsed;
+          } else if (parsed && typeof parsed === 'object') {
+            if (normalizedMode === 'subject' && cleanSubject) {
+              if (Array.isArray(parsed.bySubject?.[cleanSubject])) {
+                candidate = parsed.bySubject[cleanSubject];
+              } else if (Array.isArray(parsed.data?.bySubject?.[cleanSubject])) {
+                candidate = parsed.data.bySubject[cleanSubject];
+              }
+            }
+            if (!candidate) {
+              candidate = Array.isArray(parsed.overallTop100)
+                ? parsed.overallTop100
+                : (Array.isArray(parsed.data?.overallTop100)
+                  ? parsed.data.overallTop100
+                  : (Array.isArray(parsed.rankings)
+                    ? parsed.rankings
+                    : (Array.isArray(parsed.leaderboard)
+                      ? parsed.leaderboard
+                      : (Array.isArray(parsed.data)
+                        ? parsed.data
+                        : null))));
+            }
+          }
 
           if (Array.isArray(candidate) && candidate.length > 0) {
             rawEntries = candidate;
@@ -639,10 +752,10 @@ export async function fetchLeaderboard(
     source = 'live';
   }
 
-  // 4. Normalize and deduplicate by studentId (ignoring any stale cached preview rows)
+  // 4. Normalize and deduplicate by studentId/userId (ignoring any stale cached preview rows)
   const byId = new Map();
   rawEntries.forEach((row) => {
-    if (row?.isCohortPreview || String(row?.studentId || '').startsWith('cohort_')) return;
+    if (row?.isCohortPreview || String(row?.studentId || row?.userId || '').startsWith('cohort_')) return;
     const normalized = normalizeLeaderboardEntry(row, normalizedMode, cleanSubject);
     if (normalized) {
       // In subject mode, only include entries with >0 hours for that subject
@@ -654,7 +767,7 @@ export async function fetchLeaderboard(
 
   // 5. Merge current logged-in student's real live entry ONLY if Google-authenticated, opted in, AND has real activity
   const settings = getLeaderboardSettings(currentUserData?.userProfile);
-  const currentStudentId = currentUserData?.studentId || getStudentId(currentUserData?.userProfile);
+  const currentStudentId = currentUserData?.userId || currentUserData?.studentId || getStudentId(currentUserData?.userProfile);
   const canMergeSelf = canSyncToLeaderboard(currentUserData || {}, {});
   const effectiveOptIn = canMergeSelf && (
     currentUserData?.optedIn !== undefined
@@ -679,6 +792,7 @@ export async function fetchLeaderboard(
         byId.set(currentStudentId, {
           ...(existing || {}),
           ...normalizedSelf,
+          userId: currentStudentId,
           studentId: currentStudentId,
           displayName: normalizedSelf.displayName || settings.displayName,
           isCurrentUser: true
@@ -702,7 +816,7 @@ export async function fetchLeaderboard(
   // Assign 1-based rank and mark current user
   let currentUserRank = null;
   const fullRanked = sorted.map((entry, idx) => {
-    const isMe = entry.studentId === currentStudentId;
+    const isMe = entry.studentId === currentStudentId || entry.userId === currentStudentId;
     const rankedEntry = {
       ...entry,
       rank: idx + 1,
@@ -726,6 +840,8 @@ export async function fetchLeaderboard(
     fetchedAt: new Date().toISOString()
   };
 }
+
+export const fetchTop100Leaderboard = fetchLeaderboard;
 
 /**
  * Counts how many leaderboard entries are actively studying live right now.
@@ -1044,6 +1160,9 @@ export function renderLeaderboardFragment(entries = [], container = null, option
 if (typeof window !== 'undefined') {
   window.syncStudentToLeaderboard = syncStudentToLeaderboard;
   window.fetchLeaderboard = fetchLeaderboard;
+  window.fetchTop100Leaderboard = fetchTop100Leaderboard;
+  window.getStudentId = getStudentId;
+  window.getUserId = getUserId;
   window.renderLeaderboardFragment = renderLeaderboardFragment;
   window.startLivePresenceHeartbeat = startLivePresenceHeartbeat;
   window.stopLivePresenceHeartbeat = stopLivePresenceHeartbeat;
@@ -1054,12 +1173,14 @@ if (typeof window !== 'undefined') {
     canSyncToLeaderboard,
     isUserAuthenticated,
     getStudentId,
+    getUserId,
     getLeaderboardSettings,
     saveLeaderboardSettings,
     getAvailableSubjects,
     buildStudentLeaderboardPayload,
     syncStudentToLeaderboard,
     fetchLeaderboard,
+    fetchTop100Leaderboard,
     getLiveStudyingCount,
     filterLeaderboardEntries,
     renderLeaderboardFragment,
@@ -1078,12 +1199,14 @@ export default {
   canSyncToLeaderboard,
   isUserAuthenticated,
   getStudentId,
+  getUserId,
   getLeaderboardSettings,
   saveLeaderboardSettings,
   getAvailableSubjects,
   buildStudentLeaderboardPayload,
   syncStudentToLeaderboard,
   fetchLeaderboard,
+  fetchTop100Leaderboard,
   getLiveStudyingCount,
   filterLeaderboardEntries,
   renderLeaderboardFragment,

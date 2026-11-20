@@ -87,8 +87,8 @@ export const SIDEBAR_GROUPS = [
     id: 'growth-sync',
     label: 'GROWTH & SYNC',
     items: [
-      { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
       { id: 'leaderboard', name: 'Leaderboard', icon: Trophy, href: '/leaderboard.html', isProtected: false, tooltip: 'Real-Time Student Leaderboard' },
+      { id: 'skills', name: 'Skill Tracker', icon: Award, href: '/skills.html', isProtected: true, tooltip: 'Skill Tracker & Mastery' },
       { id: 'notes', name: 'Drive Notes', icon: FileText, href: '/notes.html', isProtected: true, tooltip: 'Google Drive Notes Vault' },
       { id: 'profile', name: 'My Profile', icon: User, href: '/profile.html', isProtected: false, tooltip: 'My Student Profile & ID Card' }
     ]

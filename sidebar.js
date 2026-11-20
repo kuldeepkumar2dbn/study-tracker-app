@@ -41,8 +41,8 @@ export const SIDEBAR_GROUPS = [
     id: 'growth-sync',
     label: 'GROWTH & SYNC',
     items: [
-      { id: 'skills', name: 'Skill Tracker', href: '#skills', targetView: 'skills', isProtected: true, guestAccess: 'locked', guestBadge: '🔒', tooltip: 'Skill Tracker & Mastery' },
       { id: 'leaderboard', name: 'Leaderboard', href: '#leaderboard', targetView: 'leaderboard', guestAccess: 'sync-locked', requiresAuthForSync: true, guestBadge: '🔒', tooltip: 'Real-Time Student Leaderboard (Sign in to sync)' },
+      { id: 'skills', name: 'Skill Tracker', href: '#skills', targetView: 'skills', isProtected: true, guestAccess: 'locked', guestBadge: '🔒', tooltip: 'Skill Tracker & Mastery' },
       { id: 'notes', name: 'Drive Notes', href: '#notes', targetView: 'notes', isProtected: true, guestAccess: 'locked', guestBadge: '🔒', tooltip: 'Google Drive Notes Vault' },
       { id: 'profile', name: 'My Profile', href: '#profile', targetView: 'profile', guestAccess: 'demo', guestBadge: 'Demo', tooltip: 'My Student Profile & ID Card' }
     ]

@@ -27,7 +27,9 @@ import {
   getAvailableSubjects,
   syncStudentToLeaderboard,
   fetchLeaderboard,
+  fetchTop100Leaderboard,
   getStudentId,
+  getUserId,
   filterLeaderboardEntries,
   getLiveStudyingCount
 } from '../../../leaderboard.js';
@@ -134,6 +136,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
   // Build current user study snapshot for syncing & live rank calculation
   const buildCurrentUserSnapshot = useCallback(() => ({
     userProfile,
+    userId: isGuestSyncLocked ? 'guest' : currentStudentId,
     studentId: isGuestSyncLocked ? 'guest' : currentStudentId,
     isGuest: isGuestSyncLocked,
     displayName,
@@ -148,7 +151,8 @@ export default function LeaderboardTab({ isActiveView = false }) {
   const loadLeaderboard = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setIsLoading(true);
     try {
-      const result = await fetchLeaderboard(TELEMETRY_URL, {
+      const fetchFn = typeof fetchTop100Leaderboard === 'function' ? fetchTop100Leaderboard : fetchLeaderboard;
+      const result = await fetchFn(TELEMETRY_URL, {
         mode,
         subject: mode === 'subject' ? selectedSubject : '',
         limit: 100,
@@ -167,10 +171,47 @@ export default function LeaderboardTab({ isActiveView = false }) {
     }
   }, [mode, selectedSubject, buildCurrentUserSnapshot]);
 
-  // Initial load + reload when mode, selectedSubject, or view activation changes
+  // Default Live Study Room filters to OFF & auto-sync latest hours whenever #view-leaderboard opens
   useEffect(() => {
-    loadLeaderboard({ silent: rankings.length > 0 });
-  }, [mode, selectedSubject, optedIn, isActiveView]);
+    if (!isActiveView) return;
+
+    // Ensure presence filters default to OFF so all ranked students are visible
+    setLiveOnly(false);
+    setSameSubjectOnly(false);
+
+    let isMounted = true;
+    const autoSyncOnOpen = async () => {
+      if (!isGuestSyncLocked && optedIn) {
+        try {
+          await syncStudentToLeaderboard(TELEMETRY_URL, buildCurrentUserSnapshot(), {
+            displayName: displayName.trim() || 'Focused Scholar',
+            optedIn: true,
+            activeSubject: mode === 'subject' ? selectedSubject : (subjects[0]?.name || selectedSubject)
+          });
+          // Wait 600ms for Google Apps Script to commit row write
+          await new Promise((r) => setTimeout(r, 600));
+        } catch (err) {
+          console.warn('Auto-sync on leaderboard open skipped:', err);
+        }
+      }
+      if (isMounted) {
+        await loadLeaderboard({ silent: rankings.length > 0 });
+      }
+    };
+
+    autoSyncOnOpen();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isActiveView]);
+
+  // Reload when mode, selectedSubject, or opt-in setting changes
+  useEffect(() => {
+    if (isActiveView) {
+      loadLeaderboard({ silent: rankings.length > 0 });
+    }
+  }, [mode, selectedSubject, optedIn]);
 
   // Refresh immediately when background hooks or Student Profile save fire
   useEffect(() => {
@@ -301,8 +342,13 @@ export default function LeaderboardTab({ isActiveView = false }) {
         optedIn,
         activeSubject: mode === 'subject' ? selectedSubject : (subjects[0]?.name || selectedSubject)
       });
+      // Wait 600ms for Google Apps Script to commit row write before fetching
+      await new Promise((r) => setTimeout(r, 600));
       await loadLeaderboard({ silent: true });
       showToast('Hours synced to the real-time Leaderboard!');
+    } catch (err) {
+      console.warn('Manual sync failed:', err);
+      await loadLeaderboard({ silent: true });
     } finally {
       setIsSyncing(false);
     }
@@ -1389,7 +1435,9 @@ export default function LeaderboardTab({ isActiveView = false }) {
                       ? `You're leading the grind! No other peers are live on ${myActiveSubject} right now—keep your timer running to appear here.`
                       : searchQuery.trim()
                         ? `No students matching "${searchQuery}" found in Ranks #4–#100.`
-                        : 'Sync your study hours to populate the Top 100 rankings.'}
+                        : (rankings.length > 0
+                          ? `All ${rankings.length} ranked student${rankings.length === 1 ? '' : 's'} are featured on the podium above. Log hours to expand the Top 100 table!`
+                          : 'Sync your study hours to populate the Top 100 rankings.')}
                   </td>
                 </tr>
               )}

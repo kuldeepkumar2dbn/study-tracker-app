@@ -117,9 +117,9 @@ function doPost(e) {
 
 function handleLeaderboardSync_(payload) {
   var sheet = getOrCreateSheet_(LEADERBOARD_SHEET, LEADERBOARD_HEADERS);
-  var studentId = sanitizeSheetText_(payload.studentId || '');
+  var studentId = sanitizeSheetText_(payload.userId || payload.studentId || '');
   if (!studentId) {
-    return jsonResponse_({ success: false, error: 'Missing studentId' });
+    return jsonResponse_({ success: false, error: 'Missing userId or studentId' });
   }
 
   var incomingSecret = String(payload.userSecret || '').trim();
@@ -133,7 +133,7 @@ function handleLeaderboardSync_(payload) {
   var targetExam = sanitizeSheetText_(payload.targetExam || '');
   var weeklyHours = Math.max(0, Number(payload.weeklyHours || 0));
   var totalHours = Math.max(0, Number(payload.totalHours || weeklyHours || 0));
-  var streak = Math.max(0, Number(payload.streak || 0));
+  var streak = Math.max(0, Number(payload.streakDays !== undefined ? payload.streakDays : (payload.streak || 0)));
   var activeSubject = sanitizeSheetText_(payload.activeSubject || 'General Studies') || 'General Studies';
   var isLiveNow = Boolean(payload.isLiveNow);
   var subjectHoursJson = JSON.stringify(payload.subjectHours || {});
@@ -233,7 +233,7 @@ function handleDeleteLeaderboardEntry_(payload) {
 function doGet(e) {
   try {
     var params = (e && e.parameter) ? e.parameter : {};
-    var type = String(params.type || 'leaderboard');
+    var type = String(params.type || params.action || 'leaderboard');
 
     if (type !== 'leaderboard') {
       return jsonResponse_({ status: 'ok', service: 'StudyFlow Telemetry & Leaderboard' });
@@ -247,7 +247,7 @@ function doGet(e) {
     var sheet = getOrCreateSheet_(LEADERBOARD_SHEET, LEADERBOARD_HEADERS);
     var values = sheet.getDataRange().getValues();
     if (values.length <= 1) {
-      return jsonResponse_({ rankings: [], mode: mode, subject: subject });
+      return jsonResponse_({ rankings: [], overallTop100: [], mode: mode, subject: subject });
     }
 
     var nowMs = Date.now();
@@ -327,8 +327,10 @@ function doGet(e) {
       return a.displayName.localeCompare(b.displayName);
     });
 
+    var rankedList = entries.slice(0, limit);
     return jsonResponse_({
-      rankings: entries.slice(0, limit),
+      rankings: rankedList,
+      overallTop100: rankedList,
       totalParticipants: entries.length,
       source: LEADERBOARD_DB_NAME,
       mode: mode,
