@@ -29,6 +29,8 @@ import {
   fetchLeaderboard,
   fetchTop100Leaderboard,
   updateLeaderboardDiagnosticBadge,
+  getLastLeaderboardSnapshot,
+  LEADERBOARD_SNAPSHOT_KEY,
   getStudentId,
   getUserId,
   filterLeaderboardEntries,
@@ -91,14 +93,20 @@ export default function LeaderboardTab({ isActiveView = false }) {
     };
   }, []);
 
-  // Rankings & sync state
-  const [rankings, setRankings] = useState([]);
+  // Rankings & sync state: pre-populate immediately from studytracker_lb_last_snapshot
+  const initialSnapshot = useMemo(() => {
+    return typeof getLastLeaderboardSnapshot === 'function'
+      ? getLastLeaderboardSnapshot(mode, selectedSubject)
+      : null;
+  }, []);
+
+  const [rankings, setRankings] = useState(() => initialSnapshot?.entries || []);
   const [currentUserRank, setCurrentUserRank] = useState(null);
-  const [totalParticipants, setTotalParticipants] = useState(0);
-  const [dataSource, setDataSource] = useState('live');
-  const [isLoading, setIsLoading] = useState(true);
+  const [totalParticipants, setTotalParticipants] = useState(() => initialSnapshot?.totalParticipants || 0);
+  const [dataSource, setDataSource] = useState(() => (initialSnapshot ? 'cached' : 'live'));
+  const [isLoading, setIsLoading] = useState(() => !initialSnapshot || initialSnapshot.entries.length === 0);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(() => initialSnapshot?.fetchedAt || null);
   const [countdownSec, setCountdownSec] = useState(30);
   const [toastMessage, setToastMessage] = useState(null);
   const [, setThemeTick] = useState(0);
@@ -995,7 +1003,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
               {diagnostic.status === 'syncing' || diagnostic.status === 'loading' ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                  <span className="truncate">Syncing Sheet...</span>
+                  <span className="truncate">{diagnostic.message || 'Syncing Sheet...'}</span>
                 </>
               ) : diagnostic.status === 'error' ? (
                 <>

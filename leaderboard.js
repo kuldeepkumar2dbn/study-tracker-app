@@ -68,9 +68,54 @@ export function canSyncToLeaderboard(userData = {}, options = {}) {
 
 export const LEADERBOARD_SETTINGS_KEY = 'studytracker_leaderboard_settings';
 export const LEADERBOARD_CACHE_KEY = 'studytracker_leaderboard_cache';
+export const LEADERBOARD_SNAPSHOT_KEY = 'studytracker_lb_last_snapshot';
 export const LEADERBOARD_SELF_KEY = 'studytracker_leaderboard_self';
 export const STUDENT_PROFILE_KEY = 'studytracker_student_profile';
 export const LIVE_HEARTBEAT_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes (180,000ms)
+
+/**
+ * Retrieves the cached last successful Leaderboard JSON snapshot from localStorage (studytracker_lb_last_snapshot).
+ *
+ * @param {'overall'|'subject'} [mode='overall']
+ * @param {string} [subject='']
+ * @returns {{entries: Array, rankings: Array, raw: Object|null, totalParticipants: number, fetchedAt: string|null}|null}
+ */
+export function getLastLeaderboardSnapshot(mode = 'overall', subject = '') {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LEADERBOARD_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed) return null;
+
+    let candidate = null;
+    if (Array.isArray(parsed)) {
+      candidate = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      if (mode === 'subject' && subject && parsed.raw) {
+        candidate = parsed.raw.bySubject?.[subject] || parsed.raw.data?.bySubject?.[subject];
+      }
+      if (!candidate) {
+        candidate = Array.isArray(parsed.entries)
+          ? parsed.entries
+          : (Array.isArray(parsed.rankings) ? parsed.rankings : null);
+      }
+    }
+
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      return {
+        entries: candidate,
+        rankings: candidate,
+        raw: parsed.raw || parsed,
+        totalParticipants: parsed.totalParticipants || candidate.length,
+        fetchedAt: parsed.fetchedAt || null
+      };
+    }
+  } catch {
+    // corrupted or invalid cache
+  }
+  return null;
+}
 
 /**
  * Reads persisted student profile (username, targetExam, showOnLeaderboard) from localStorage.
@@ -686,9 +731,9 @@ export function updateLeaderboardDiagnosticBadge(statusOrOptions, options = {}) 
   const isSyncingOrLoading = status === 'syncing' || status === 'loading';
 
   if (isSyncingOrLoading) {
-    textContent = 'Syncing Sheet...';
+    textContent = message || 'Syncing Sheet...';
     fullTitle = fullTitle || 'Fetching real-time rankings from Google Apps Script...';
-    displayHtml = '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span><span>Syncing Sheet...</span>';
+    displayHtml = `<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span><span>${textContent}</span>`;
   } else if (status === 'success') {
     const studentsLabel = `${count} student${count === 1 ? '' : 's'}`;
     textContent = `🟢 Sheet: ${studentsLabel} • ${timeStr}`;
@@ -780,17 +825,29 @@ export function updateLeaderboardDiagnosticBadge(statusOrOptions, options = {}) 
  * Fetches Top 100 Overall or Subject-Wise student rankings from TELEMETRY_URL,
  * merges the current user's live local state if opted in, and returns sorted rankings.
  *
+ * Implements a 15-second timeout and 1 automatic silent cold-start retry with
+ * diagnostic badge in "loading" ("Waking server...") to absorb Google Apps Script cold starts.
+ *
  * @param {string} [endpoint=TELEMETRY_URL]
  * @param {Object} [options={}]
  * @param {'overall'|'subject'} [options.mode='overall']
  * @param {string} [options.subject='']
  * @param {number} [options.limit=100]
  * @param {Object} [options.currentUserData=null]
+ * @param {number} [options.timeoutMs=15000]
+ * @param {number} [options.retryDelayMs=1000]
  * @returns {Promise<{rankings: Array, currentUserRank: Object|null, totalParticipants: number, source: string, fetchedAt: string, diagnostic: Object|null}>}
  */
 export async function fetchLeaderboard(
   endpoint = TELEMETRY_URL,
-  { mode = 'overall', subject = '', limit = 100, currentUserData = null } = {}
+  {
+    mode = 'overall',
+    subject = '',
+    limit = 100,
+    currentUserData = null,
+    timeoutMs = 15000,
+    retryDelayMs = 1000
+  } = {}
 ) {
   const targetUrl = endpoint || TELEMETRY_URL;
   const normalizedMode = mode === 'subject' ? 'subject' : 'overall';
@@ -801,38 +858,53 @@ export async function fetchLeaderboard(
   let source = 'live';
   let diagnostic = null;
 
-  // 1. Attempt live GET fetch from TELEMETRY_URL
+  // 1. Attempt live GET fetch from TELEMETRY_URL with 15s timeout & 1 cold-start silent retry
   if (isTelemetryConfigured(targetUrl) && typeof fetch !== 'undefined') {
     // Show pulsing amber dot before fetching
     diagnostic = updateLeaderboardDiagnosticBadge('syncing', { message: 'Syncing Sheet...' });
 
-    try {
-      const separator = targetUrl.includes('?') ? '&' : '?';
-      const timestamp = Date.now();
-      const queryUrl = `${targetUrl}${separator}action=leaderboard&type=leaderboard&mode=${encodeURIComponent(normalizedMode)}&subject=${encodeURIComponent(cleanSubject)}&limit=${maxEntries}&t=${timestamp}`;
+    const separator = targetUrl.includes('?') ? '&' : '?';
+    const baseQueryUrl = `${targetUrl}${separator}action=leaderboard&type=leaderboard&mode=${encodeURIComponent(normalizedMode)}&subject=${encodeURIComponent(cleanSubject)}&limit=${maxEntries}`;
+    const MAX_ATTEMPTS = 2; // Initial attempt + 1 automatic retry on timeout/abort
 
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 7000) : null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let controller = null;
+      let timeoutId = null;
 
-      const res = await fetch(queryUrl, {
-        method: 'GET',
-        signal: controller ? controller.signal : undefined
-      });
-      if (timeoutId) clearTimeout(timeoutId);
+      try {
+        if (typeof AbortController !== 'undefined') {
+          controller = new AbortController();
+          timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        }
 
-      if (res && res.ok) {
-        const text = await res.text();
-        const isHtml = /<html\b|<!DOCTYPE\b|<body\b/i.test(text);
+        const timestamp = Date.now();
+        const queryUrl = `${baseQueryUrl}&t=${timestamp}`;
 
-        if (isHtml) {
-          const titleMatch = text.match(/<title[^>]*>([^<]+)<\/title>/i);
-          const snippet = titleMatch ? titleMatch[1].trim() : 'Google HTML permission error';
-          diagnostic = updateLeaderboardDiagnosticBadge('error', {
-            shortReason: 'HTML permission error',
-            message: '🔴 Sync Error: HTML permission error',
-            title: `Google Apps Script returned an HTML permission error instead of JSON: ${snippet}`
-          });
-        } else {
+        // Ensure fetch uses redirect: "follow" and cache: "no-store" with no custom headers to avoid preflight delays
+        const res = await fetch(queryUrl, {
+          method: 'GET',
+          redirect: 'follow',
+          cache: 'no-store',
+          signal: controller ? controller.signal : undefined
+        });
+
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (res && res.ok) {
+          const text = await res.text();
+          const isHtml = /<html\b|<!DOCTYPE\b|<body\b/i.test(text);
+
+          if (isHtml) {
+            const titleMatch = text.match(/<title[^>]*>([^<]+)<\/title>/i);
+            const snippet = titleMatch ? titleMatch[1].trim() : 'Google HTML permission error';
+            diagnostic = updateLeaderboardDiagnosticBadge('error', {
+              shortReason: 'HTML permission error',
+              message: '🔴 Sync Error: HTML permission error',
+              title: `Google Apps Script returned an HTML permission error instead of JSON: ${snippet}`
+            });
+            break; // Permission error won't be resolved by cold-start retry
+          }
+
           try {
             const parsed = JSON.parse(text);
             let candidate = null;
@@ -881,25 +953,38 @@ export async function fetchLeaderboard(
                 title: `Successfully fetched ${count} student rankings from Google Sheets at ${timeStr}`
               });
 
-              // Cache live results
+              // Cache last valid snapshot under studytracker_lb_last_snapshot and standard cache
               if (typeof localStorage !== 'undefined') {
                 try {
+                  const snapshotData = {
+                    mode: normalizedMode,
+                    subject: cleanSubject,
+                    entries: rawEntries,
+                    rankings: rawEntries,
+                    raw: parsed,
+                    totalParticipants: count,
+                    fetchedAt: new Date().toISOString()
+                  };
+                  localStorage.setItem(LEADERBOARD_SNAPSHOT_KEY, JSON.stringify(snapshotData));
                   localStorage.setItem(LEADERBOARD_CACHE_KEY, JSON.stringify({
                     mode: normalizedMode,
                     subject: cleanSubject,
                     entries: rawEntries,
-                    fetchedAt: new Date().toISOString()
+                    fetchedAt: snapshotData.fetchedAt
                   }));
                 } catch {
                   // ignore
                 }
               }
+
+              break; // Success! Exit attempt loop
             } else {
               diagnostic = updateLeaderboardDiagnosticBadge('error', {
                 shortReason: 'Unexpected schema',
                 message: '🔴 Sync Error: Unexpected schema',
                 title: 'Google Apps Script JSON response did not contain an array of student rankings'
               });
+              break;
             }
           } catch (jsonErr) {
             diagnostic = updateLeaderboardDiagnosticBadge('error', {
@@ -907,25 +992,51 @@ export async function fetchLeaderboard(
               message: '🔴 Sync Error: Invalid JSON',
               title: `Failed to parse response as JSON: ${jsonErr.message || ''} (${text.slice(0, 100)})`
             });
+            break;
           }
+        } else {
+          // HTTP non-ok status
+          const errReason = `HTTP ${res?.status || 'Unknown'}`;
+          if (attempt < MAX_ATTEMPTS && (res?.status === 502 || res?.status === 503 || res?.status === 504)) {
+            diagnostic = updateLeaderboardDiagnosticBadge('loading', {
+              message: 'Waking server...',
+              title: `Google Apps Script returned ${errReason}; retrying while server wakes up...`
+            });
+            await new Promise((r) => setTimeout(r, retryDelayMs));
+            continue;
+          }
+          diagnostic = updateLeaderboardDiagnosticBadge('error', {
+            shortReason: errReason,
+            message: `🔴 Sync Error: ${errReason}`,
+            title: `Google Apps Script returned HTTP status ${res?.status || ''} ${res?.statusText || ''}`.trim()
+          });
+          break;
         }
-      } else {
-        const errReason = `HTTP ${res?.status || 'Unknown'}`;
+      } catch (fetchErr) {
+        if (timeoutId) clearTimeout(timeoutId);
+        const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isTimeout = fetchErr?.name === 'AbortError' ||
+          String(fetchErr?.message || '').toLowerCase().includes('timeout') ||
+          String(fetchErr?.message || '').toLowerCase().includes('abort');
+
+        if (attempt < MAX_ATTEMPTS && isTimeout) {
+          // Automatic 1-time silent retry on abort/timeout with "Waking server..." badge
+          diagnostic = updateLeaderboardDiagnosticBadge('loading', {
+            message: 'Waking server...',
+            title: 'Initial request timed out during Google Apps Script cold start. Retrying while server wakes up (attempt 2/2)...'
+          });
+          await new Promise((r) => setTimeout(r, retryDelayMs));
+          continue;
+        }
+
+        const errReason = isOffline ? 'Offline' : (isTimeout ? 'Timeout' : (fetchErr?.message || 'Network error'));
         diagnostic = updateLeaderboardDiagnosticBadge('error', {
           shortReason: errReason,
           message: `🔴 Sync Error: ${errReason}`,
-          title: `Google Apps Script returned HTTP status ${res?.status || ''} ${res?.statusText || ''}`.trim()
+          title: `Fetch failed connecting to Google Apps Script: ${fetchErr?.message || errReason}`
         });
+        break;
       }
-    } catch (fetchErr) {
-      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      const isTimeout = fetchErr?.name === 'AbortError';
-      const errReason = isOffline ? 'Offline' : (isTimeout ? 'Timeout' : (fetchErr?.message || 'Network error'));
-      diagnostic = updateLeaderboardDiagnosticBadge('error', {
-        shortReason: errReason,
-        message: `🔴 Sync Error: ${errReason}`,
-        title: `Fetch failed connecting to Google Apps Script: ${fetchErr?.message || errReason}`
-      });
     }
   } else if (!isTelemetryConfigured(targetUrl)) {
     diagnostic = updateLeaderboardDiagnosticBadge('error', {
@@ -938,12 +1049,18 @@ export async function fetchLeaderboard(
   // 2. Fallback to cached live response if matching mode/subject
   if (!rawEntries && typeof localStorage !== 'undefined') {
     try {
-      const cachedRaw = localStorage.getItem(LEADERBOARD_CACHE_KEY);
-      if (cachedRaw) {
-        const cached = JSON.parse(cachedRaw);
-        if (cached && cached.mode === normalizedMode && cached.subject === cleanSubject && Array.isArray(cached.entries) && cached.entries.length > 0) {
-          rawEntries = cached.entries;
-          source = 'cached';
+      const snapshot = getLastLeaderboardSnapshot(normalizedMode, cleanSubject);
+      if (snapshot && Array.isArray(snapshot.entries) && snapshot.entries.length > 0) {
+        rawEntries = snapshot.entries;
+        source = 'cached';
+      } else {
+        const cachedRaw = localStorage.getItem(LEADERBOARD_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && cached.mode === normalizedMode && cached.subject === cleanSubject && Array.isArray(cached.entries) && cached.entries.length > 0) {
+            rawEntries = cached.entries;
+            source = 'cached';
+          }
         }
       }
     } catch {
@@ -1368,6 +1485,8 @@ if (typeof window !== 'undefined') {
   window.fetchLeaderboard = fetchLeaderboard;
   window.fetchTop100Leaderboard = fetchTop100Leaderboard;
   window.updateLeaderboardDiagnosticBadge = updateLeaderboardDiagnosticBadge;
+  window.getLastLeaderboardSnapshot = getLastLeaderboardSnapshot;
+  window.LEADERBOARD_SNAPSHOT_KEY = LEADERBOARD_SNAPSHOT_KEY;
   window.getStudentId = getStudentId;
   window.getUserId = getUserId;
   window.renderLeaderboardFragment = renderLeaderboardFragment;
@@ -1375,6 +1494,7 @@ if (typeof window !== 'undefined') {
   window.stopLivePresenceHeartbeat = stopLivePresenceHeartbeat;
   window.StudyLeaderboard = {
     TELEMETRY_URL,
+    LEADERBOARD_SNAPSHOT_KEY,
     LIVE_HEARTBEAT_INTERVAL_MS,
     COMMON_LEADERBOARD_SUBJECTS,
     canSyncToLeaderboard,
@@ -1389,6 +1509,7 @@ if (typeof window !== 'undefined') {
     fetchLeaderboard,
     fetchTop100Leaderboard,
     updateLeaderboardDiagnosticBadge,
+    getLastLeaderboardSnapshot,
     getLiveStudyingCount,
     filterLeaderboardEntries,
     renderLeaderboardFragment,
@@ -1402,6 +1523,7 @@ export default {
   TELEMETRY_URL,
   LEADERBOARD_SETTINGS_KEY,
   LEADERBOARD_CACHE_KEY,
+  LEADERBOARD_SNAPSHOT_KEY,
   LIVE_HEARTBEAT_INTERVAL_MS,
   COMMON_LEADERBOARD_SUBJECTS,
   canSyncToLeaderboard,
@@ -1416,6 +1538,7 @@ export default {
   fetchLeaderboard,
   fetchTop100Leaderboard,
   updateLeaderboardDiagnosticBadge,
+  getLastLeaderboardSnapshot,
   getLiveStudyingCount,
   filterLeaderboardEntries,
   renderLeaderboardFragment,
