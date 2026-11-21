@@ -536,7 +536,7 @@ export function exportAllStudyDataAsJson() {
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link?.remove?.();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
@@ -579,7 +579,7 @@ export async function exportEncryptedVaultBackup(passphrase = '') {
     link.download = filename;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link?.remove?.();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 

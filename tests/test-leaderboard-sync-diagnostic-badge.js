@@ -122,6 +122,9 @@ class MockElement {
   getAttribute(k) {
     return this.attributes.has(k) ? this.attributes.get(k) : null;
   }
+  hasAttribute(k) {
+    return this.attributes.has(k);
+  }
   removeAttribute(k) {
     this.attributes.delete(k);
   }

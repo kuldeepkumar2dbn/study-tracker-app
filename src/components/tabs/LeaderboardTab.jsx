@@ -93,14 +93,23 @@ export default function LeaderboardTab({ isActiveView = false }) {
     };
   }, []);
 
-  // Rankings & sync state: pre-populate immediately from studytracker_lb_last_snapshot
+  // Pure React state for Leaderboard data & sync telemetry (prevents removeChild VDOM mismatches)
   const initialSnapshot = useMemo(() => {
     return typeof getLastLeaderboardSnapshot === 'function'
       ? getLastLeaderboardSnapshot(mode, selectedSubject)
       : null;
   }, []);
 
-  const [rankings, setRankings] = useState(() => initialSnapshot?.entries || []);
+  const [leaderboardData, setLeaderboardData] = useState(() => initialSnapshot?.entries || []);
+  const rankings = leaderboardData;
+  const setRankings = setLeaderboardData;
+
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [syncCount, setSyncCount] = useState(0);
+  const [syncError, setSyncError] = useState(null);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncTitle, setSyncTitle] = useState('Leaderboard synchronization status');
+
   const [currentUserRank, setCurrentUserRank] = useState(null);
   const [totalParticipants, setTotalParticipants] = useState(() => initialSnapshot?.totalParticipants || 0);
   const [dataSource, setDataSource] = useState(() => (initialSnapshot ? 'cached' : 'live'));
@@ -112,17 +121,28 @@ export default function LeaderboardTab({ isActiveView = false }) {
   const [, setThemeTick] = useState(0);
 
   // Sync diagnostic state (syncing, success, error) for #lb-sync-diagnostic-badge
-  const [diagnostic, setDiagnostic] = useState({
-    status: 'idle',
-    message: '',
-    title: 'Leaderboard synchronization status',
-    count: 0
-  });
+  const diagnostic = useMemo(() => ({
+    status: syncStatus,
+    count: syncCount,
+    message: syncMessage,
+    title: syncTitle,
+    error: syncError
+  }), [syncStatus, syncCount, syncMessage, syncTitle, syncError]);
 
   useEffect(() => {
     const handleDiagnostic = (e) => {
       if (e?.detail) {
-        setDiagnostic(e.detail);
+        const { status, count, message, title } = e.detail;
+        setSyncStatus(status || 'idle');
+        setSyncCount(Number(count) || 0);
+        setSyncMessage(message || '');
+        setSyncTitle(title || '');
+        if (status === 'error') {
+          const errReason = message ? message.replace(/^🔴\s*Sync Error:\s*/, '').replace(/\s*Retry\s*↻.*$/, '').trim() : 'Network error';
+          setSyncError(errReason);
+        } else {
+          setSyncError(null);
+        }
       }
     };
     window.addEventListener('studyflow-leaderboard-diagnostic-updated', handleDiagnostic);
@@ -185,12 +205,26 @@ export default function LeaderboardTab({ isActiveView = false }) {
         limit: 100,
         currentUserData: buildCurrentUserSnapshot()
       });
-      setRankings(result.rankings || []);
+      setLeaderboardData(result.rankings || []);
       setCurrentUserRank(result.currentUserRank || null);
       setTotalParticipants(result.totalParticipants || (result.rankings || []).length);
       setDataSource(result.source || 'live');
       setLastUpdatedAt(result.fetchedAt || new Date().toISOString());
       setCountdownSec(30);
+      if (result.diagnostic) {
+        setSyncStatus(result.diagnostic.status || 'idle');
+        setSyncCount(Number(result.diagnostic.count) || 0);
+        setSyncMessage(result.diagnostic.message || '');
+        setSyncTitle(result.diagnostic.title || '');
+        if (result.diagnostic.status === 'error') {
+          const errReason = result.diagnostic.message
+            ? result.diagnostic.message.replace(/^🔴\s*Sync Error:\s*/, '').replace(/\s*Retry\s*↻.*$/, '').trim()
+            : 'Network error';
+          setSyncError(errReason);
+        } else {
+          setSyncError(null);
+        }
+      }
     } catch (err) {
       console.warn('Error loading leaderboard:', err);
     } finally {
@@ -397,6 +431,9 @@ export default function LeaderboardTab({ isActiveView = false }) {
   };
 
   const handleRetry = useCallback(async () => {
+    setSyncStatus('loading');
+    setSyncMessage('Syncing Sheet...');
+    setSyncError(null);
     updateLeaderboardDiagnosticBadge('loading', { message: 'Syncing Sheet...' });
     await loadLeaderboard({ silent: false });
   }, [loadLeaderboard]);
@@ -550,6 +587,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
 
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold font-mono-numbers"
+                translate="no"
                 style={{
                   backgroundColor: 'var(--bg-sidebar)',
                   border: '1px solid var(--border-glow)',
@@ -557,7 +595,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
                 }}
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{liveStudyingCount} Studying Live Now</span>
+                <span translate="no">{liveStudyingCount} Studying Live Now</span>
               </span>
             </div>
 
@@ -578,6 +616,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
             <button
               id="leaderboard-live-toggle-btn"
               type="button"
+              translate="no"
               onClick={handleToggleLiveRefresh}
               title={liveAutoRefresh ? 'Pause 30s automatic leaderboard polling' : 'Resume 30s automatic leaderboard polling'}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
@@ -590,7 +629,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
               <span
                 className={`w-2 h-2 rounded-full ${liveAutoRefresh ? 'bg-emerald-400 animate-ping' : 'bg-slate-400'}`}
               />
-              <span>
+              <span translate="no">
                 {liveAutoRefresh ? `🟢 Live (${countdownSec}s)` : '⚪ Live (30s) Paused'}
               </span>
             </button>
@@ -598,6 +637,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
             <button
               id="leaderboard-refresh-btn"
               type="button"
+              translate="no"
               onClick={() => loadLeaderboard({ silent: false })}
               title={`Refresh rankings (Last updated ${formattedLastUpdate})`}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95"
@@ -608,7 +648,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
               }}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="font-mono-numbers">{formattedLastUpdate}</span>
+              <span className="font-mono-numbers" translate="no">{formattedLastUpdate}</span>
             </button>
           </div>
         </div>
@@ -973,11 +1013,13 @@ export default function LeaderboardTab({ isActiveView = false }) {
             {/* SYNC DIAGNOSTIC BADGE */}
             <div
               id="lb-sync-diagnostic-badge"
-              role={diagnostic.status === 'error' ? 'button' : undefined}
-              tabIndex={diagnostic.status === 'error' ? 0 : undefined}
-              onClick={diagnostic.status === 'error' ? handleRetry : undefined}
+              data-react-managed="true"
+              translate="no"
+              role={syncStatus === 'error' ? 'button' : undefined}
+              tabIndex={syncStatus === 'error' ? 0 : undefined}
+              onClick={syncStatus === 'error' ? handleRetry : undefined}
               onKeyDown={
-                diagnostic.status === 'error'
+                syncStatus === 'error'
                   ? (e) => {
                       if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
                         e.preventDefault();
@@ -986,11 +1028,11 @@ export default function LeaderboardTab({ isActiveView = false }) {
                     }
                   : undefined
               }
-              title={diagnostic.title || diagnostic.message || 'Real-time Leaderboard Google Sheets Sync Status'}
-              data-status={diagnostic.status}
-              data-count={diagnostic.count}
+              title={syncTitle || syncMessage || 'Real-time Leaderboard Google Sheets Sync Status'}
+              data-status={syncStatus}
+              data-count={syncCount}
               className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-[var(--border-glow)] bg-[var(--bg-card)] font-mono-numbers font-medium transition-all select-none max-w-full truncate ${
-                diagnostic.status === 'error'
+                syncStatus === 'error'
                   ? 'cursor-pointer hover:bg-rose-500/20 active:scale-95'
                   : 'cursor-default'
               }`}
@@ -1000,26 +1042,26 @@ export default function LeaderboardTab({ isActiveView = false }) {
                 color: 'var(--text-main)'
               }}
             >
-              {diagnostic.status === 'syncing' || diagnostic.status === 'loading' ? (
+              {syncStatus === 'syncing' || syncStatus === 'loading' ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                  <span className="truncate">{diagnostic.message || 'Syncing Sheet...'}</span>
+                  <span className="truncate" translate="no">{syncMessage || diagnostic.message || 'Syncing Sheet...'}</span>
                 </>
-              ) : diagnostic.status === 'error' ? (
+              ) : syncStatus === 'error' ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-                  <span className="truncate text-rose-500 font-semibold">
-                    {diagnostic.message ? diagnostic.message.replace(/^🔴\s*/, '').replace(/\s*Retry\s*↻.*$/, '') : 'Sync Error'}
+                  <span className="truncate text-rose-500 font-semibold" translate="no">
+                    Sync Error: {syncError || (syncMessage ? syncMessage.replace(/^🔴\s*/, '').replace(/\s*Retry\s*↻.*$/, '') : 'Network error')}
                   </span>
-                  <span className="inline-flex items-center gap-1 font-bold text-rose-400 bg-rose-500/20 px-1.5 py-0.5 rounded text-[10px] hover:bg-rose-500/30 shrink-0 transition-colors">
+                  <span className="inline-flex items-center gap-1 font-bold text-rose-400 bg-rose-500/20 px-1.5 py-0.5 rounded text-[10px] hover:bg-rose-500/30 shrink-0 transition-colors" translate="no">
                     Retry ↻
                   </span>
                 </>
               ) : (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="truncate">
-                    {diagnostic.message ? diagnostic.message.replace(/^🟢\s*/, '') : `Sheet: ${rankings.length} students • ${formattedLastUpdate}`}
+                  <span className="truncate" translate="no">
+                    {syncMessage ? syncMessage.replace(/^🟢\s*/, '') : `Sheet: ${leaderboardData.length} students • ${formattedLastUpdate}`}
                   </span>
                 </>
               )}
@@ -1170,6 +1212,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
           <span
             className="text-xs font-mono-numbers font-semibold"
             style={{ color: 'var(--text-muted)' }}
+            translate="no"
           >
             Showing Top {rankings.length} of {totalParticipants} students
           </span>
@@ -1227,6 +1270,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
 
                   <span
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold font-mono-numbers"
+                    translate="no"
                     style={{
                       backgroundColor: 'var(--bg-sidebar)',
                       border: '1px solid var(--border-glow)',
@@ -1312,6 +1356,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
                   </span>
                   <span
                     className="font-display font-extrabold text-2xl font-mono-numbers"
+                    translate="no"
                     style={{ color: 'var(--text-main)' }}
                   >
                     {Number(student.hours || 0).toFixed(1)}h
@@ -1418,6 +1463,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
                       <td className="py-3.5 px-4 font-mono-numbers font-extrabold text-sm">
                         <span
                           className="inline-flex items-center justify-center min-w-[34px] px-2 py-0.5 rounded-lg text-xs font-bold"
+                          translate="no"
                           style={
                             isMe
                               ? {
@@ -1500,6 +1546,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
                       <td className="py-3.5 px-4 text-center font-mono-numbers text-xs sm:text-sm font-bold">
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full"
+                          translate="no"
                           style={{
                             backgroundColor: 'var(--bg-sidebar)',
                             border: '1px solid var(--border-glow)',
@@ -1513,6 +1560,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
                       {/* Hours Logged */}
                       <td
                         className="py-3.5 px-4 text-right font-mono-numbers font-extrabold text-sm"
+                        translate="no"
                         style={{ color: 'var(--text-main)' }}
                       >
                         {Number(student.hours || 0).toFixed(1)}h
@@ -1557,6 +1605,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
           <div className="flex items-center gap-3">
             <span
               className="inline-flex items-center justify-center px-3 py-1 rounded-xl font-mono-numbers font-extrabold text-sm"
+              translate="no"
               style={{
                 backgroundColor: 'var(--primary)',
                 color: '#FFFFFF',
@@ -1571,7 +1620,7 @@ export default function LeaderboardTab({ isActiveView = false }) {
               </p>
               <p className="text-sm font-extrabold" style={{ color: 'var(--text-main)' }}>
                 {currentUserRank.displayName}
-                <span className="ml-2 font-mono-numbers text-xs font-bold" style={{ color: 'var(--text-muted)' }}>
+                <span className="ml-2 font-mono-numbers text-xs font-bold" style={{ color: 'var(--text-muted)' }} translate="no">
                   • 🔥 {currentUserRank.streak}d • {Number(currentUserRank.hours || 0).toFixed(1)}h
                 </span>
               </p>

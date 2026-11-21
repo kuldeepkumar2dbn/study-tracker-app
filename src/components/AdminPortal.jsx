@@ -316,7 +316,7 @@ export default function AdminPortal() {
     link.download = `studyflow-starter-pack-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    link?.remove?.();
     URL.revokeObjectURL(url);
 
     // 2. Also copy to clipboard

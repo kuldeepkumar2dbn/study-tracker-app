@@ -750,57 +750,70 @@ export function updateLeaderboardDiagnosticBadge(statusOrOptions, options = {}) 
   if (typeof document !== 'undefined') {
     const badge = document.getElementById('lb-sync-diagnostic-badge');
     if (badge) {
-      badge.innerHTML = displayHtml;
+      // Check if badge is managed by React (data-react-managed="true" or React fiber node)
+      const isReactManaged = (typeof badge.hasAttribute === 'function' ? badge.hasAttribute('data-react-managed') : false) ||
+        (typeof badge.getAttribute === 'function' && badge.getAttribute('data-react-managed') === 'true') ||
+        Boolean(badge._reactRootContainer) ||
+        Object.keys(badge).some((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
+
       badge.setAttribute('title', fullTitle);
       badge.setAttribute('data-status', status);
       badge.setAttribute('data-count', String(count));
+      badge.setAttribute('translate', 'no');
 
-      if (status === 'error') {
-        if (badge.classList) {
-          badge.classList.remove('cursor-default');
-          badge.classList.add('cursor-pointer', 'hover:bg-rose-500/20', 'active:scale-95', 'transition-all');
-        }
-        badge.setAttribute('role', 'button');
-        badge.setAttribute('tabindex', '0');
-        const ariaLabel = `Leaderboard sync error: ${textContent.replace(/^🔴\s*/, '')}. Click to retry`;
-        badge.setAttribute('aria-label', ariaLabel);
-
-        const triggerRetry = (evt) => {
-          if (evt) {
-            if (typeof evt.preventDefault === 'function') evt.preventDefault();
-            if (typeof evt.stopPropagation === 'function') evt.stopPropagation();
+      // CRITICAL: NEVER overwrite innerHTML or destroy children of a React-managed container!
+      // Direct innerHTML mutation destroys React's Virtual DOM fiber nodes, which causes React's
+      // reconciler to crash with:
+      // "NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node"
+      if (!isReactManaged) {
+        badge.innerHTML = displayHtml;
+        if (status === 'error') {
+          if (badge.classList) {
+            badge.classList.remove('cursor-default');
+            badge.classList.add('cursor-pointer', 'hover:bg-rose-500/20', 'active:scale-95', 'transition-all');
           }
-          // Immediately transition badge to "loading" ("Syncing Sheet...")
-          updateLeaderboardDiagnosticBadge('loading', { message: 'Syncing Sheet...' });
+          badge.setAttribute('role', 'button');
+          badge.setAttribute('tabindex', '0');
+          const ariaLabel = `Leaderboard sync error: ${textContent.replace(/^🔴\s*/, '')}. Click to retry`;
+          badge.setAttribute('aria-label', ariaLabel);
 
-          // Re-trigger Leaderboard sync & fetch
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('studyflow-leaderboard-retry-requested'));
-            if (typeof window.refreshLeaderboardView === 'function') {
-              window.refreshLeaderboardView();
-            } else if (typeof window.fetchTop100Leaderboard === 'function') {
-              window.fetchTop100Leaderboard();
-            } else if (typeof fetchLeaderboard === 'function') {
-              fetchLeaderboard(TELEMETRY_URL, { mode: 'overall' }).catch(() => {});
+          const triggerRetry = (evt) => {
+            if (evt) {
+              if (typeof evt.preventDefault === 'function') evt.preventDefault();
+              if (typeof evt.stopPropagation === 'function') evt.stopPropagation();
             }
-          }
-        };
+            // Immediately transition badge to "loading" ("Syncing Sheet...")
+            updateLeaderboardDiagnosticBadge('loading', { message: 'Syncing Sheet...' });
 
-        badge.onclick = triggerRetry;
-        badge.onkeydown = (e) => {
-          if (e && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
-            triggerRetry(e);
+            // Re-trigger Leaderboard sync & fetch
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('studyflow-leaderboard-retry-requested'));
+              if (typeof window.refreshLeaderboardView === 'function') {
+                window.refreshLeaderboardView();
+              } else if (typeof window.fetchTop100Leaderboard === 'function') {
+                window.fetchTop100Leaderboard();
+              } else if (typeof fetchLeaderboard === 'function') {
+                fetchLeaderboard(TELEMETRY_URL, { mode: 'overall' }).catch(() => {});
+              }
+            }
+          };
+
+          badge.onclick = triggerRetry;
+          badge.onkeydown = (e) => {
+            if (e && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
+              triggerRetry(e);
+            }
+          };
+        } else if (isSyncingOrLoading || status === 'success') {
+          badge.onclick = null;
+          badge.onkeydown = null;
+          badge.removeAttribute('role');
+          badge.removeAttribute('tabindex');
+          badge.removeAttribute('aria-label');
+          if (badge.classList) {
+            badge.classList.remove('cursor-pointer', 'hover:bg-rose-500/20', 'active:scale-95');
+            badge.classList.add('cursor-default');
           }
-        };
-      } else if (isSyncingOrLoading || status === 'success') {
-        badge.onclick = null;
-        badge.onkeydown = null;
-        badge.removeAttribute('role');
-        badge.removeAttribute('tabindex');
-        badge.removeAttribute('aria-label');
-        if (badge.classList) {
-          badge.classList.remove('cursor-pointer', 'hover:bg-rose-500/20', 'active:scale-95');
-          badge.classList.add('cursor-default');
         }
       }
     }
@@ -1473,8 +1486,17 @@ export function renderLeaderboardFragment(entries = [], container = null, option
   });
 
   if (container && typeof container.appendChild === 'function') {
-    container.innerHTML = '';
-    container.appendChild(fragment);
+    const isReactManaged = container.hasAttribute?.('data-react-managed') ||
+      Boolean(container._reactRootContainer) ||
+      Object.keys(container).some((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
+    if (!isReactManaged) {
+      if (typeof container.replaceChildren === 'function') {
+        container.replaceChildren(fragment);
+      } else {
+        container.innerHTML = '';
+        container.appendChild(fragment);
+      }
+    }
   }
 
   return fragment;
