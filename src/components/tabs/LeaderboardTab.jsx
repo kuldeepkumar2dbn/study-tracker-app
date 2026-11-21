@@ -247,11 +247,20 @@ export default function LeaderboardTab({ isActiveView = false }) {
       }
       loadLeaderboard({ silent: true });
     };
+    const handleRetryEvent = () => {
+      loadLeaderboard({ silent: false });
+    };
+
     window.addEventListener('studyflow-leaderboard-synced', handleSynced);
     window.addEventListener('studyflow-student-profile-updated', handleProfileUpdated);
+    window.addEventListener('studyflow-leaderboard-retry-requested', handleRetryEvent);
+    window.refreshLeaderboardView = () => loadLeaderboard({ silent: false });
+
     return () => {
       window.removeEventListener('studyflow-leaderboard-synced', handleSynced);
       window.removeEventListener('studyflow-student-profile-updated', handleProfileUpdated);
+      window.removeEventListener('studyflow-leaderboard-retry-requested', handleRetryEvent);
+      delete window.refreshLeaderboardView;
     };
   }, [loadLeaderboard]);
 
@@ -378,6 +387,11 @@ export default function LeaderboardTab({ isActiveView = false }) {
       currentUserRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
+
+  const handleRetry = useCallback(async () => {
+    updateLeaderboardDiagnosticBadge('loading', { message: 'Syncing Sheet...' });
+    await loadLeaderboard({ silent: false });
+  }, [loadLeaderboard]);
 
   // Logged-in user's currently selected subject (for "🎯 Same Subject as Me" filter)
   const myActiveSubject = useMemo(() => {
@@ -951,17 +965,34 @@ export default function LeaderboardTab({ isActiveView = false }) {
             {/* SYNC DIAGNOSTIC BADGE */}
             <div
               id="lb-sync-diagnostic-badge"
+              role={diagnostic.status === 'error' ? 'button' : undefined}
+              tabIndex={diagnostic.status === 'error' ? 0 : undefined}
+              onClick={diagnostic.status === 'error' ? handleRetry : undefined}
+              onKeyDown={
+                diagnostic.status === 'error'
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+                        e.preventDefault();
+                        handleRetry();
+                      }
+                    }
+                  : undefined
+              }
               title={diagnostic.title || diagnostic.message || 'Real-time Leaderboard Google Sheets Sync Status'}
               data-status={diagnostic.status}
               data-count={diagnostic.count}
-              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-[var(--border-glow)] bg-[var(--bg-card)] font-mono-numbers font-medium transition-all select-none max-w-full truncate"
+              className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border border-[var(--border-glow)] bg-[var(--bg-card)] font-mono-numbers font-medium transition-all select-none max-w-full truncate ${
+                diagnostic.status === 'error'
+                  ? 'cursor-pointer hover:bg-rose-500/20 active:scale-95'
+                  : 'cursor-default'
+              }`}
               style={{
                 backgroundColor: 'var(--bg-card)',
                 borderColor: 'var(--border-glow)',
                 color: 'var(--text-main)'
               }}
             >
-              {diagnostic.status === 'syncing' ? (
+              {diagnostic.status === 'syncing' || diagnostic.status === 'loading' ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
                   <span className="truncate">Syncing Sheet...</span>
@@ -970,7 +1001,10 @@ export default function LeaderboardTab({ isActiveView = false }) {
                 <>
                   <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
                   <span className="truncate text-rose-500 font-semibold">
-                    {diagnostic.message ? diagnostic.message.replace(/^🔴\s*/, '') : 'Sync Error'}
+                    {diagnostic.message ? diagnostic.message.replace(/^🔴\s*/, '').replace(/\s*Retry\s*↻.*$/, '') : 'Sync Error'}
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-bold text-rose-400 bg-rose-500/20 px-1.5 py-0.5 rounded text-[10px] hover:bg-rose-500/30 shrink-0 transition-colors">
+                    Retry ↻
                   </span>
                 </>
               ) : (

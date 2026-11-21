@@ -1353,10 +1353,41 @@ html[data-theme="black-gold"] #profile-guest-demo-badge {
   transition: all 0.2s ease-in-out;
 }
 
+#lb-sync-diagnostic-badge[data-status="error"] {
+  cursor: pointer;
+}
+
+#lb-sync-diagnostic-badge[data-status="error"]:hover {
+  background-color: rgba(244, 63, 94, 0.15);
+}
+
+#lb-sync-diagnostic-badge[data-status="error"]:active {
+  transform: scale(0.95);
+}
+
 [data-theme="black-gold"] #lb-sync-diagnostic-badge,
 html[data-theme="black-gold"] #lb-sync-diagnostic-badge {
   background-color: #ECD9AE !important;
   border-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] #lb-sync-diagnostic-badge[data-status="error"],
+html[data-theme="black-gold"] #lb-sync-diagnostic-badge[data-status="error"] {
+  background-color: #E2CA92 !important;
+  border-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] #lb-sync-diagnostic-badge[data-status="error"]:hover,
+html[data-theme="black-gold"] #lb-sync-diagnostic-badge[data-status="error"]:hover {
+  background-color: #D8BC82 !important;
+  border-color: #FFFFFF !important;
+  color: #000000 !important;
+}
+
+[data-theme="black-gold"] #lb-sync-diagnostic-badge span,
+html[data-theme="black-gold"] #lb-sync-diagnostic-badge span {
   color: #000000 !important;
 }
 

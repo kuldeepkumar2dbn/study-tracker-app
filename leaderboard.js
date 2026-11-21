@@ -634,15 +634,45 @@ function normalizeLeaderboardEntry(raw, mode = 'overall', subject = '') {
 
 /**
  * Updates or dispatches sync diagnostics for #lb-sync-diagnostic-badge.
- * - 'syncing': Pulsing amber dot, "Syncing Sheet..."
+ * - 'syncing' / 'loading': Pulsing amber dot, "Syncing Sheet..."
  * - 'success': Green dot, "🟢 Sheet: [X] students • [HH:MM:SS]"
- * - 'error': Subtle rose/red badge, "🔴 Sync Error: [message]" with full details in title
+ * - 'error': Subtle rose/red interactive badge, "🔴 Sync Error: [message]  Retry ↻"
  *
- * @param {'syncing'|'success'|'error'} status
- * @param {Object} [details={}]
+ * Supports both signatures:
+ * - updateLeaderboardDiagnosticBadge(status, { count, timestamp, message, shortReason, errorMsg, title })
+ * - updateLeaderboardDiagnosticBadge({ status, count, timestamp, message, shortReason, errorMsg, title })
+ *
+ * @param {'syncing'|'loading'|'success'|'error'|Object} statusOrOptions
+ * @param {Object} [options={}]
  * @returns {{status: string, count: number, timestamp: string, message: string, title: string}}
  */
-export function updateLeaderboardDiagnosticBadge(status, { count = 0, timestamp = '', message = '', shortReason = '', title = '' } = {}) {
+export function updateLeaderboardDiagnosticBadge(statusOrOptions, options = {}) {
+  let status = 'idle';
+  let count = 0;
+  let timestamp = '';
+  let message = '';
+  let shortReason = '';
+  let errorMsg = '';
+  let title = '';
+
+  if (typeof statusOrOptions === 'object' && statusOrOptions !== null) {
+    status = statusOrOptions.status || 'idle';
+    count = statusOrOptions.count !== undefined ? statusOrOptions.count : 0;
+    timestamp = statusOrOptions.timestamp || '';
+    message = statusOrOptions.message || '';
+    shortReason = statusOrOptions.shortReason || '';
+    errorMsg = statusOrOptions.errorMsg || '';
+    title = statusOrOptions.title || '';
+  } else {
+    status = statusOrOptions || 'idle';
+    count = options.count !== undefined ? options.count : 0;
+    timestamp = options.timestamp || '';
+    message = options.message || '';
+    shortReason = options.shortReason || '';
+    errorMsg = options.errorMsg || '';
+    title = options.title || '';
+  }
+
   const now = new Date();
   const timeStr = timestamp || [
     String(now.getHours()).padStart(2, '0'),
@@ -653,8 +683,9 @@ export function updateLeaderboardDiagnosticBadge(status, { count = 0, timestamp 
   let textContent = message;
   let fullTitle = title;
   let displayHtml = '';
+  const isSyncingOrLoading = status === 'syncing' || status === 'loading';
 
-  if (status === 'syncing') {
+  if (isSyncingOrLoading) {
     textContent = 'Syncing Sheet...';
     fullTitle = fullTitle || 'Fetching real-time rankings from Google Apps Script...';
     displayHtml = '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span><span>Syncing Sheet...</span>';
@@ -663,11 +694,12 @@ export function updateLeaderboardDiagnosticBadge(status, { count = 0, timestamp 
     textContent = `🟢 Sheet: ${studentsLabel} • ${timeStr}`;
     fullTitle = fullTitle || `Successfully fetched ${count} student rankings from Google Sheets at ${timeStr}`;
     displayHtml = `<span class="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span><span>Sheet: ${studentsLabel} • ${timeStr}</span>`;
-  } else {
-    const errReason = shortReason || message.replace(/^🔴\s*Sync Error:\s*/, '') || 'Network error';
-    textContent = `🔴 Sync Error: ${errReason}`;
-    fullTitle = fullTitle || `Sync Error: ${errReason}`;
-    displayHtml = `<span class="inline-block w-2 h-2 rounded-full bg-rose-500 shrink-0"></span><span class="text-rose-500 font-semibold truncate">Sync Error: ${errReason}</span>`;
+  } else if (status === 'error') {
+    const rawErr = shortReason || errorMsg || (message ? message.replace(/^🔴\s*Sync Error:\s*/, '') : '') || 'Network error';
+    const cleanErr = rawErr.replace(/\s*Retry\s*↻.*$/, '').trim();
+    textContent = `🔴 Sync Error: ${cleanErr}  Retry ↻`;
+    fullTitle = fullTitle || `Sync Error: ${cleanErr}. Click or press Enter/Space to retry.`;
+    displayHtml = `<span class="inline-block w-2 h-2 rounded-full bg-rose-500 shrink-0"></span><span class="text-rose-500 font-semibold truncate">Sync Error: ${cleanErr}</span><span class="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 transition-colors shrink-0">Retry ↻</span>`;
   }
 
   if (typeof document !== 'undefined') {
@@ -677,10 +709,59 @@ export function updateLeaderboardDiagnosticBadge(status, { count = 0, timestamp 
       badge.setAttribute('title', fullTitle);
       badge.setAttribute('data-status', status);
       badge.setAttribute('data-count', String(count));
+
+      if (status === 'error') {
+        if (badge.classList) {
+          badge.classList.remove('cursor-default');
+          badge.classList.add('cursor-pointer', 'hover:bg-rose-500/20', 'active:scale-95', 'transition-all');
+        }
+        badge.setAttribute('role', 'button');
+        badge.setAttribute('tabindex', '0');
+        const ariaLabel = `Leaderboard sync error: ${textContent.replace(/^🔴\s*/, '')}. Click to retry`;
+        badge.setAttribute('aria-label', ariaLabel);
+
+        const triggerRetry = (evt) => {
+          if (evt) {
+            if (typeof evt.preventDefault === 'function') evt.preventDefault();
+            if (typeof evt.stopPropagation === 'function') evt.stopPropagation();
+          }
+          // Immediately transition badge to "loading" ("Syncing Sheet...")
+          updateLeaderboardDiagnosticBadge('loading', { message: 'Syncing Sheet...' });
+
+          // Re-trigger Leaderboard sync & fetch
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('studyflow-leaderboard-retry-requested'));
+            if (typeof window.refreshLeaderboardView === 'function') {
+              window.refreshLeaderboardView();
+            } else if (typeof window.fetchTop100Leaderboard === 'function') {
+              window.fetchTop100Leaderboard();
+            } else if (typeof fetchLeaderboard === 'function') {
+              fetchLeaderboard(TELEMETRY_URL, { mode: 'overall' }).catch(() => {});
+            }
+          }
+        };
+
+        badge.onclick = triggerRetry;
+        badge.onkeydown = (e) => {
+          if (e && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
+            triggerRetry(e);
+          }
+        };
+      } else if (isSyncingOrLoading || status === 'success') {
+        badge.onclick = null;
+        badge.onkeydown = null;
+        badge.removeAttribute('role');
+        badge.removeAttribute('tabindex');
+        badge.removeAttribute('aria-label');
+        if (badge.classList) {
+          badge.classList.remove('cursor-pointer', 'hover:bg-rose-500/20', 'active:scale-95');
+          badge.classList.add('cursor-default');
+        }
+      }
     }
   }
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('studyflow-leaderboard-diagnostic-updated', {
       detail: {
         status,
